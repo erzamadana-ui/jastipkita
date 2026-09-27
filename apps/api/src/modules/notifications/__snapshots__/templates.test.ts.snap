@@ -1,0 +1,177 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`e-mail templates (snapshot) > PIN ready never contains a PIN, only an instruction to open the app 1`] = `
+{
+  "subject": "PIN serah terima JK-260927-7K2M9Q siap di aplikasi",
+  "text": "PIN/QR serah terima siap
+
+Halo Rina,
+
+PIN/QR serah terima untuk "Nintendo Switch OLED" sudah siap di aplikasi JastipKita.
+
+Demi keamanan, PIN tidak pernah kami kirim lewat e-mail, SMS, atau notifikasi — buka aplikasi untuk melihatnya.
+
+>> Periksa barang dulu. Jangan berikan PIN sebelum barang sesuai.
+
+No. transaksi: JK-260927-7K2M9Q
+Produk: Nintendo Switch OLED
+Traveler: Dimas P.
+Status: Pembayaran aman
+
+Rincian harga
+- Harga Barang: Rp 5.565.927
+- Traveler Fee: Rp 556.593
+- Bea Masuk (estimasi): Rp 549.000
+- Pajak Impor (estimasi): Rp 1.871.000
+- JastipKita Protection: Rp 83.489
+- Platform Fee: Rp 278.296
+- Pajak atas layanan: Rp 39.796
+- Biaya Pembayaran: Rp 62.522
+- Diskon promo: −Rp 50.000
+- JastipKita Credit: −Rp 25.000
+= Total Landed Cost: Rp 8.931.623
+Bea masuk & pajak impor adalah estimasi; nilai final ditetapkan Bea Cukai.
+
+Buka PIN di aplikasi: https://jastipkita.id/app/transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c
+Buka di aplikasi JastipKita: jastipkita://transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c
+Lihat struk: https://jastipkita.id/app/transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c/receipt
+
+—
+E-mail ini dikirim otomatis oleh JastipKita — mohon tidak membalas e-mail ini.
+Butuh bantuan? Hubungi Pusat Bantuan: https://jastipkita.id/bantuan
+Atur notifikasi: https://jastipkita.id/app/settings/notifications
+Syarat & Ketentuan: https://jastipkita.id/legal/syarat-ketentuan
+Kebijakan Privasi: https://jastipkita.id/legal/privasi
+JastipKita — Titip Mudah, Aman, Terpercaya.",
+}
+`;
+
+exports[`e-mail templates (snapshot) > payment secured (buyer, id) — subject/text snapshot, accessible dark-mode-safe HTML with the §10 breakdown 1`] = `
+{
+  "subject": "Pembayaran aman untuk JK-260927-7K2M9Q",
+  "text": "Pembayaran kamu aman
+
+Halo Rina,
+
+Pembayaran untuk titipan "Nintendo Switch OLED" sudah kami terima dan ditahan SafePay.
+
+Dana baru diteruskan ke traveler setelah kamu menerima barang. Traveler akan mengonfirmasi harga aktual sebelum membeli.
+
+>> Pembayaran aman / PAYMENT SECURED — Rp 8.931.623 ditahan SafePay
+
+No. transaksi: JK-260927-7K2M9Q
+Produk: Nintendo Switch OLED
+Traveler: Dimas P.
+Status: Pembayaran aman
+
+Rincian harga
+- Harga Barang: Rp 5.565.927
+- Traveler Fee: Rp 556.593
+- Bea Masuk (estimasi): Rp 549.000
+- Pajak Impor (estimasi): Rp 1.871.000
+- JastipKita Protection: Rp 83.489
+- Platform Fee: Rp 278.296
+- Pajak atas layanan: Rp 39.796
+- Biaya Pembayaran: Rp 62.522
+- Diskon promo: −Rp 50.000
+- JastipKita Credit: −Rp 25.000
+= Total Landed Cost: Rp 8.931.623
+Bea masuk & pajak impor adalah estimasi; nilai final ditetapkan Bea Cukai.
+
+Lihat status titipan: https://jastipkita.id/app/transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c
+Buka di aplikasi JastipKita: jastipkita://transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c
+Lihat struk: https://jastipkita.id/app/transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c/receipt
+
+—
+E-mail ini dikirim otomatis oleh JastipKita — mohon tidak membalas e-mail ini.
+Butuh bantuan? Hubungi Pusat Bantuan: https://jastipkita.id/bantuan
+Atur notifikasi: https://jastipkita.id/app/settings/notifications
+Syarat & Ketentuan: https://jastipkita.id/legal/syarat-ketentuan
+Kebijakan Privasi: https://jastipkita.id/legal/privasi
+JastipKita — Titip Mudah, Aman, Terpercaya.",
+}
+`;
+
+exports[`e-mail templates (snapshot) > price adjustment requested (en) 1`] = `
+{
+  "subject": "Action needed: price change for JK-260927-7K2M9Q",
+  "text": "Your traveler requested a price adjustment
+
+Hi Rina,
+
+Dimas P. found that the actual price of "Nintendo Switch OLED" differs from what you paid.
+
+Approve, reject or ask for clarification before 27 Sep 2026, 10:15 WIB. If you do not respond, the change is treated as rejected and you get a full refund without penalty.
+
+>> Respond by 27 Sep 2026, 10:15 WIB
+
+Transaction no.: JK-260927-7K2M9Q
+Product: Nintendo Switch OLED
+Traveler: Dimas P.
+Status: Payment secured
+Original price: Rp 5,565,927
+Actual price: Rp 5,685,927
+Difference: +Rp 120,000
+
+Price breakdown
+- Item Price: Rp 5,565,927
+- Traveler Fee: Rp 556,593
+- Customs Duty (estimate): Rp 549,000
+- Import Tax (estimate): Rp 1,871,000
+- JastipKita Protection: Rp 83,489
+- Platform Fee: Rp 278,296
+- Service Tax: Rp 39,796
+- Payment Fee: Rp 62,522
+- Promo discount: −Rp 50,000
+- JastipKita Credit: −Rp 25,000
+= Total Landed Cost: Rp 8,931,623
+Customs duty & import tax are estimates; the final amount is set by Indonesian Customs.
+
+Review price change: https://jastipkita.id/app/transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c
+Open in the JastipKita app: jastipkita://transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c
+View receipt: https://jastipkita.id/app/transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c/receipt
+
+—
+This e-mail was sent automatically by JastipKita — please do not reply.
+Need help? Visit the Help Center: https://jastipkita.id/bantuan
+Notification settings: https://jastipkita.id/app/settings/notifications
+Terms & Conditions: https://jastipkita.id/legal/syarat-ketentuan
+Privacy Policy: https://jastipkita.id/legal/privasi
+JastipKita — Easy, Safe, Trusted shopping by travelers.",
+}
+`;
+
+exports[`e-mail templates (snapshot) > request accepted (traveler) shows DO NOT PURCHASE and only item + traveler fee 1`] = `
+{
+  "subject": "Request diterima: JK-260927-7K2M9Q",
+  "text": "Request titipan diterima
+
+Halo Rina,
+
+Kamu sekarang terhubung dengan penitip untuk "Nintendo Switch OLED". Chat transaksi sudah dibuka.
+
+Penitip akan membayar lewat SafePay. Kamu baru boleh membeli barang setelah status Pembelian Disetujui.
+
+>> JANGAN BELI DULU / DO NOT PURCHASE — tunggu status Pembelian Disetujui.
+
+No. transaksi: JK-260927-7K2M9Q
+Produk: Nintendo Switch OLED
+Penitip: Rina W.
+Status: Traveler ditemukan
+
+Rincian untuk traveler
+- Harga Barang: Rp 5.565.927
+- Traveler Fee: Rp 556.593
+
+Lihat titipan: https://jastipkita.id/app/transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c
+Buka di aplikasi JastipKita: jastipkita://transactions/5b3f6c2e-8a1d-4f7e-9c0b-2d4e6f8a1b3c
+
+—
+E-mail ini dikirim otomatis oleh JastipKita — mohon tidak membalas e-mail ini.
+Butuh bantuan? Hubungi Pusat Bantuan: https://jastipkita.id/bantuan
+Atur notifikasi: https://jastipkita.id/app/settings/notifications
+Syarat & Ketentuan: https://jastipkita.id/legal/syarat-ketentuan
+Kebijakan Privasi: https://jastipkita.id/legal/privasi
+JastipKita — Titip Mudah, Aman, Terpercaya.",
+}
+`;
