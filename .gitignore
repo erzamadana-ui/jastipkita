@@ -33,3 +33,7 @@ secrets/
 *.pem
 !docs/**/*.pem.example
 .DS_Store
+
+# DevOps additions
+apps/mobile/dart_defines.json
+apps/api/dist-node/

@@ -1,0 +1,149 @@
+# JastipKita API — Cloudflare Workers configuration (NO SECRETS IN THIS FILE).
+#
+#   Deploy (CI does this):  npx wrangler@4 deploy --config infra/cloudflare/wrangler.toml --env staging
+#   Dry run (local):        npx wrangler@4 deploy --config infra/cloudflare/wrangler.toml --env staging --dry-run --outdir .wrangler/dist
+#
+# Secrets (DATABASE_URL, JWT_SECRET, DATA_ENCRYPTION_KEYS, HMAC_PEPPER, XENDIT_*, S3 keys, …) are NOT here:
+# CI pushes them with `wrangler secret bulk` from GitHub Environment secrets (docs/07-deployment.md §5).
+# Non-secret values below are safe defaults; account-specific ones (URLs, bucket, endpoint) are overridden at
+# deploy time from GitHub Variables with `--var KEY:VALUE` (scripts/ci/worker-config.ts).
+#
+# PLAN LIMITS (Workers FREE — verify on https://developers.cloudflare.com/workers/platform/limits/):
+#   * 10 ms CPU per invocation (HTTP and Cron). Measured in Node 22: createApp() alone ≈ 7 ms CPU median per request
+#     because src/worker.ts rebuilds the app on every request → see docs/01-architecture.md §10 "Workers FREE plan — risk list".
+#   * 100 000 requests/day, 128 MB memory, 50 external subrequests per invocation, 5 Cron Triggers per account.
+#   If CPU limits are hit (error 1102 / "exceeded CPU"), options are: (a) cache the app per isolate (code change,
+#   API team), (b) Workers Paid US$5/month, (c) Node container (apps/api/Dockerfile). (b) and (c) need OWNER APPROVAL.
+
+name = "jastipkita-api"                      # never deployed without --env (CI always passes one)
+main = "../../apps/api/src/worker.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]     # postgres.js uses TCP sockets via cloudflare:sockets / node:net shims
+workers_dev = false
+
+# ---------------------------------------------------------------------------------------------------------------
+# STAGING — https://jastipkita-api-staging.<your-subdomain>.workers.dev
+# ---------------------------------------------------------------------------------------------------------------
+[env.staging]
+name = "jastipkita-api-staging"
+workers_dev = true
+preview_urls = false
+
+[env.staging.observability]
+enabled = true
+head_sampling_rate = 1
+
+# Smart Placement runs the Worker close to the database (Neon aws-ap-southeast-1) instead of the user's PoP,
+# which matters because every request opens a fresh Postgres connection (several round trips).
+[env.staging.placement]
+mode = "smart"
+
+# Worker tick (jobs + outbox, src/jobs/runner.ts). Jobs declared every 60 s run at most every 5 min here.
+# NEON FREE WARNING: a 5-minute cron keeps the Neon compute awake 24/7 (it suspends only after 5 min idle) →
+# ≈ 720 h × 0.25 CU = 180 CU-hours/month (ASUMSI) versus the free allowance (ASUMSI 100 CU-hours/project/month,
+# check the Neon pricing page). If the Neon console shows the budget running out, change this to "*/15 * * * *".
+[env.staging.triggers]
+crons = ["*/5 * * * *"]
+
+[env.staging.vars]
+APP_ENV = "staging"
+APP_NAME = "JastipKita"
+LOG_LEVEL = "info"
+# Overridden from GitHub Variables (API_BASE_URL, WEB_BASE_URL, ADMIN_BASE_URL, CORS_ORIGINS).
+API_BASE_URL = "https://jastipkita-api-staging.CHANGE-ME.workers.dev"
+WEB_BASE_URL = "https://antarkitaindonesia.com/jastipkita"
+ADMIN_BASE_URL = "https://jastipkita-admin-staging.pages.dev"
+# CORS compares the browser Origin (scheme://host[:port], never a path). WEB_BASE_URL has a path, so the web origin
+# must be listed here explicitly.
+CORS_ORIGINS = "https://antarkitaindonesia.com"
+DB_PROVIDER = "neon"
+DB_POOL_MAX = "1"
+ACCESS_TOKEN_TTL_SEC = "900"
+REFRESH_TOKEN_TTL_DAYS = "30"
+ADMIN_MFA_STEP_UP_SEC = "900"
+OTP_DEV_ECHO = "false"
+# Payments: Xendit TEST mode (keys xnd_development_…). Never "live" on staging (CI refuses).
+PAYMENT_PROVIDER = "xendit"
+XENDIT_ENV = "test"
+XENDIT_BASE_URL = "https://api.xendit.co"
+ALLOW_LIVE_PAYMENTS = "false"
+# E-mail/SMS/push start as log-only (MOCK). NOTE: with EMAIL_PROVIDER=log and SMS_PROVIDER=log nobody can receive
+# an OTP on staging → set EMAIL_PROVIDER=resend (GitHub Variable) + RESEND_API_KEY secret, or use Google Sign-In.
+EMAIL_PROVIDER = "log"
+EMAIL_FROM = "JastipKita Staging <no-reply@antarkitaindonesia.com>"
+PUSH_PROVIDER = "log"
+SMS_PROVIDER = "log"
+# Object storage is mandatory outside development (memory storage is refused by env.ts): Cloudflare R2.
+STORAGE_PROVIDER = "s3"
+S3_REGION = "auto"
+S3_ENDPOINT = "https://CHANGE-ME.r2.cloudflarestorage.com"
+S3_BUCKET = "jastipkita-staging"
+FX_PROVIDER = "frankfurter"
+FX_FRANKFURTER_BASE_URL = "https://api.frankfurter.dev/v1"
+KYC_PROVIDER = "manual"
+# ClamAV cannot run inside a Worker; "mock" is labelled MOCK in /v1/health. Real scanning needs a clamd service.
+MALWARE_SCAN_PROVIDER = "mock"
+INSURANCE_PROVIDER = "mock"
+EXTRACTION_PROVIDER = "heuristic"
+# "neon" is not wired yet in src/providers/db-admin (throws) — keep "generic".
+DB_ADMIN_PROVIDER = "generic"
+WORKER_ENABLED = "true"
+WORKER_ID = "cf-cron-staging"
+
+# ---------------------------------------------------------------------------------------------------------------
+# PRODUCTION — deployed only by .github/workflows/deploy-production.yml (manual, owner approval).
+# Custom domain requires the antarkitaindonesia.com zone on Cloudflare DNS. A path route such as
+# api.antarkitaindonesia.com/jastipkita/* would NOT work today: the app serves /v1/* and does not strip a base path.
+# ---------------------------------------------------------------------------------------------------------------
+[env.production]
+name = "jastipkita-api-production"
+workers_dev = false
+preview_urls = false
+# routes = [{ pattern = "jastipkita-api.antarkitaindonesia.com", custom_domain = true }]
+
+[env.production.observability]
+enabled = true
+head_sampling_rate = 1
+
+[env.production.placement]
+mode = "smart"
+
+[env.production.triggers]
+crons = ["*/5 * * * *"]
+
+[env.production.vars]
+APP_ENV = "production"
+APP_NAME = "JastipKita"
+LOG_LEVEL = "info"
+API_BASE_URL = "https://jastipkita-api.antarkitaindonesia.com"
+WEB_BASE_URL = "https://antarkitaindonesia.com/jastipkita"
+ADMIN_BASE_URL = "https://jastipkita-admin.pages.dev"
+CORS_ORIGINS = "https://antarkitaindonesia.com"
+DB_PROVIDER = "neon"
+DB_POOL_MAX = "1"
+ACCESS_TOKEN_TTL_SEC = "900"
+REFRESH_TOKEN_TTL_DAYS = "30"
+ADMIN_MFA_STEP_UP_SEC = "900"
+OTP_DEV_ECHO = "false"
+PAYMENT_PROVIDER = "xendit"
+# XENDIT_ENV / ALLOW_LIVE_PAYMENTS are forced by deploy-production.yml from the recorded owner decision.
+XENDIT_ENV = "test"
+XENDIT_BASE_URL = "https://api.xendit.co"
+ALLOW_LIVE_PAYMENTS = "false"
+EMAIL_PROVIDER = "resend"
+EMAIL_FROM = "JastipKita <no-reply@antarkitaindonesia.com>"
+PUSH_PROVIDER = "fcm"
+SMS_PROVIDER = "twilio"
+STORAGE_PROVIDER = "s3"
+S3_REGION = "auto"
+S3_ENDPOINT = "https://CHANGE-ME.r2.cloudflarestorage.com"
+S3_BUCKET = "jastipkita-production"
+FX_PROVIDER = "frankfurter"
+FX_FRANKFURTER_BASE_URL = "https://api.frankfurter.dev/v1"
+KYC_PROVIDER = "manual"
+MALWARE_SCAN_PROVIDER = "clamav-http"
+INSURANCE_PROVIDER = "mock"
+EXTRACTION_PROVIDER = "heuristic"
+DB_ADMIN_PROVIDER = "generic"
+WORKER_ENABLED = "true"
+WORKER_ID = "cf-cron-production"

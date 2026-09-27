@@ -1,0 +1,305 @@
+# Deploy STAGING ($0 target: Neon Free + Cloudflare Workers Free + GitHub Pages/Cloudflare Pages).
+#
+# Trigger: CI succeeded on a push to main (workflow_run), or manual run from main.
+# Order:   preflight → migrate (Neon, as jk_migrate_staging) → deploy-api (Worker + secrets + smoke) → web → admin
+# Every step that lacks its credentials is SKIPPED WITH A NOTICE instead of failing, so the pipeline is green
+# while the owner is still creating accounts (docs/07-deployment.md lists every secret/variable).
+name: Deploy staging
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_migrations:
+        description: Skip database migrations (API/web only)
+        type: boolean
+        default: false
+      force_secrets:
+        description: Push Worker secrets even when the fingerprint is unchanged
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+  WRANGLER: npx --yes wrangler@4
+  WRANGLER_SEND_METRICS: 'false'
+
+jobs:
+  preflight:
+    name: Preflight
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    environment: staging
+    timeout-minutes: 5
+    outputs:
+      db: ${{ steps.check.outputs.db }}
+      api: ${{ steps.check.outputs.api }}
+      landing: ${{ steps.check.outputs.landing }}
+      pages: ${{ steps.check.outputs.pages }}
+    steps:
+      - id: check
+        env:
+          HAS_DB: ${{ secrets.DATABASE_URL_MIGRATOR != '' }}
+          HAS_CF: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+          HAS_LANDING: ${{ secrets.LANDING_DEPLOY_TOKEN != '' }}
+          HAS_PAGES: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && vars.ADMIN_PAGES_PROJECT != '' }}
+        run: |
+          { echo "db=$HAS_DB"; echo "api=$HAS_CF"; echo "landing=$HAS_LANDING"; echo "pages=$HAS_PAGES"; } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Staging deploy of \`${DEPLOY_SHA::7}\`"
+            echo "| Part | Ready | Missing configuration |"
+            echo "|---|---|---|"
+            echo "| Database migrations | $HAS_DB | secret \`DATABASE_URL_MIGRATOR\` |"
+            echo "| API Worker | $HAS_CF | secrets \`CLOUDFLARE_API_TOKEN\`, \`CLOUDFLARE_ACCOUNT_ID\` |"
+            echo "| Web → antarkita-landing | $HAS_LANDING | secret \`LANDING_DEPLOY_TOKEN\` |"
+            echo "| Admin → Cloudflare Pages | $HAS_PAGES | variable \`ADMIN_PAGES_PROJECT\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$HAS_DB" = true ] || echo "::notice title=staging::DATABASE_URL_MIGRATOR missing — migrations skipped (docs/07-deployment.md §3)"
+          [ "$HAS_CF" = true ] || echo "::notice title=staging::Cloudflare credentials missing — API deploy skipped (docs/07-deployment.md §4)"
+          [ "$HAS_LANDING" = true ] || echo "::notice title=staging::LANDING_DEPLOY_TOKEN missing — web is built as an artifact only"
+
+  migrate:
+    name: Migrate Neon (staging)
+    needs: preflight
+    if: needs.preflight.outputs.db == 'true' && inputs.skip_migrations != true
+    runs-on: ubuntu-24.04
+    environment: staging
+    timeout-minutes: 15
+    env:
+      # DIRECT (non-pooled) connection string of jk_migrate_staging, with ?sslmode=require
+      DATABASE_URL: ${{ secrets.DATABASE_URL_MIGRATOR }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+      - name: PostgreSQL client
+        run: bash scripts/ci/install-pg-client.sh ${{ vars.PG_MAJOR || '17' }}
+      - name: Connection check
+        run: psql -X -At -c "SELECT 'connected as ' || current_user || ' to PostgreSQL ' || current_setting('server_version')"
+      - name: Status before
+        run: bash db/scripts/migrate.sh --status | tail -8
+      - name: Checksum drift check (refuse edited migrations)
+        run: bash db/scripts/migrate.sh --verify
+      - name: Apply pending migrations
+        run: |
+          v=$(psql -X -At -c "SHOW server_version_num")
+          # documented bootstrap workaround for PG16+ non-superuser owners (harmless afterwards)
+          if [ "$v" -ge 160000 ]; then export PGOPTIONS="-c createrole_self_grant=set,inherit"; fi
+          bash db/scripts/migrate.sh | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Seeds (idempotent)
+        run: bash db/scripts/seed.sh
+      - name: Verify after
+        run: |
+          bash db/scripts/migrate.sh --verify
+          echo "schema version: $(psql -X -At -c 'SELECT max(version) FROM schema_migrations')" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  deploy-api:
+    name: Deploy API Worker (staging)
+    needs: [preflight, migrate]
+    if: >-
+      always() && needs.preflight.outputs.api == 'true' &&
+      (needs.migrate.result == 'success' || (needs.migrate.result == 'skipped' && inputs.skip_migrations == true))
+    runs-on: ubuntu-24.04
+    environment:
+      name: staging
+      url: ${{ vars.API_BASE_URL }}
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter "@jastipkita/api..."
+      - name: Build and validate Worker configuration (no values printed)
+        id: cfg
+        env:
+          VARS_JSON: ${{ toJSON(vars) }}
+          SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: |
+          ver=$(node -p "require('./apps/api/package.json').version")
+          export APP_VERSION="$ver+${DEPLOY_SHA::7}"
+          pnpm --filter @jastipkita/api exec tsx ../../scripts/ci/worker-config.ts staging
+      - name: Secrets unchanged since last push?
+        id: fp
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/secrets-fingerprint
+          key: worker-secrets-staging-${{ steps.cfg.outputs.fingerprint }}
+          lookup-only: true
+      - name: Deploy Worker
+        run: |
+          mapfile -t VAR_ARGS < <(grep -v '^$' "$RUNNER_TEMP/worker-vars.args")
+          $WRANGLER deploy --config infra/cloudflare/wrangler.toml --env staging "${VAR_ARGS[@]}" \
+            --message "staging ${DEPLOY_SHA::7} (run ${{ github.run_id }})"
+      - name: Push Worker secrets (wrangler secret bulk)
+        if: steps.fp.outputs.cache-hit != 'true' || inputs.force_secrets == true
+        run: |
+          $WRANGLER secret bulk "$RUNNER_TEMP/worker-secrets.json" --config infra/cloudflare/wrangler.toml --env staging
+          mkdir -p "$RUNNER_TEMP/secrets-fingerprint" && echo "${{ steps.cfg.outputs.fingerprint }}" > "$RUNNER_TEMP/secrets-fingerprint/fp"
+      - name: Remember secrets fingerprint
+        if: steps.fp.outputs.cache-hit != 'true' || inputs.force_secrets == true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/secrets-fingerprint
+          key: worker-secrets-staging-${{ steps.cfg.outputs.fingerprint }}
+      - name: Remove secrets file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/worker-secrets.json"
+      - name: Smoke test (/v1/health — never LIVE on staging)
+        run: bash scripts/ci/smoke-health.sh "${{ vars.API_BASE_URL }}" staging 'SANDBOX|MOCK' | tee -a "$GITHUB_STEP_SUMMARY"
+
+  web:
+    name: Web (build + optional publish to antarkita-landing)
+    needs: [preflight, deploy-api]
+    if: always() && needs.preflight.result == 'success' && needs.deploy-api.result != 'failure'
+    runs-on: ubuntu-24.04
+    environment: staging
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+      - id: app
+        run: |
+          if [ -f apps/web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"
+          else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice title=web::apps/web not present — skipped"; fi
+      - if: steps.app.outputs.present == 'true'
+        uses: pnpm/action-setup@v4
+      - if: steps.app.outputs.present == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - if: steps.app.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile --filter "@jastipkita/web..."
+      - if: steps.app.outputs.present == 'true'
+        name: Build (public, non-secret configuration only)
+        env:
+          PUBLIC_API_BASE_URL: ${{ vars.PUBLIC_API_BASE_URL || vars.API_BASE_URL }}
+          PUBLIC_SUPPORT_WHATSAPP: ${{ vars.PUBLIC_SUPPORT_WHATSAPP }}
+          PUBLIC_SUPPORT_EMAIL: ${{ vars.PUBLIC_SUPPORT_EMAIL }}
+          PUBLIC_PLAY_STORE_URL: ${{ vars.PUBLIC_PLAY_STORE_URL }}
+          PUBLIC_APP_STORE_URL: ${{ vars.PUBLIC_APP_STORE_URL }}
+          PUBLIC_ENABLE_GOOGLE_LOGIN: ${{ vars.PUBLIC_ENABLE_GOOGLE_LOGIN || 'false' }}
+          PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.PUBLIC_GOOGLE_CLIENT_ID }}
+        run: pnpm --filter @jastipkita/web build
+      - if: steps.app.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist-staging-${{ github.run_number }}
+          path: apps/web/dist
+          retention-days: 14
+      - name: Check landing publish prerequisites
+        id: landing
+        if: steps.app.outputs.present == 'true' && needs.preflight.outputs.landing == 'true'
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"
+      - if: steps.landing.outputs.ok == 'true'
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ vars.LANDING_REPO || 'erzamadana-ui/antarkita-landing' }}
+          ref: ${{ vars.LANDING_BRANCH || 'main' }}
+          token: ${{ secrets.LANDING_DEPLOY_TOKEN }}
+          path: landing
+      - name: Publish to antarkita-landing/${{ vars.LANDING_PATH || 'jastipkita' }}
+        if: steps.landing.outputs.ok == 'true'
+        env:
+          LANDING_PATH: ${{ vars.LANDING_PATH || 'jastipkita' }}
+          ADD_NOJEKYLL: ${{ vars.LANDING_ADD_NOJEKYLL || 'false' }}
+        run: |
+          set -euo pipefail
+          # GitHub Pages (Jekyll) ignores folders starting with "_" — Astro emits /_assets/. Without .nojekyll every
+          # CSS/JS asset would 404. Adding .nojekyll changes the WHOLE landing site, so it is opt-in.
+          if [ ! -f landing/.nojekyll ]; then
+            if [ "$ADD_NOJEKYLL" = true ]; then touch landing/.nojekyll
+            else
+              echo "::error title=landing::antarkita-landing has no .nojekyll → /jastipkita/_assets/* would 404 on GitHub Pages. Set repository variable LANDING_ADD_NOJEKYLL=true (after checking the landing site does not rely on Jekyll) and re-run."
+              exit 1
+            fi
+          fi
+          mkdir -p "landing/$LANDING_PATH"
+          # keep the Flutter web app (/jastipkita/app/) which is published separately
+          rsync -a --delete --exclude 'app/' apps/web/dist/ "landing/$LANDING_PATH/"
+          cd landing
+          git add -A "$LANDING_PATH"
+          [ -f .nojekyll ] && git add .nojekyll
+          if git diff --cached --quiet; then echo "no changes to publish"; exit 0; fi
+          git -c user.name="jastipkita-deploy[bot]" -c user.email="jastipkita-deploy@users.noreply.github.com" \
+            commit -q -m "deploy(jastipkita-web): ${DEPLOY_SHA::7} from ${{ github.repository }} run ${{ github.run_id }}"
+          git push -q origin "HEAD:${{ vars.LANDING_BRANCH || 'main' }}"
+          echo "Published web to https://antarkitaindonesia.com/$LANDING_PATH/" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  admin:
+    name: Admin (build + optional Cloudflare Pages)
+    needs: [preflight, deploy-api]
+    if: always() && needs.preflight.result == 'success' && needs.deploy-api.result != 'failure'
+    runs-on: ubuntu-24.04
+    environment: staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+      - id: app
+        run: |
+          if [ -f apps/admin/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"
+          else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice title=admin::apps/admin not present — skipped"; fi
+      - if: steps.app.outputs.present == 'true'
+        uses: pnpm/action-setup@v4
+      - if: steps.app.outputs.present == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - if: steps.app.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile --filter "@jastipkita/admin..."
+      - if: steps.app.outputs.present == 'true'
+        env:
+          VITE_API_BASE_URL: ${{ vars.API_BASE_URL }}
+          VITE_APP_ENV: staging
+        run: pnpm --filter @jastipkita/admin build
+      - name: Enforce noindex + security headers on the static admin
+        if: steps.app.outputs.present == 'true'
+        run: |
+          d=apps/admin/dist
+          [ -f "$d/robots.txt" ] || printf 'User-agent: *\nDisallow: /\n' > "$d/robots.txt"
+          if [ ! -f "$d/_headers" ]; then
+            printf '/*\n  X-Robots-Tag: noindex, nofollow\n  X-Frame-Options: DENY\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n' > "$d/_headers"
+          fi
+      - if: steps.app.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-dist-staging-${{ github.run_number }}
+          path: apps/admin/dist
+          retention-days: 14
+      - name: Deploy to Cloudflare Pages (preview branch "staging")
+        if: steps.app.outputs.present == 'true' && needs.preflight.outputs.pages == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: $WRANGLER pages deploy apps/admin/dist --project-name "${{ vars.ADMIN_PAGES_PROJECT }}" --branch staging --commit-hash "$DEPLOY_SHA"

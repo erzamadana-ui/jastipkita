@@ -1,0 +1,119 @@
+---
+import '@jastipkita/design-tokens/tokens.css';
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import ConsentBanner from '../components/ConsentBanner.astro';
+import JsonLd from '../components/JsonLd.astro';
+import { absolute, absoluteAsset, asset } from '../lib/paths.ts';
+import { organizationLd, websiteLd } from '../lib/seo.ts';
+
+export interface Alternate {
+  lang: 'id' | 'en';
+  path: string;
+}
+
+interface Props {
+  title: string;
+  description: string;
+  /** Path relative to the site base, e.g. "/kalkulator-bea-cukai/". Used for canonical & OG url. */
+  path: string;
+  lang?: 'id' | 'en';
+  alternates?: Alternate[];
+  noindex?: boolean;
+  jsonLd?: unknown[];
+  ogImage?: string;
+  ogType?: 'website' | 'article';
+  /** Section key for aria-current in the nav. */
+  nav?: string;
+}
+
+const {
+  title,
+  description,
+  path,
+  lang = 'id',
+  alternates = [],
+  noindex = false,
+  jsonLd = [],
+  ogImage = '/og-image.png',
+  ogType = 'website',
+  nav,
+} = Astro.props;
+
+const fullTitle = title.includes('JastipKita') ? title : `${title} · JastipKita`;
+const canonical = absolute(path);
+const alt = alternates.length ? [{ lang, path }, ...alternates.filter((a) => a.lang !== lang)] : [];
+const xDefault = alt.find((a) => a.lang === 'id');
+const fontFaces = [
+  ['400', 'normal'],
+  ['500', 'normal'],
+  ['600', 'normal'],
+  ['700', 'normal'],
+] as const;
+const LATIN = 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD';
+const LATIN_EXT = 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF';
+const fontCss = fontFaces
+  .flatMap(([w, s]) => [
+    `@font-face{font-family:Poppins;font-style:${s};font-weight:${w};font-display:swap;src:url(${asset(`/fonts/poppins-latin-${w}-${s}.woff2`)}) format('woff2');unicode-range:${LATIN}}`,
+    `@font-face{font-family:Poppins;font-style:${s};font-weight:${w};font-display:swap;src:url(${asset(`/fonts/poppins-latin-ext-${w}-${s}.woff2`)}) format('woff2');unicode-range:${LATIN_EXT}}`,
+  ])
+  .join('');
+// Runs before first paint: apply a theme the visitor explicitly chose (stored only after a click).
+const themeInit = `try{var t=localStorage.getItem('jk-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}`;
+---
+<!doctype html>
+<html lang={lang === 'id' ? 'id' : 'en'} dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    {alt.map((a) => <link rel="alternate" hreflang={a.lang === 'id' ? 'id-ID' : 'en'} href={absolute(a.path)} />)}
+    {xDefault && <link rel="alternate" hreflang="x-default" href={absolute(xDefault.path)} />}
+    <script is:inline set:html={themeInit} />
+    <link rel="preload" href={asset('/fonts/poppins-latin-400-normal.woff2')} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={asset('/fonts/poppins-latin-600-normal.woff2')} as="font" type="font/woff2" crossorigin />
+    <style is:inline set:html={fontCss}></style>
+    <meta name="theme-color" content="#0B1E4A" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#070B19" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href={asset('/favicon.ico')} sizes="48x48" />
+    <link rel="icon" href={asset('/favicon.svg')} type="image/svg+xml" />
+    <link rel="apple-touch-icon" href={asset('/apple-touch-icon.png')} />
+    <link rel="manifest" href={asset('/site.webmanifest')} />
+    <link rel="sitemap" href={asset('/sitemap-index.xml')} />
+    <meta property="og:site_name" content="JastipKita" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={absoluteAsset(ogImage)} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="JastipKita — Titip Mudah, Aman, Terpercaya." />
+    <meta property="og:locale" content={lang === 'id' ? 'id_ID' : 'en_US'} />
+    {alt.filter((a) => a.lang !== lang).map((a) => <meta property="og:locale:alternate" content={a.lang === 'id' ? 'id_ID' : 'en_US'} />)}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={absoluteAsset(ogImage)} />
+    <meta name="format-detection" content="telephone=no" />
+    <JsonLd data={[organizationLd(), websiteLd(lang), ...jsonLd]} />
+    <slot name="head" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{lang === 'id' ? 'Lewati ke konten utama' : 'Skip to main content'}</a>
+    <Header lang={lang} alternates={alt} current={nav} />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <Footer lang={lang} />
+    <ConsentBanner lang={lang} />
+    <script>
+      import '../scripts/site.ts';
+    </script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+---
+import Base from '../../layouts/Base.astro';
+import RestrictedPage from '../../components/RestrictedPage.astro';
+import { breadcrumbLd, webPageLd } from '../../lib/seo.ts';
+const title = 'Cek Barang Terlarang & Terbatas untuk Jastip Luar Negeri';
+const description = 'Periksa apakah barang titipanmu dilarang, terbatas, butuh izin, atau wajib deklarasi saat masuk Indonesia: obat, suplemen, kosmetik, ponsel, power bank, alkohol, vape, dan lainnya.';
+const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Cek barang terlarang', path: '/cek-barang-terlarang/' }];
+---
+<Base title={title} description={description} path="/cek-barang-terlarang/" alternates={[{ lang: 'en', path: '/en/restricted-items/' }]} jsonLd={[webPageLd({ name: title, description, path: '/cek-barang-terlarang/' }), breadcrumbLd(crumbs)]}>
+  <RestrictedPage lang="id" crumbs={crumbs} />
+</Base>

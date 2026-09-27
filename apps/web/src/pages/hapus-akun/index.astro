@@ -1,0 +1,11 @@
+---
+import Base from '../../layouts/Base.astro';
+import DeleteAccountInfo from '../../components/DeleteAccountInfo.astro';
+import { breadcrumbLd, webPageLd } from '../../lib/seo.ts';
+const title = 'Hapus Akun & Data JastipKita';
+const description = 'Cara menghapus akun JastipKita dari aplikasi atau web, masa tenggang 14 hari, data yang dihapus, dan data yang wajib disimpan lebih lama.';
+const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Hapus akun & data', path: '/hapus-akun/' }];
+---
+<Base title={title} description={description} path="/hapus-akun/" alternates={[{ lang: 'en', path: '/en/delete-account/' }]} jsonLd={[webPageLd({ name: title, description, path: '/hapus-akun/' }), breadcrumbLd(crumbs)]}>
+  <DeleteAccountInfo lang="id" crumbs={crumbs} />
+</Base>

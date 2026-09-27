@@ -1,0 +1,17 @@
+---
+import { url } from '../lib/paths.ts';
+import type { Crumb } from '../lib/seo.ts';
+interface Props { items: Crumb[]; lang?: 'id' | 'en' }
+const { items, lang = 'id' } = Astro.props;
+---
+<nav class="breadcrumbs" aria-label={lang === 'id' ? 'Breadcrumb' : 'Breadcrumb'}>
+  <ol>
+    {items.map((c, i) =>
+      i === items.length - 1 ? (
+        <li><span aria-current="page">{c.name}</span></li>
+      ) : (
+        <li><a href={url(c.path)}>{c.name}</a></li>
+      ),
+    )}
+  </ol>
+</nav>

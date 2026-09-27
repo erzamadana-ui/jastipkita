@@ -1,0 +1,209 @@
+# Mobile release builds (manual). Produces SIGNED Android AAB + APK as workflow artifacts.
+# It does NOT upload to Google Play / App Store: store submission needs owner approval (docs/checklists/store-checklist.md).
+#
+# Android signing secrets (upload key — Play App Signing holds the app signing key):
+#   ANDROID_KEYSTORE_BASE64   base64 of the upload keystore (.jks)     ANDROID_KEY_ALIAS
+#   ANDROID_KEYSTORE_PASSWORD                                          ANDROID_KEY_PASSWORD
+# versionCode = vars.ANDROID_VERSION_CODE_OFFSET (default 0) + run number of this workflow (monotonic).
+#
+# iOS job: skeleton, DISABLED unless input build_ios=true AND repository variable IOS_RELEASE_ENABLED=true.
+# Needs the Apple Developer Program (US$99/year, owner approval), a macOS runner (billed at 10× Linux minutes on
+# private repos) and these secrets: IOS_DIST_CERT_P12_BASE64, IOS_DIST_CERT_PASSWORD,
+# IOS_PROVISIONING_PROFILE_BASE64, IOS_TEAM_ID (+ for a later upload step: APPSTORE_CONNECT_API_KEY_ID,
+# APPSTORE_CONNECT_ISSUER_ID, APPSTORE_CONNECT_API_KEY_P8_BASE64).
+name: Mobile release
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_env:
+        description: Backend the build talks to
+        type: choice
+        options: [staging, production]
+        default: staging
+      build_name:
+        description: versionName (empty = version from pubspec.yaml)
+        type: string
+        default: ''
+      build_ios:
+        description: Also run the iOS job (requires IOS_RELEASE_ENABLED=true and Apple certificates)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-release
+  cancel-in-progress: false
+
+jobs:
+  android:
+    name: Android (signed AAB + APK)
+    runs-on: ubuntu-24.04
+    environment: mobile-release
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      API_BASE_URL: ${{ inputs.app_env == 'production' && vars.PRODUCTION_API_BASE_URL || vars.STAGING_API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Preconditions
+        env:
+          HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+        run: |
+          [ -f pubspec.yaml ] || { echo "::error::apps/mobile/pubspec.yaml missing"; exit 1; }
+          [ "$HAS_KEYSTORE" = true ] || { echo "::error::Android signing secrets missing (see workflow header)"; exit 1; }
+          [ -n "$API_BASE_URL" ] || { echo "::error::variable ${{ inputs.app_env == 'production' && 'PRODUCTION_API_BASE_URL' || 'STAGING_API_BASE_URL' }} is not set"; exit 1; }
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Platform folders
+        run: |
+          if [ ! -d android ]; then
+            echo "::warning::android/ is not committed — building from a generated scaffold. Commit apps/mobile/android before the first store upload."
+            had_test=false; [ -f test/widget_test.dart ] && had_test=true
+            flutter create --platforms=android,ios,web --org com.antarkitaindonesia --project-name jastipkita .
+            [ "$had_test" = false ] && rm -f test/widget_test.dart
+          fi
+          flutter pub get
+          if grep -q '^flutter_launcher_icons:' pubspec.yaml || [ -f flutter_launcher_icons.yaml ]; then dart run flutter_launcher_icons; fi
+          if grep -q '^flutter_native_splash:' pubspec.yaml || [ -f flutter_native_splash.yaml ]; then dart run flutter_native_splash:create; fi
+          if [ -f l10n.yaml ] || grep -qE '^\s+generate:\s*true' pubspec.yaml; then flutter gen-l10n; fi
+      - name: Version
+        id: ver
+        env:
+          OFFSET: ${{ vars.ANDROID_VERSION_CODE_OFFSET || '0' }}
+          INPUT_NAME: ${{ inputs.build_name }}
+        run: |
+          code=$(( OFFSET + ${{ github.run_number }} ))
+          name="${INPUT_NAME:-$(grep -E '^version:' pubspec.yaml | sed -E 's/version:\s*([^+ ]+).*/\1/')}"
+          echo "code=$code" >> "$GITHUB_OUTPUT"; echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "versionName $name, versionCode $code, backend ${{ inputs.app_env }}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Keystore (temporary, removed at the end)
+        id: ks
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          umask 077
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          # standard Flutter signing contract (android/key.properties is git-ignored)
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/upload.jks" "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD" > android/key.properties
+          if grep -qs 'key.properties' android/app/build.gradle android/app/build.gradle.kts; then
+            echo "gradle=true" >> "$GITHUB_OUTPUT"; echo "Gradle release signing configured via key.properties"
+          else
+            echo "gradle=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::android/app/build.gradle(.kts) does not read key.properties — artifacts will be re-signed after the build (apksigner/jarsigner). Add the standard Flutter signingConfigs block."
+          fi
+      - name: Build AAB + APK (release)
+        run: |
+          defs=(--dart-define=API_BASE_URL="$API_BASE_URL" --dart-define=APP_ENV=${{ inputs.app_env }})
+          flutter build appbundle --release --build-number=${{ steps.ver.outputs.code }} --build-name=${{ steps.ver.outputs.name }} "${defs[@]}"
+          flutter build apk --release --build-number=${{ steps.ver.outputs.code }} --build-name=${{ steps.ver.outputs.name }} "${defs[@]}"
+      - name: Re-sign with the upload key (only when Gradle signing is not configured)
+        if: steps.ks.outputs.gradle == 'false'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          bt="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          aab=build/app/outputs/bundle/release/app-release.aab
+          "$bt/apksigner" sign --ks "$RUNNER_TEMP/upload.jks" --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD "$apk"
+          # AAB: drop the debug signature, then sign with the upload key
+          zip -q -d "$aab" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.DSA' 'META-INF/*.EC' 'META-INF/MANIFEST.MF' || true
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore "$RUNNER_TEMP/upload.jks" \
+            -storepass:env ANDROID_KEYSTORE_PASSWORD -keypass:env ANDROID_KEY_PASSWORD "$aab" "$ANDROID_KEY_ALIAS"
+      - name: Verify signatures (must not be the debug key)
+        run: |
+          set -euo pipefail
+          bt="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          certs=$("$bt/apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk)
+          echo "$certs" | grep -E 'certificate (DN|SHA-256)' | tee -a "$GITHUB_STEP_SUMMARY"
+          if echo "$certs" | grep -q 'CN=Android Debug'; then echo "::error::APK is signed with the DEBUG key"; exit 1; fi
+          jarsigner -verify build/app/outputs/bundle/release/app-release.aab | tail -1
+          if jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab | grep -q 'CN=Android Debug'; then
+            echo "::error::AAB is signed with the DEBUG key"; exit 1; fi
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks" android/key.properties
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-release-${{ inputs.app_env }}-${{ steps.ver.outputs.name }}-${{ steps.ver.outputs.code }}
+          path: |
+            apps/mobile/build/app/outputs/bundle/release/app-release.aab
+            apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+  ios:
+    name: iOS (skeleton — disabled by default)
+    if: inputs.build_ios == true && vars.IOS_RELEASE_ENABLED == 'true'
+    runs-on: macos-15
+    environment: mobile-release
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      API_BASE_URL: ${{ inputs.app_env == 'production' && vars.PRODUCTION_API_BASE_URL || vars.STAGING_API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Preconditions
+        run: |
+          [ -d ios ] || { echo "::error::apps/mobile/ios must be committed (bundle id, capabilities, Sign in with Apple entitlement)"; exit 1; }
+          [ -f ios/ExportOptions.plist ] || { echo "::error::ios/ExportOptions.plist missing (method app-store, teamID, provisioningProfiles)"; exit 1; }
+      - name: Import signing certificate and provisioning profile
+        env:
+          P12: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          kc="$RUNNER_TEMP/build.keychain-db"; kcpw=$(openssl rand -hex 16)
+          echo "$P12" | base64 -d > "$RUNNER_TEMP/dist.p12"
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          security import "$RUNNER_TEMP/dist.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$kc"
+          security set-key-partition-list -S apple-tool:,apple: -k "$kcpw" "$kc" >/dev/null
+          # shellcheck disable=SC2046 # intentional word splitting of the existing keychain list
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROFILE" | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/jastipkita.mobileprovision
+          rm -f "$RUNNER_TEMP/dist.p12"
+      - name: Build IPA
+        run: |
+          flutter pub get
+          flutter build ipa --release --build-number=$(( ${{ vars.IOS_BUILD_NUMBER_OFFSET || '0' }} + ${{ github.run_number }} )) \
+            --dart-define=API_BASE_URL="$API_BASE_URL" --dart-define=APP_ENV=${{ inputs.app_env }} \
+            --export-options-plist=ios/ExportOptions.plist
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-${{ inputs.app_env }}-${{ github.run_number }}
+          path: apps/mobile/build/ios/ipa/*.ipa
+          retention-days: 30

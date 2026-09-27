@@ -1,0 +1,15 @@
+{
+  "_comment": "Example --dart-define-from-file for the Flutter app. PUBLIC values only: everything here is compiled into the app and can be extracted from the APK/IPA. Never put secrets, API keys with write access or settlement data here. Copy to dart_defines.json (git-ignored; CI secret guard refuses it if committed) and run: flutter run --dart-define-from-file=dart_defines.json. Names must match String.fromEnvironment(...) in the app — coordinate with the mobile engineer before renaming. Legal page URLs are placeholders until apps/web publishes those routes; ACCOUNT_DELETION_URL (/jastipkita/akun/hapus/) is the one declared to Google Play.",
+  "APP_ENV": "staging",
+  "API_BASE_URL": "https://jastipkita-api-staging.example.workers.dev",
+  "WEB_BASE_URL": "https://antarkitaindonesia.com/jastipkita",
+  "PRIVACY_POLICY_URL": "https://antarkitaindonesia.com/jastipkita/kebijakan-privasi/",
+  "TERMS_URL": "https://antarkitaindonesia.com/jastipkita/syarat-ketentuan/",
+  "ACCOUNT_DELETION_URL": "https://antarkitaindonesia.com/jastipkita/akun/hapus/",
+  "SUPPORT_WHATSAPP": "",
+  "SUPPORT_EMAIL": "",
+  "GOOGLE_SERVER_CLIENT_ID": "",
+  "GOOGLE_IOS_CLIENT_ID": "",
+  "APPLE_SERVICE_ID": "",
+  "SHOW_SANDBOX_BADGE": "true"
+}

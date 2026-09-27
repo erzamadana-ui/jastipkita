@@ -1,0 +1,20 @@
+# gitleaks configuration (CI: .github/workflows/ci.yml → job "secrets").
+# Extends the default rule set. Allow-listed paths contain only test fixtures or generated data; they are still
+# scanned for real credential formats by scripts/ci/secret-grep.sh.
+title = "JastipKita"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures, snapshots and generated files (no real secrets)"
+paths = [
+  '''(^|/)[^/]+\.test\.ts$''',
+  '''(^|/)__snapshots__/''',
+  '''^apps/api/test/''',
+  '''^apps/api/src/modules/[^/]+/test-(fixtures|support)\.ts$''',
+  '''^apps/api/src/modules/notifications/testing/''',
+  '''^pnpm-lock\.yaml$''',
+  '''^docs/api/openapi\.json$''',
+  '''^brand/preview/''',
+]

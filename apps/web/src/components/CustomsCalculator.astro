@@ -1,0 +1,112 @@
+---
+import Icon from './Icon.astro';
+import { PRODUCT_CATEGORIES } from '@jastipkita/core';
+import { COUNTRY_PAGES } from '../data/countries.ts';
+import { CURRENCY_META, KMK_RATES } from '../data/kmk-rates.ts';
+import { RULE_NON_PERSONAL } from '../lib/customs.ts';
+import { url } from '../lib/paths.ts';
+
+interface Props { lang: 'id' | 'en' }
+const { lang } = Astro.props;
+const id = lang === 'id';
+const t = (a: string, b: string) => (id ? a : b);
+const cats = [...PRODUCT_CATEGORIES].filter((c) => c.code !== 'OTHER').sort((a, b) => (id ? a.nameId : a.nameEn).localeCompare(id ? b.nameId : b.nameEn, lang));
+---
+<div class="tool-grid">
+  <form class="card calc-form" id="calc-form" novalidate aria-describedby="calc-help">
+    <h2 class="h-card">{t('Detail barang titipan', 'Item details')}</h2>
+    <p id="calc-help" class="small muted" style="margin-top:4px">{t('Isi harga yang benar-benar dibayar di toko (termasuk pajak penjualan negara asal).', 'Enter the price actually paid in store (including the origin country’s sales tax).')}</p>
+    <div class="form-grid" style="margin-top:20px">
+      <div class="form-grid cols-2">
+        <div class="field">
+          <label for="origin">{t('Negara asal', 'Origin country')}</label>
+          <select class="select" id="origin" name="origin" required>
+            {COUNTRY_PAGES.map((c, i) => <option value={c.code} data-currency={c.currency} selected={i === 0}>{id ? c.nameId : c.nameEn}</option>)}
+          </select>
+        </div>
+        <div class="field">
+          <label for="category">{t('Kategori', 'Category')}</label>
+          <select class="select" id="category" name="category" required>
+            {cats.map((c) => <option value={c.code} selected={c.code === 'FOOTWEAR'}>{id ? c.nameId : c.nameEn}</option>)}
+          </select>
+        </div>
+      </div>
+      <div class="form-grid cols-2">
+        <div class="field">
+          <label for="price">{t('Harga per unit', 'Unit price')}</label>
+          <div class="input-group">
+            <select class="prefix currency-select" id="currency" name="currency" aria-label={t('Mata uang', 'Currency')}>
+              {Object.keys(KMK_RATES.rates).filter((k) => CURRENCY_META[k]).map((k) => <option value={k}>{k}</option>)}
+            </select>
+            <input class="input tnum" id="price" name="price" inputmode="decimal" autocomplete="off" required placeholder="60000" value="60000" aria-describedby="price-hint" />
+          </div>
+          <span class="hint" id="price-hint">{t('Gunakan titik untuk desimal, mis. 129.90', 'Use a dot for decimals, e.g. 129.90')}</span>
+        </div>
+        <div class="field">
+          <label for="qty">{t('Jumlah', 'Quantity')}</label>
+          <input class="input tnum" id="qty" name="qty" type="number" inputmode="numeric" min="1" max="999" step="1" value="1" required />
+        </div>
+      </div>
+      <details class="calc-advanced">
+        <summary><Icon name="filter" size={16} />{t('Pengaturan lanjutan (mode offline)', 'Advanced (offline mode)')}</summary>
+        <div class="form-grid" style="margin-top:14px">
+          <div class="field">
+            <label for="rate">{t('Kurs pajak (Rp per 1 unit mata uang)', 'Tax rate (IDR per 1 currency unit)')}</label>
+            <input class="input tnum" id="rate" name="rate" inputmode="decimal" autocomplete="off" />
+            <span class="hint">{t(`Default: ${KMK_RATES.reference}, berlaku 23–29 Sep 2026. Dipakai hanya saat API tidak tersedia.`, `Default: ${KMK_RATES.reference}, valid 23–29 Sep 2026. Used only when the API is unavailable.`)}</span>
+          </div>
+          <label class="check"><input type="checkbox" id="no-npwp" name="noNpwp" />
+            <span>{t('Simulasikan PPh 22 10% (traveler tanpa NPWP) — skenario belum terverifikasi', 'Simulate 10% income tax art. 22 (traveler without NPWP) — unverified scenario')}</span>
+          </label>
+        </div>
+      </details>
+      <div class="error-text" id="calc-error" role="alert" hidden></div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit" id="calc-submit"><Icon name="calculator" />{t('Hitung estimasi', 'Calculate estimate')}</button>
+    </div>
+  </form>
+
+  <section class="sticky" aria-live="polite" aria-labelledby="result-title">
+    <div class="card calc-result" id="calc-result">
+      <div class="breakdown-head">
+        <h2 id="result-title" class="h-card">{t('Estimasi bea & pajak impor', 'Estimated duty & import tax')}</h2>
+        <span class="status-pill" id="calc-status" data-state="idle"><span class="dot" aria-hidden="true"></span><span class="lbl">{t('Belum dihitung', 'Not calculated')}</span></span>
+      </div>
+      <div id="calc-output">
+        <div class="result-empty">
+          <Icon name="calculator" />
+          <p class="small">{t('Isi detail barang lalu tekan “Hitung estimasi”.', 'Fill in the item and press “Calculate estimate”.')}</p>
+        </div>
+      </div>
+    </div>
+    <div class="note note-warning" style="margin-top:14px">
+      <Icon name="triangle-alert" />
+      <p>{t(
+        'Estimasi, bukan nasihat pajak. Barang titipan (jastip) adalah barang bukan pribadi menurut PMK 34/2025, sehingga tidak mendapat pembebasan USD 500. Nilai final ditetapkan pejabat Bea dan Cukai berdasarkan kurs minggu kedatangan dan pemeriksaan barang.',
+        'An estimate, not tax advice. Items bought for others (jastip) are non-personal goods under PMK 34/2025 and get no USD 500 exemption. Indonesian Customs sets the final amount based on the arrival week’s rate and inspection.',
+      )}</p>
+    </div>
+    <p class="xsmall muted" style="margin-top:12px">
+      {t('Aturan', 'Rule')}: {RULE_NON_PERSONAL.code} v{RULE_NON_PERSONAL.version} · {t('berlaku sejak', 'effective')} {RULE_NON_PERSONAL.effectiveFrom} · {t('terakhir diverifikasi', 'last verified')} {RULE_NON_PERSONAL.lastVerifiedAt} ({t('riset internal, belum ditinjau ahli kepabeanan', 'internal research, not yet reviewed by a customs expert')}).
+      {' '}<a href={RULE_NON_PERSONAL.sourceUrl} rel="noopener">PMK 34/2025 (JDIH Kemenkeu)</a>.
+      {' '}{t('Barang terlarang? ', 'Restricted item? ')}<a href={id ? url('/cek-barang-terlarang/') : url('/en/restricted-items/')}>{t('Cek di sini', 'Check here')}</a>.
+    </p>
+  </section>
+</div>
+
+<noscript>
+  <div class="note note-neutral" style="margin-top:20px">
+    <p>{t('Kalkulator membutuhkan JavaScript. Rumus manual: bea masuk 10% × nilai pabean; PPN 12% × 11/12 × (nilai + bea); PPh 22 5% × (nilai + bea).', 'The calculator needs JavaScript. Manual formula: duty 10% × customs value; VAT 12% × 11/12 × (value + duty); income tax 5% × (value + duty).')}</p>
+  </div>
+</noscript>
+
+<script>
+  import '../scripts/calculator.ts';
+</script>
+
+<style>
+  .calc-form { padding: 24px; }
+  .currency-select { appearance: none; border-right: 0; cursor: pointer; padding: 0 12px; min-width: 76px; text-align: center; color: var(--jk-color-on-surface); }
+  .calc-advanced { border: 1px dashed var(--jk-color-outline); border-radius: var(--jk-radius-md); padding: 12px 14px; }
+  .calc-advanced summary { cursor: pointer; font-size: 0.875rem; font-weight: 500; display: flex; gap: 8px; align-items: center; min-height: 28px; }
+  .calc-result { padding: 22px; min-height: 280px; }
+</style>

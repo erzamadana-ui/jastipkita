@@ -1,0 +1,41 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { breadcrumbLd, webPageLd } from '../../lib/seo.ts';
+import { url } from '../../lib/paths.ts';
+
+const docs = (await getCollection('legal')).sort((a, b) => a.data.order - b.data.order);
+const title = 'Dokumen Legal JastipKita';
+const description = 'Syarat & Ketentuan, Kebijakan Privasi, Perjanjian Traveler, Kebijakan Refund, Barang Terlarang, Ketentuan Pembayaran, dan kebijakan lainnya.';
+const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Legal', path: '/legal/' }];
+---
+<Base title={title} description={description} path="/legal/" jsonLd={[webPageLd({ name: title, description, path: '/legal/' }), breadcrumbLd(crumbs)]}>
+  <section class="page-hero">
+    <div class="container container-narrow">
+      <Breadcrumbs items={crumbs} />
+      <h1>Dokumen legal</h1>
+      <p class="lead">Semua ketentuan yang mengatur penggunaan JastipKita. Dokumen masih berstatus rancangan dan akan difinalkan setelah ditinjau konsultan hukum.</p>
+      <div class="legal-banner" style="margin-top:20px"><Icon name="triangle-alert" /><p class="small"><strong>TEMPLATE — wajib direview konsultan hukum sebelum production launch; bukan nasihat hukum.</strong> Bagian dalam [kurung siku] akan dilengkapi setelah badan usaha berdiri.</p></div>
+    </div>
+  </section>
+  <section class="section-tight" style="padding-top:0">
+    <div class="container container-narrow">
+      <ul class="legal-list" role="list">
+        {docs.map((d) => (
+          <li>
+            <a class="card card-link" href={url(`/legal/${d.id}/`)}>
+              <div><h2 class="h-card">{d.data.title}</h2><p class="small muted">{d.data.description}</p></div>
+              <span class="chip">v{d.data.version}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+</Base>
+<style>
+  .legal-list { list-style: none; padding: 0; display: grid; gap: 12px; }
+  .legal-list a { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 18px 20px; }
+</style>

@@ -1,0 +1,80 @@
+---
+import Logo from './Logo.astro';
+import Icon from './Icon.astro';
+import { url } from '../lib/paths.ts';
+
+interface Props {
+  lang: 'id' | 'en';
+  alternates: Array<{ lang: 'id' | 'en'; path: string }>;
+  current?: string | undefined;
+}
+const { lang, alternates, current } = Astro.props;
+
+const nav =
+  lang === 'id'
+    ? [
+        { key: 'cara-kerja', label: 'Cara kerja', href: url('/#cara-kerja') },
+        { key: 'safepay', label: 'SafePay', href: url('/#safepay') },
+        { key: 'negara', label: 'Negara', href: url('/#negara') },
+        { key: 'trip', label: 'Cari trip', href: url('/trip/') },
+        { key: 'kalkulator', label: 'Kalkulator bea', href: url('/kalkulator-bea-cukai/') },
+        { key: 'bantuan', label: 'Bantuan', href: url('/bantuan/') },
+      ]
+    : [
+        { key: 'cara-kerja', label: 'How it works', href: url('/en/#how-it-works') },
+        { key: 'safepay', label: 'SafePay', href: url('/en/#safepay') },
+        { key: 'kalkulator', label: 'Duty calculator', href: url('/en/customs-calculator/') },
+        { key: 'cek', label: 'Restricted items', href: url('/en/restricted-items/') },
+        { key: 'bantuan', label: 'Help (ID)', href: url('/bantuan/') },
+      ];
+const other = alternates.find((a) => a.lang !== lang);
+const home = lang === 'id' ? url('/') : url('/en/');
+const t = lang === 'id'
+  ? { menu: 'Menu', theme: 'Ganti tema terang/gelap', login: 'Masuk', cta: 'Hitung biaya titip', home: 'JastipKita — beranda', switch: 'English', switchLabel: 'Read this page in English' }
+  : { menu: 'Menu', theme: 'Toggle light/dark theme', login: 'Sign in', cta: 'Estimate landed cost', home: 'JastipKita — home', switch: 'Bahasa Indonesia', switchLabel: 'Baca halaman ini dalam Bahasa Indonesia' };
+const ctaHref = lang === 'id' ? url('/kalkulator-bea-cukai/') : url('/en/customs-calculator/');
+---
+<header class="site-header">
+  <div class="container">
+    <div class="header-inner">
+      <a class="brand" href={home} aria-label={t.home}>
+        <Logo />
+      </a>
+      <nav class="nav-primary" aria-label={lang === 'id' ? 'Navigasi utama' : 'Main navigation'}>
+        <ul>
+          {nav.map((n) => (
+            <li><a href={n.href} aria-current={current === n.key ? 'page' : undefined}>{n.label}</a></li>
+          ))}
+        </ul>
+      </nav>
+      <div class="header-actions">
+        {other && (
+          <a class="lang-switch" href={url(other.path)} hreflang={other.lang} lang={other.lang} aria-label={t.switchLabel}>
+            <Icon name="languages" />
+            <span>{other.lang === 'en' ? 'EN' : 'ID'}</span>
+          </a>
+        )}
+        <button class="icon-btn" type="button" data-theme-toggle aria-label={t.theme} title={t.theme}>
+          <Icon name="sun-moon" />
+        </button>
+        <a class="btn btn-ghost btn-sm header-cta" href={url('/masuk/')}>{t.login}</a>
+        <a class="btn btn-primary btn-sm header-cta" href={ctaHref}>
+          <Icon name="calculator" />{t.cta}
+        </a>
+        <button class="icon-btn nav-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" data-nav-toggle>
+          <span class="sr-only">{t.menu}</span>
+          <Icon name="menu" />
+        </button>
+      </div>
+    </div>
+    <nav id="mobile-nav" class="mobile-nav" data-open="false" aria-label={lang === 'id' ? 'Navigasi seluler' : 'Mobile navigation'}>
+      <ul>
+        {nav.map((n) => (
+          <li><a href={n.href}>{n.label}<Icon name="chevron-right" /></a></li>
+        ))}
+        <li><a href={url('/masuk/')}>{t.login}<Icon name="log-in" /></a></li>
+      </ul>
+      <a class="btn btn-primary btn-block" href={ctaHref}><Icon name="calculator" />{t.cta}</a>
+    </nav>
+  </div>
+</header>

@@ -1,0 +1,19 @@
+<!--
+  JastipKita deep-link forwarding for the antarkita-landing ROOT 404.html (GitHub Pages serves only one 404 page).
+  Paste this <script> into the <head> of /404.html in erzamadana-ui/antarkita-landing (before any other script).
+  Effect: /jastipkita/app/transactions/<id> → /jastipkita/app/transactions/?id=<id>
+          /jastipkita/r/<code>              → /jastipkita/r/?code=<code>
+          any other /jastipkita/* miss       → /jastipkita/404.html (JastipKita-branded 404)
+  When the JastipKita app is installed, Android App Links / iOS Universal Links open the app before this runs.
+-->
+<script>
+  (function () {
+    var p = location.pathname;
+    if (p.indexOf('/jastipkita/') !== 0) return;
+    var m = /^\/jastipkita\/app\/transactions\/([^/?#]+)\/?$/.exec(p);
+    if (m) return location.replace('/jastipkita/app/transactions/?id=' + encodeURIComponent(decodeURIComponent(m[1])));
+    var r = /^\/jastipkita\/r\/([^/?#]+)\/?$/.exec(p);
+    if (r) return location.replace('/jastipkita/r/?code=' + encodeURIComponent(decodeURIComponent(r[1])));
+    if (p !== '/jastipkita/404.html') location.replace('/jastipkita/404.html');
+  })();
+</script>

@@ -1,0 +1,27 @@
+---
+import Icon from './Icon.astro';
+import { CONFIG } from '../config.ts';
+interface Props { lang?: 'id' | 'en'; tone?: 'default' | 'on-dark' }
+const { lang = 'id', tone = 'default' } = Astro.props;
+const id = lang === 'id';
+const stores = [
+  { key: 'play', href: CONFIG.playStoreUrl, top: id ? 'Unduh di' : 'Get it on', name: 'Google Play', icon: 'smartphone' as const },
+  { key: 'apple', href: CONFIG.appStoreUrl, top: id ? 'Unduh di' : 'Download on the', name: 'App Store', icon: 'smartphone' as const },
+];
+const soon = id ? 'Segera hadir di' : 'Coming soon to';
+---
+<div class="store-row">
+  {stores.map((s) =>
+    s.href ? (
+      <a class:list={['btn store-btn', tone === 'on-dark' ? 'btn-on-dark' : '']} href={s.href} rel="noopener">
+        <Icon name={s.icon} />
+        <span class="txt"><small>{s.top}</small>{s.name}</span>
+      </a>
+    ) : (
+      <span class:list={['btn store-btn', tone === 'on-dark' ? 'btn-on-dark' : '']} aria-disabled="true" role="link" title={`${soon} ${s.name}`}>
+        <Icon name="clock" />
+        <span class="txt"><small>{soon}</small>{s.name}</span>
+      </span>
+    ),
+  )}
+</div>

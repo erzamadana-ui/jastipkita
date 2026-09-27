@@ -1,0 +1,98 @@
+---
+import Logo from './Logo.astro';
+import Icon from './Icon.astro';
+import { url } from '../lib/paths.ts';
+import { CONFIG, SITE, formatWhatsapp, whatsappUrl } from '../config.ts';
+import { COUNTRY_PAGES } from '../data/countries.ts';
+
+interface Props { lang: 'id' | 'en' }
+const { lang } = Astro.props;
+const id = lang === 'id';
+const wa = whatsappUrl(id ? 'Halo JastipKita, saya mau bertanya.' : 'Hello JastipKita, I have a question.');
+
+const product = id
+  ? [
+      ['Cara kerja', url('/#cara-kerja')],
+      ['SafePay', url('/#safepay')],
+      ['Cari trip traveler', url('/trip/')],
+      ['Kalkulator bea & pajak', url('/kalkulator-bea-cukai/')],
+      ['Cek barang terlarang', url('/cek-barang-terlarang/')],
+      ['Jadi traveler', url('/#traveler')],
+    ]
+  : [
+      ['How it works', url('/en/#how-it-works')],
+      ['SafePay', url('/en/#safepay')],
+      ['Customs & tax calculator', url('/en/customs-calculator/')],
+      ['Restricted items checker', url('/en/restricted-items/')],
+      ['Delete your account', url('/en/delete-account/')],
+    ];
+const legal: Array<[string, string]> = [
+  [id ? 'Syarat & Ketentuan' : 'Terms of Service (ID)', url('/legal/terms-of-service/')],
+  [id ? 'Kebijakan Privasi' : 'Privacy Policy (ID)', url('/legal/privacy-policy/')],
+  [id ? 'Perjanjian Traveler' : 'Traveler Agreement (ID)', url('/legal/traveler-agreement/')],
+  [id ? 'Kebijakan Refund' : 'Refund Policy (ID)', url('/legal/refund-policy/')],
+  [id ? 'Barang Terlarang' : 'Prohibited Items (ID)', url('/legal/prohibited-items-policy/')],
+  [id ? 'Ketentuan Pembayaran' : 'Payment Terms (ID)', url('/legal/payment-terms/')],
+  [id ? 'Kebijakan Cookie' : 'Cookie Policy (ID)', url('/legal/cookie-policy/')],
+  [id ? 'Semua dokumen legal' : 'All legal documents', url('/legal/')],
+];
+---
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="stack" style="--stack:14px">
+        <a class="footer-brand" href={id ? url('/') : url('/en/')} aria-label="JastipKita"><Logo /></a>
+        <p class="small muted" style="max-width:340px">
+          {id
+            ? 'Marketplace titip belanja luar negeri lewat traveler terverifikasi. Dana ditahan SafePay sampai barang kamu terima.'
+            : 'A marketplace for buying abroad through verified travelers. Funds are held by SafePay until you receive the item.'}
+        </p>
+        <p class="small">
+          <strong>{SITE.tagline}</strong>
+        </p>
+        <p class="xsmall muted">
+          {id ? 'JastipKita adalah bagian dari ' : 'JastipKita is part of '}
+          <a href={SITE.parentUrl}>{SITE.parentBrand}</a>.
+        </p>
+      </div>
+      <div>
+        <h2>{id ? 'Layanan' : 'Product'}</h2>
+        <ul>{product.map(([label, href]) => <li><a href={href}>{label}</a></li>)}</ul>
+      </div>
+      <div>
+        <h2>{id ? 'Jastip per negara' : 'Countries (ID)'}</h2>
+        <ul>{COUNTRY_PAGES.map((c) => <li><a href={url(`/${c.slug}/`)}>{id ? `Jastip ${c.nameId}` : `Jastip ${c.nameEn}`}</a></li>)}</ul>
+      </div>
+      <div>
+        <h2>{id ? 'Legal & bantuan' : 'Legal & help'}</h2>
+        <ul>
+          {legal.map(([label, href]) => <li><a href={href}>{label}</a></li>)}
+          <li><a href={url('/bantuan/')}>{id ? 'Pusat bantuan' : 'Help center (ID)'}</a></li>
+          <li><a href={id ? url('/hapus-akun/') : url('/en/delete-account/')}>{id ? 'Hapus akun & data' : 'Delete account & data'}</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="stack" style="--stack:6px">
+        <p>
+          © 2026 JastipKita · {SITE.companyName}
+        </p>
+        <p>
+          {id ? 'Kontak: ' : 'Contact: '}
+          {wa ? <a href={wa} rel="noopener">WhatsApp {formatWhatsapp(CONFIG.supportWhatsapp)}</a> : <span>{id ? 'WhatsApp CS segera diumumkan' : 'WhatsApp support to be announced'}</span>}
+          {' · '}
+          {CONFIG.supportEmail ? <a href={`mailto:${CONFIG.supportEmail}`}>{CONFIG.supportEmail}</a> : <span>{id ? 'e-mail CS segera diumumkan' : 'support e-mail to be announced'}</span>}
+        </p>
+        <p>
+          <Icon name="info" size={14} class="inline-icon" />
+          {id
+            ? ' Aplikasi JastipKita belum diluncurkan. Integrasi pembayaran masih tahap uji (sandbox) — belum ada transaksi uang sungguhan.'
+            : ' The JastipKita app has not launched yet. Payment integration is still in test mode (sandbox) — no real-money transactions yet.'}
+        </p>
+      </div>
+      <div>
+        <button type="button" class="linkish" data-consent-open>{id ? 'Pengaturan cookie' : 'Cookie settings'}</button>
+      </div>
+    </div>
+  </div>
+</footer>

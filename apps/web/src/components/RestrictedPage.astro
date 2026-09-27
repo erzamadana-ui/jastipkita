@@ -1,0 +1,155 @@
+---
+import Icon from './Icon.astro';
+import Breadcrumbs from './Breadcrumbs.astro';
+import { PRODUCT_CATEGORIES } from '@jastipkita/core';
+import { COUNTRY_PAGES } from '../data/countries.ts';
+import restrictedData from '../data/restricted-items.generated.json';
+import type { Classification, RestrictedRule } from '../lib/restricted.ts';
+import { categoryName } from '../lib/engine.ts';
+import { url } from '../lib/paths.ts';
+import type { Crumb } from '../lib/seo.ts';
+
+interface Props { lang: 'id' | 'en'; crumbs: Crumb[] }
+const { lang, crumbs } = Astro.props;
+const id = lang === 'id';
+const t = (a: string, b: string) => (id ? a : b);
+const rules = restrictedData.rules as unknown as RestrictedRule[];
+const cats = [...PRODUCT_CATEGORIES].sort((a, b) => (id ? a.nameId : a.nameEn).localeCompare(id ? b.nameId : b.nameEn, lang));
+const ORDER: Classification[] = ['PROHIBITED', 'PERMIT_REQUIRED', 'RESTRICTED', 'DECLARATION_REQUIRED'];
+const LABEL: Record<Classification, [string, string, string]> = {
+  PROHIBITED: ['Dilarang — checkout diblokir', 'Prohibited — checkout blocked', 'ban'],
+  PERMIT_REQUIRED: ['Butuh izin instansi', 'Permit required', 'file-check'],
+  RESTRICTED: ['Terbatas — ada batas & wajib persetujuan', 'Restricted — limits & acknowledgement', 'triangle-alert'],
+  DECLARATION_REQUIRED: ['Wajib deklarasi', 'Declaration required', 'file-text'],
+  ALLOWED: ['Diizinkan', 'Allowed', 'circle-check'],
+};
+const groups = ORDER.map((cls) => ({ cls, items: rules.filter((r) => r.status === 'ACTIVE' && r.classification === cls) }));
+const drafts = rules.filter((r) => r.status !== 'ACTIVE');
+function ruleTitle(r: RestrictedRule): string {
+  if (r.categoryCode && r.keywords.length === 0) return categoryName(r.categoryCode, lang);
+  const kw = r.keywords.slice(0, 5).join(', ');
+  return r.categoryCode ? `${categoryName(r.categoryCode, lang)}: ${kw}` : kw;
+}
+---
+<section class="page-hero">
+  <div class="container">
+    <Breadcrumbs items={crumbs} lang={lang} />
+    <span class="eyebrow" style="margin-top:18px"><Icon name="search" size={16} />{t('Alat gratis', 'Free tool')}</span>
+    <h1>{t('Cek barang terlarang & terbatas untuk jastip', 'Restricted & prohibited items checker')}</h1>
+    <p class="lead">{t(
+      'Barang titipan bukan barang pribadi traveler, sehingga tetap tunduk pada aturan larangan & pembatasan impor (lartas). Cek dulu sebelum menitip — hasilnya sama dengan yang dipakai aplikasi saat checkout.',
+      'Items bought for others are not the traveler’s personal goods, so Indonesia’s import prohibitions and restrictions still apply. Check before you order — the same rules run at checkout in the app.',
+    )}</p>
+  </div>
+</section>
+
+<section class="section-tight" style="padding-top:0">
+  <div class="container">
+    <div class="tool-grid">
+      <form class="card" id="rc-form" novalidate style="padding:24px">
+        <h2 class="h-card">{t('Barang yang ingin dititip', 'Item you want to order')}</h2>
+        <div class="form-grid" style="margin-top:18px">
+          <div class="field">
+            <label for="rc-name">{t('Nama barang', 'Product name')}</label>
+            <input class="input" id="rc-name" name="productName" required minlength="2" maxlength="300" autocomplete="off" placeholder={t('mis. Power bank 20000mAh, vitamin D3, pisau santoku', 'e.g. 20000mAh power bank, vitamin D3, santoku knife')} />
+          </div>
+          <div class="form-grid cols-2">
+            <div class="field">
+              <label for="rc-origin">{t('Negara asal', 'Origin country')}</label>
+              <select class="select" id="rc-origin" name="origin">
+                {COUNTRY_PAGES.map((c) => <option value={c.code}>{id ? c.nameId : c.nameEn}</option>)}
+              </select>
+            </div>
+            <div class="field">
+              <label for="rc-qty">{t('Jumlah', 'Quantity')}</label>
+              <input class="input tnum" id="rc-qty" name="quantity" type="number" min="1" max="999" value="1" inputmode="numeric" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="rc-category">{t('Kategori', 'Category')}</label>
+            <select class="select" id="rc-category" name="category">
+              {cats.map((c) => <option value={c.code} selected={c.code === 'OTHER'}>{id ? c.nameId : c.nameEn}</option>)}
+            </select>
+          </div>
+          <div class="error-text" id="rc-error" role="alert" hidden></div>
+          <button class="btn btn-primary btn-lg btn-block" type="submit" id="rc-submit"><Icon name="search" />{t('Periksa barang', 'Check item')}</button>
+        </div>
+      </form>
+      <section class="sticky" aria-live="polite" aria-labelledby="rc-result-title">
+        <div class="card" style="padding:22px;min-height:260px">
+          <div class="breakdown-head">
+            <h2 id="rc-result-title" class="h-card">{t('Hasil pemeriksaan', 'Result')}</h2>
+            <span class="status-pill" id="rc-status" data-state="idle"><span class="dot" aria-hidden="true"></span><span class="lbl">{t('Belum diperiksa', 'Not checked')}</span></span>
+          </div>
+          <div id="rc-output">
+            <div class="result-empty"><Icon name="shield-alert" /><p class="small">{t('Masukkan nama barang untuk melihat klasifikasinya.', 'Enter a product name to see its classification.')}</p></div>
+          </div>
+        </div>
+        <p class="xsmall muted" style="margin-top:12px">{t(
+          `Daftar aturan per ${restrictedData.lastVerifiedAt}, disusun dari riset regulasi (UU Narkotika, Per BPOM 28/2023, PMK 34/2025, Permendag, ketentuan karantina & IATA). Belum ditinjau konsultan hukum/kepabeanan. Keputusan akhir ada pada Bea Cukai dan instansi terkait.`,
+          `Rules as of ${restrictedData.lastVerifiedAt}, compiled from regulatory research (narcotics law, BPOM 28/2023, PMK 34/2025, trade ministry, quarantine & IATA rules). Not yet reviewed by legal/customs counsel. Customs and the relevant agencies have the final say.`,
+        )} <a href={url('/legal/prohibited-items-policy/')}>{t('Kebijakan barang terlarang', 'Prohibited items policy (ID)')}</a>.</p>
+      </section>
+    </div>
+  </div>
+</section>
+
+<section class="section-tight" aria-labelledby="rc-list-title">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">{t('Daftar lengkap', 'Full list')}</span>
+      <h2 id="rc-list-title" class="h-section">{t('Aturan barang yang berlaku di JastipKita', 'Item rules enforced by JastipKita')}</h2>
+      <p class="lead">{t('Klasifikasi paling berat yang menang. Barang terbatas tetap bisa dititip setelah kamu menyetujui peringatannya; barang terlarang diblokir.', 'The most severe classification wins. Restricted items can still be ordered after you acknowledge the warning; prohibited items are blocked.')}</p>
+    </div>
+    <div class="stack" style="--stack:28px">
+      {groups.map(({ cls, items }) => (
+        <div>
+          <h3 class={`rc-group-title cls-${cls}`}><Icon name={LABEL[cls][2] as any} />{id ? LABEL[cls][0] : LABEL[cls][1]} <span class="muted">({items.length})</span></h3>
+          <div class="grid grid-2" style="--gap:12px;margin-top:12px">
+            {items.map((r) => (
+              <details class="rc-rule">
+                <summary><span>{ruleTitle(r)}{r.keywords.length > 5 ? '…' : ''}</span><Icon name="chevron-down" /></summary>
+                <p class="small">{id ? r.messageId : r.messageEn}</p>
+                {r.permitAuthority && <p class="xsmall muted">{t('Instansi', 'Authority')}: {r.permitAuthority}</p>}
+                {r.maxQuantity && <p class="xsmall muted">{t('Batas jumlah', 'Quantity limit')}: {r.maxQuantity}</p>}
+                {r.airlineDg && <p class="xsmall muted">{t('Ada batasan barang berbahaya penerbangan (IATA DG).', 'Aviation dangerous-goods limits apply (IATA DG).')}</p>}
+                <p class="xsmall muted">{t('Dasar', 'Basis')}: {r.sourceReference}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div>
+        <h3 class="rc-group-title"><Icon name="clock" />{t('Dalam kajian (belum berlaku otomatis)', 'Under review (not enforced automatically)')} <span class="muted">({drafts.length})</span></h3>
+        <div class="grid grid-2" style="--gap:12px;margin-top:12px">
+          {drafts.map((r) => (
+            <details class="rc-rule">
+              <summary><span>{ruleTitle(r) || (r.originCountry ? `${t('Rute', 'Route')} ${r.originCountry}` : r.code)}</span><Icon name="chevron-down" /></summary>
+              <p class="small">{id ? r.messageId : r.messageEn}</p>
+              <p class="xsmall muted">{t('Klasifikasi kandidat', 'Candidate classification')}: {r.classification}. {r.sourceReference}</p>
+            </details>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import '../scripts/restricted-checker.ts';
+</script>
+
+<style>
+  .rc-group-title { display: flex; align-items: center; gap: 10px; font-size: 1.0625rem; font-weight: 600; }
+  .rc-group-title :global(svg) { width: 20px; height: 20px; }
+  .cls-PROHIBITED :global(svg) { color: var(--jk-color-error); }
+  .cls-PERMIT_REQUIRED :global(svg), .cls-RESTRICTED :global(svg) { color: var(--jk-color-warning-text); }
+  .cls-DECLARATION_REQUIRED :global(svg) { color: var(--jk-color-info-text); }
+  .rc-rule { background: var(--jk-color-surface); border: 1px solid var(--card-border); border-radius: var(--jk-radius-md); padding: 0 16px; }
+  .rc-rule summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; align-items: center; min-height: 52px; font-size: 0.9375rem; font-weight: 500; }
+  .rc-rule summary::-webkit-details-marker { display: none; }
+  .rc-rule summary :global(svg) { width: 18px; height: 18px; flex: none; color: var(--jk-color-on-surface-muted); }
+  .rc-rule[open] summary :global(svg) { transform: rotate(180deg); }
+  .rc-rule p { margin-bottom: 8px; }
+  .rc-rule p:last-child { padding-bottom: 8px; }
+</style>

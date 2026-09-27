@@ -1,0 +1,24 @@
+# CODEOWNERS — placeholder: a single owner until the team grows. Later entries win.
+# Replace with team handles (e.g. @org/money-team) once the organisation exists. Enforced only when branch protection
+# with "Require review from Code Owners" is available on the repository plan.
+
+*                               @erzamadana-ui
+
+# Money, ledger and payment configuration — always two reviewers in practice
+/apps/api/src/modules/payments/  @erzamadana-ui
+/apps/api/src/modules/ledger/    @erzamadana-ui
+/apps/api/src/modules/refunds/   @erzamadana-ui
+/apps/api/src/modules/payouts/   @erzamadana-ui
+/apps/api/src/providers/payment/ @erzamadana-ui
+/packages/core/src/config/       @erzamadana-ui
+
+# Schema, infrastructure, pipelines, secrets handling
+/db/                            @erzamadana-ui
+/infra/                         @erzamadana-ui
+/.github/                       @erzamadana-ui
+/scripts/                       @erzamadana-ui
+
+# Legal/compliance-facing documents
+/docs/checklists/               @erzamadana-ui
+/docs/10-privacy.md             @erzamadana-ui
+/SECURITY.md                    @erzamadana-ui

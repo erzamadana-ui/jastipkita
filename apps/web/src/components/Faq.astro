@@ -1,0 +1,21 @@
+---
+import Icon from './Icon.astro';
+interface Props { items: Array<{ q: string; a: string }>; openFirst?: boolean }
+const { items, openFirst = false } = Astro.props;
+// Minimal inline formatting: **bold** and paragraphs separated by blank lines. Content is authored in-repo.
+function toHtml(s: string): string {
+  const esc = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc
+    .split(/\n{2,}/)
+    .map((p) => `<p>${p.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</p>`)
+    .join('');
+}
+---
+<div class="faq">
+  {items.map((f, i) => (
+    <details open={openFirst && i === 0}>
+      <summary><span>{f.q}</span><Icon name="chevron-down" /></summary>
+      <div class="answer" set:html={toHtml(f.a)} />
+    </details>
+  ))}
+</div>

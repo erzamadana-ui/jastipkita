@@ -1,0 +1,1728 @@
+{
+  "@@locale": "id",
+  "appName": "JastipKita",
+  "tagline": "Titip Mudah, Aman, Terpercaya.",
+  "loading": "Memuat…",
+  "errorNetwork": "Tidak ada koneksi internet. Periksa jaringanmu lalu coba lagi.",
+  "errorTimeout": "Server terlalu lama merespons. Coba lagi sebentar lagi.",
+  "errorSessionExpired": "Sesi kamu berakhir. Silakan masuk lagi.",
+  "errorRateLimited": "Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.",
+  "errorServer": "Terjadi gangguan di server kami. Dana di SafePay tetap aman. Coba lagi nanti.",
+  "errorGeneric": "Terjadi kesalahan. Coba lagi.",
+  "errorTitle": "Gagal memuat",
+  "actionRetry": "Coba lagi",
+  "actionCancel": "Batal",
+  "actionSeeAll": "Lihat semua",
+  "actionSkip": "Lewati",
+  "actionNext": "Lanjut",
+  "actionBack": "Kembali",
+  "actionClose": "Tutup",
+  "actionCopy": "Salin",
+  "actionOk": "Oke",
+  "actionSave": "Simpan",
+  "actionChange": "Ubah",
+  "actionRemove": "Hapus",
+  "actionNotAvailable": "Aksi ini belum tersedia di status sekarang.",
+  "copied": "Disalin",
+  "optional": "Opsional",
+  "validationRequired": "Wajib diisi",
+  "validationAmount": "Masukkan angka yang valid",
+  "pickerChoose": "Pilih",
+  "pickerChooseDate": "Pilih tanggal",
+  "quantityDecrease": "Kurangi jumlah",
+  "quantityIncrease": "Tambah jumlah",
+  "estimateBadge": "Estimasi",
+  "estimateBadgeSemantics": "Nilai perkiraan, bisa berubah",
+  "sandboxBadge": "SANDBOX",
+  "countdownRenew": "Perbarui",
+  "countdownExpired": "Kedaluwarsa",
+  "txStatusRequestCreated": "Titipan dibuat",
+  "txStatusMatched": "Traveler cocok",
+  "txStatusAwaitingPayment": "Menunggu pembayaran",
+  "txStatusPaymentSecured": "Dana aman di SafePay",
+  "txStatusPriceChangePending": "Konfirmasi harga",
+  "txStatusPurchaseApproved": "Boleh dibeli",
+  "txStatusPurchased": "Sudah dibeli",
+  "txStatusTraveling": "Dalam perjalanan",
+  "txStatusArrived": "Tiba di Indonesia",
+  "txStatusCustomsProcess": "Proses bea cukai",
+  "txStatusReadyForHandover": "Siap diserahkan",
+  "txStatusOutForDelivery": "Sedang dikirim",
+  "txStatusDelivered": "Sudah diterima",
+  "txStatusBuyerConfirmed": "Dikonfirmasi penitip",
+  "txStatusCompleted": "Selesai",
+  "txStatusCancelled": "Dibatalkan",
+  "txStatusDisputed": "Dalam sengketa",
+  "txStatusRefundPending": "Refund diproses",
+  "txStatusRefunded": "Dana dikembalikan",
+  "tripStatusDraft": "Draf",
+  "tripStatusVerificationPending": "Menunggu verifikasi",
+  "tripStatusVerified": "Terverifikasi",
+  "tripStatusActive": "Aktif",
+  "tripStatusFull": "Penuh",
+  "tripStatusTraveling": "Dalam perjalanan",
+  "tripStatusCompleted": "Selesai",
+  "tripStatusCancelled": "Dibatalkan",
+  "requestStatusDraft": "Draf",
+  "requestStatusOpen": "Mencari traveler",
+  "requestStatusMatched": "Sudah cocok",
+  "requestStatusClosed": "Ditutup",
+  "requestStatusCancelled": "Dibatalkan",
+  "requestStatusExpired": "Kedaluwarsa",
+  "kycLevel1": "Terdaftar",
+  "kycLevel2": "HP terverifikasi",
+  "kycLevel3": "Identitas terverifikasi",
+  "kycLevel4": "Traveler terverifikasi",
+  "kycLevel5": "Trusted Traveler",
+  "kycBenefit1": "Jelajahi traveler dan simpan draf titipan.",
+  "kycBenefit2": "Bayar titipan lewat SafePay dan chat dengan traveler.",
+  "kycBenefit3": "Limit transaksi lebih tinggi dan bisa menjadi traveler.",
+  "kycBenefit4": "Terima titipan, tampil sebagai traveler terverifikasi, dan cairkan pendapatan.",
+  "kycBenefit5": "Prioritas di pencarian dan badge Trusted Traveler. Diberikan otomatis dari rekam jejak.",
+  "kycSubmissionPending": "Menunggu",
+  "kycSubmissionInReview": "Sedang ditinjau",
+  "kycSubmissionApproved": "Disetujui",
+  "kycSubmissionRejected": "Ditolak",
+  "kycSubmissionExpired": "Kedaluwarsa",
+  "payoutAccountVerified": "Terverifikasi",
+  "payoutAccountPending": "Sedang dicek",
+  "payoutAccountFailed": "Gagal diverifikasi",
+  "payoutAccountNameMismatch": "Nama tidak sesuai",
+  "payoutAccountUnverified": "Belum diverifikasi",
+  "restrictionRestrictedTitle": "Barang dibatasi",
+  "restrictionDeclarationTitle": "Wajib dideklarasikan",
+  "restrictionPermitTitle": "Perlu izin khusus",
+  "restrictionProhibitedTitle": "Barang dilarang",
+  "restrictionAllowedTitle": "Boleh dititipkan",
+  "restrictionRestrictedBody": "Ada batas jumlah atau syarat khusus untuk barang ini. Traveler bisa menolak bila melebihi ketentuan.",
+  "restrictionDeclarationBody": "Barang ini wajib dilaporkan di deklarasi bea cukai saat tiba. Bea dan pajak bisa dikenakan.",
+  "restrictionPermitBody": "Barang ini butuh izin dari instansi terkait sebelum masuk Indonesia. Tanpa izin, barang bisa ditahan.",
+  "restrictionProhibitedBody": "Barang ini dilarang masuk Indonesia atau dilarang di JastipKita, jadi tidak bisa dititipkan.",
+  "restrictionAllowedBody": "Tidak ada pembatasan khusus yang terdeteksi.",
+  "priceLineItemPrice": "Harga barang",
+  "priceLineTravelerFee": "Fee traveler",
+  "priceLineCustomsDuty": "Bea masuk",
+  "priceLineImportTax": "Pajak impor",
+  "priceLineProtectionFee": "JastipKita Protection",
+  "priceLinePlatformFee": "Biaya platform",
+  "priceLineServiceTax": "Pajak layanan platform",
+  "priceLinePaymentFee": "Biaya pembayaran",
+  "priceLineDiscount": "Diskon promo",
+  "priceLineReferralCredit": "JastipKita Credit",
+  "priceLineTotal": "Total",
+  "priceLineWaived": "Gratis",
+  "priceLineImportTaxSub": "PPN impor + PPh 22 impor",
+  "channelVa": "Virtual Account",
+  "channelQris": "QRIS",
+  "channelEwallet": "E-wallet",
+  "channelCard": "Kartu kredit/debit",
+  "paymentStatusPending": "Menunggu pembayaran",
+  "paymentStatusSecured": "Aman di SafePay",
+  "paymentStatusExpired": "Kedaluwarsa",
+  "paymentStatusFailed": "Gagal",
+  "paymentStatusRefunded": "Dikembalikan",
+  "paymentStatusPartiallyRefunded": "Dikembalikan sebagian",
+  "deliveryMeetup": "Ketemuan (COD serah terima)",
+  "deliveryCourier": "Kurir",
+  "deliveryPartnerLogistics": "Mitra logistik",
+  "disputeTypeItemNotReceived": "Barang tidak diterima",
+  "disputeTypeWrongItem": "Barang tidak sesuai",
+  "disputeTypeDamagedItem": "Barang rusak",
+  "disputeTypeCounterfeit": "Diduga palsu",
+  "disputeTypePriceDispute": "Masalah harga",
+  "disputeTypeDeliveryDispute": "Masalah pengiriman",
+  "disputeTypeOther": "Lainnya",
+  "disputeStatusOpen": "Dibuka",
+  "disputeStatusEvidenceCollection": "Pengumpulan bukti",
+  "disputeStatusUnderReview": "Ditinjau tim",
+  "disputeStatusResolved": "Diputuskan",
+  "disputeStatusAppealed": "Banding",
+  "disputeStatusClosed": "Ditutup",
+  "resolutionRefundFull": "Refund penuh",
+  "resolutionRefundPartial": "Refund sebagian",
+  "resolutionNoRefund": "Tanpa refund",
+  "resolutionReturnAndRefund": "Kembalikan barang lalu refund",
+  "resolutionOther": "Lainnya",
+  "evidencePhoto": "Foto",
+  "evidenceVideo": "Video",
+  "evidenceReceipt": "Struk",
+  "evidenceChat": "Riwayat chat",
+  "evidenceTracking": "Resi pengiriman",
+  "evidenceDeliveryProof": "Bukti serah terima",
+  "evidenceOther": "Lainnya",
+  "payoutStatusScheduled": "Terjadwal",
+  "payoutStatusOnHold": "Ditahan",
+  "payoutStatusProcessing": "Diproses",
+  "payoutStatusPaid": "Dibayar",
+  "payoutStatusFailed": "Gagal",
+  "payoutStatusCancelled": "Dibatalkan",
+  "offerStatusPending": "Menunggu",
+  "offerStatusAccepted": "Diterima",
+  "offerStatusDeclined": "Ditolak",
+  "offerStatusWithdrawn": "Ditarik",
+  "offerStatusExpired": "Kedaluwarsa",
+  "feeTypePercent": "Persen dari harga barang",
+  "feeTypePerKg": "Per kg",
+  "feeTypeFixed": "Tarif tetap per barang",
+  "docTypeItinerary": "Itinerary",
+  "docTypeBoardingPass": "Boarding pass",
+  "docTypeEticket": "E-tiket",
+  "trustTierExcellent": "Sangat tepercaya",
+  "trustTierGood": "Baik",
+  "trustTierFair": "Cukup",
+  "trustTierLow": "Rendah",
+  "stageBeforeMatch": "Sebelum cocok",
+  "stageAfterMatch": "Setelah cocok, belum bayar",
+  "stageAfterPayment": "Setelah pembayaran",
+  "stageBeforePurchase": "Sebelum barang dibeli",
+  "stageAfterPurchase": "Setelah barang dibeli",
+  "stageDuringTravel": "Dalam perjalanan",
+  "stageAfterArrival": "Setelah tiba",
+  "stageHintBeforePayment": "Belum ada dana yang dibayar. Pembatalan tanpa biaya.",
+  "stageHintAfterPayment": "Barang belum dibeli. Dana di SafePay dikembalikan penuh sesuai kebijakan refund.",
+  "stageHintAfterPurchase": "Barang sudah dibeli. Pembatalan ditinjau tim dan bisa ada kompensasi untuk traveler.",
+  "ticketStatusOpen": "Dibuka",
+  "ticketStatusPendingUser": "Menunggu balasanmu",
+  "ticketStatusInProgress": "Diproses",
+  "ticketStatusResolved": "Selesai",
+  "ticketStatusClosed": "Ditutup",
+  "ticketCategoryTransaction": "Transaksi",
+  "ticketCategoryDispute": "Sengketa",
+  "ticketCategoryRefund": "Refund",
+  "ticketCategoryAccount": "Akun",
+  "ticketCategoryPayment": "Pembayaran",
+  "ticketCategoryCustoms": "Bea cukai",
+  "ticketCategoryOther": "Lainnya",
+  "notifGroupTransaction": "Transaksi",
+  "notifGroupPayment": "Pembayaran",
+  "notifGroupChat": "Chat",
+  "notifGroupPromotion": "Promo",
+  "notifGroupAccount": "Akun & keamanan",
+  "notifChannelPush": "Notifikasi push",
+  "notifChannelEmail": "E-mail",
+  "notifChannelInApp": "Di aplikasi",
+  "privacyStatusReceived": "Diterima",
+  "privacyStatusInProgress": "Diproses",
+  "privacyStatusCompleted": "Selesai",
+  "privacyStatusRejected": "Ditolak",
+  "privacyStatusCancelled": "Dibatalkan",
+  "refundStatusSucceeded": "Berhasil",
+  "refundStatusFailed": "Gagal",
+  "refundStatusCancelled": "Dibatalkan",
+  "refundStatusProcessing": "Diproses",
+  "consentTitle": "Persetujuan",
+  "consentIntro": "Sebelum mulai, baca dan setujui ketentuan berikut. Verifikasi identitas (KYC) diminta terpisah nanti, hanya saat dibutuhkan.",
+  "consentTerms": "Saya menyetujui Syarat & Ketentuan JastipKita",
+  "consentRequired": "Wajib",
+  "consentReadTerms": "Baca Syarat & Ketentuan",
+  "consentPrivacy": "Saya menyetujui pemrosesan data pribadi sesuai Kebijakan Privasi",
+  "consentReadPrivacy": "Baca Kebijakan Privasi",
+  "consentMarketing": "Kirimi saya promo dan kabar terbaru",
+  "consentMarketingHelp": "Bisa diubah kapan saja. Notifikasi transaksi tetap dikirim.",
+  "consentOptional": "Opsional",
+  "consentKycSeparate": "Persetujuan ini bukan verifikasi identitas. Foto KTP/paspor hanya diminta saat kamu naik level verifikasi, dengan persetujuan terpisah.",
+  "consentContinue": "Setuju & lanjutkan",
+  "consentNeedRequired": "Setujui semua ketentuan wajib untuk melanjutkan.",
+  "consentSaved": "Preferensi disimpan",
+  "loginTitle": "Masuk ke JastipKita",
+  "loginSubtitle": "Satu akun untuk menitip dan menjadi traveler.",
+  "loginGoogle": "Masuk dengan Google",
+  "loginApple": "Masuk dengan Apple",
+  "loginGoogleNotConfigured": "Login Google belum dikonfigurasi di build ini. Gunakan nomor HP atau e-mail.",
+  "loginOr": "atau",
+  "loginPhone": "Nomor HP",
+  "loginEmail": "E-mail",
+  "loginPhoneLabel": "Nomor HP",
+  "loginPhoneHint": "0812 3456 7890",
+  "loginPhoneInvalid": "Masukkan nomor HP Indonesia yang valid.",
+  "loginViaWhatsapp": "Kirim via WhatsApp",
+  "loginViaSms": "Kirim via SMS",
+  "loginEmailLabel": "E-mail",
+  "loginEmailHint": "nama@email.com",
+  "loginEmailInvalid": "Masukkan alamat e-mail yang valid.",
+  "loginSendCode": "Kirim kode",
+  "loginLegal": "Dengan melanjutkan, kamu akan diminta menyetujui Syarat & Ketentuan dan Kebijakan Privasi.",
+  "loginIdentityNote": "E-mail dan nomor HP login dipakai untuk masuk dan keamanan akun. Hubungi bantuan untuk menggantinya.",
+  "otpTitle": "Masukkan kode",
+  "otpFieldLabel": "Kode 6 digit",
+  "otpVerify": "Verifikasi",
+  "otpInvalid": "Kode salah. Periksa lagi.",
+  "otpExpired": "Kode sudah kedaluwarsa. Minta kode baru.",
+  "otpLocked": "Terlalu banyak percobaan. Minta kode baru beberapa saat lagi.",
+  "otpResend": "Kirim ulang kode",
+  "otpResent": "Kode baru sudah dikirim",
+  "onboardingTitle1": "Titip belanja dari luar negeri",
+  "onboardingBody1": "Tempel link produk, foto, atau cari barang. Kami bantu hitung total biaya sampai tangan.",
+  "onboardingTitle2": "Traveler terverifikasi",
+  "onboardingBody2": "Traveler memverifikasi identitas dan tiket perjalanan. Lihat trust score dan ulasan sebelum memilih.",
+  "onboardingTitle3": "Dana aman di SafePay",
+  "onboardingBody3": "Pembayaranmu ditahan SafePay dan baru diteruskan ke traveler setelah barang kamu terima.",
+  "onboardingStart": "Mulai",
+  "chatTitle": "Chat",
+  "txDetailTitle": "Detail titipan",
+  "chatSafetyNotice": "Demi keamananmu, jangan bertransaksi atau membagikan nomor HP/rekening di luar JastipKita. Pembayaran di luar SafePay tidak dilindungi.",
+  "chatLocked": "Percakapan ini sudah ditutup. Butuh bantuan? Buka Pusat Bantuan.",
+  "chatAttachPhoto": "Lampirkan foto",
+  "chatInputHint": "Tulis pesan…",
+  "chatSend": "Kirim",
+  "chatHidden": "Pesan ini disembunyikan karena melanggar pedoman komunitas.",
+  "chatProductCard": "Info produk",
+  "chatReceiptCard": "Struk pembelian",
+  "chatViewPhoto": "Lihat foto",
+  "chatMasked": "Kontak pribadi disamarkan otomatis",
+  "chatSending": "Mengirim…",
+  "chatEmptyTitle": "Belum ada percakapan",
+  "chatEmptyBody": "Chat dengan traveler atau penitip akan muncul di sini setelah ada titipan yang cocok.",
+  "chatNotAvailable": "Chat belum tersedia untuk transaksi ini.",
+  "chatWithCounterpart": "Chat",
+  "disputesTitle": "Sengketa",
+  "disputesEmptyTitle": "Tidak ada sengketa",
+  "disputesEmptyBody": "Semoga tetap begini. Jika ada masalah dengan titipan, buka sengketa dari detail transaksi.",
+  "disputeDetailTitle": "Detail sengketa",
+  "disputeAddEvidence": "Tambah bukti",
+  "disputeEvidenceAdded": "Bukti ditambahkan",
+  "disputeActionIntro": "Jelaskan alasanmu. Tim kami akan meninjaunya.",
+  "reasonLabel": "Alasan",
+  "reasonOptional": "Alasan (opsional)",
+  "cancelReasonDefault": "Dibatalkan lewat aplikasi",
+  "disputeEvidenceDue": "Batas bukti",
+  "disputeSla": "Target keputusan",
+  "disputeAppealWindow": "Batas banding",
+  "disputeTypeLabel": "Jenis masalah",
+  "disputeDescription": "Deskripsi",
+  "disputeRequestedResolution": "Penyelesaian yang diminta",
+  "disputeResolution": "Keputusan",
+  "disputeEvidence": "Bukti",
+  "disputeNoEvidence": "Belum ada bukti.",
+  "evidenceMine": "Kamu",
+  "disputeAppeal": "Ajukan banding",
+  "disputeAppealed": "Banding diajukan",
+  "disputeWithdraw": "Tarik sengketa",
+  "disputeWithdrawn": "Sengketa ditarik",
+  "helpWithTransaction": "Ada masalah? Buka sengketa",
+  "disputeEvidenceEmpty": "Pilih file bukti terlebih dahulu.",
+  "pickFile": "Pilih file",
+  "evidenceNote": "Keterangan",
+  "disputeChooseType": "Pilih jenis masalah.",
+  "disputeDescribe": "Ceritakan masalahnya (minimal 10 karakter).",
+  "disputeOpen": "Buka sengketa",
+  "disputeIntro": "Ceritakan apa yang terjadi. Tim JastipKita akan meninjau bukti dari kedua pihak secara adil.",
+  "disputeEvidenceHelp": "Tambahkan foto barang, kemasan, atau tangkapan layar yang mendukung.",
+  "disputeImpactTitle": "Selama sengketa",
+  "disputeImpactBody": "Dana tetap ditahan SafePay dan tidak diteruskan ke traveler sampai ada keputusan.",
+  "disputeSubmit": "Kirim sengketa",
+  "homeGreeting": "Mau titip apa hari ini?",
+  "homeSafepayStrip": "Pembayaran ditahan SafePay dan baru diteruskan ke traveler setelah barang kamu terima.",
+  "homeTitipFrom": "Titip dari",
+  "homeActiveTitipan": "Titipan aktif",
+  "homeNoActiveTitle": "Belum ada titipan aktif",
+  "homeNoActiveBody": "Tempel link produk atau foto barang yang kamu mau. Kami carikan traveler yang cocok.",
+  "homeCreateRequest": "Buat titipan",
+  "homeTravelersForYou": "Traveler untukmu",
+  "homeAllRoutes": "Semua rute",
+  "homeNoTravelers": "Belum ada traveler di rute ini. Buat titipan dan traveler bisa menawarkan diri.",
+  "trustPointSafepay": "Dana ditahan SafePay sampai barang diterima",
+  "trustPointVerified": "Traveler terverifikasi identitas & tiket",
+  "trustPointTransparent": "Semua biaya tampil sebelum bayar",
+  "homeSearchHint": "Tempel link atau cari barang",
+  "homeActionPhoto": "Foto",
+  "homeActionUrl": "Link",
+  "homeActionTraveler": "Traveler",
+  "homeActionManual": "Manual",
+  "travelerKycCardTitle": "Verifikasi dulu untuk menerima titipan",
+  "travelerKycCardBody": "Traveler perlu verifikasi identitas (level 3) dan dokumen perjalanan sebelum trip tampil ke penitip.",
+  "travelerKycCardCta": "Mulai verifikasi",
+  "travelerEarnings": "Pendapatan",
+  "payoutScheduled": "Terjadwal",
+  "payoutHeld": "Ditahan SafePay",
+  "payoutPaid": "Sudah dicairkan",
+  "payoutProcessing": "Diproses",
+  "payoutFailed": "Gagal",
+  "payoutNet": "Diterima bersih",
+  "travelerActiveTrips": "Trip aktif",
+  "travelerNoTripsTitle": "Belum ada trip",
+  "travelerNoTripsBody": "Tambahkan rencana perjalananmu dan terima titipan dari penitip di rute yang sama.",
+  "tripCreate": "Tambah trip",
+  "travelerOrdersToAct": "Perlu tindakanmu",
+  "travelerNoOrders": "Belum ada pesanan yang perlu ditindaklanjuti.",
+  "travelerMatchingRequests": "Titipan cocok dengan tripmu",
+  "travelerNoMatchingRequests": "Belum ada titipan yang cocok. Coba lihat semua titipan terbuka.",
+  "discoveryTitle": "Cari traveler",
+  "discoveryVerifiedOnly": "Trip terverifikasi",
+  "discoveryAllOrigins": "Semua negara",
+  "discoveryEmptyTitle": "Belum ada traveler",
+  "discoveryEmptyBody": "Belum ada trip yang cocok dengan filter ini. Buat titipan agar traveler bisa menawarkan diri.",
+  "kycTitle": "Verifikasi akun",
+  "kycCurrentLevel": "Level saat ini",
+  "kycPendingBody": "Dokumenmu sedang ditinjau. Biasanya selesai dalam 1×24 jam, kami kabari lewat notifikasi.",
+  "kycRejectedTitle": "Verifikasi ditolak",
+  "kycRejectedBody": "Periksa alasan di bawah, lalu kirim ulang dengan foto yang jelas.",
+  "kycLadderTitle": "Level verifikasi",
+  "kycPrivacyNote": "Data identitas dienkripsi dan hanya dipakai untuk verifikasi, sesuai UU Pelindungan Data Pribadi. Penitip dan traveler lain tidak bisa melihatnya.",
+  "verifyPhone": "Verifikasi nomor HP",
+  "verifyPhoneIntro": "Kami kirim kode 6 digit ke nomor HP-mu. Nomor terverifikasi membuka pembayaran lewat SafePay.",
+  "phoneVerified": "Nomor HP terverifikasi",
+  "kycStartIdentity": "Verifikasi identitas",
+  "kycTryAgain": "Kirim ulang",
+  "payoutAccountsTitle": "Rekening pencairan",
+  "kycSubmitTitle": "Verifikasi identitas",
+  "kycSubmitted": "Dokumen terkirim. Kami kabari setelah ditinjau.",
+  "kycLeaveTitle": "Keluar dari verifikasi?",
+  "kycLeaveBody": "Foto yang sudah diambil tidak disimpan.",
+  "kycLeave": "Keluar",
+  "kycSubmit": "Kirim untuk ditinjau",
+  "kycCapture": "Ambil foto",
+  "kycRetake": "Ulangi foto",
+  "kycConsentTitle": "Persetujuan verifikasi identitas",
+  "kycConsentBody": "Untuk verifikasi, kami memproses foto KTP/paspor, swafoto, dan data identitasmu bersama penyedia verifikasi. Data hanya dipakai untuk mencegah penipuan dan memenuhi kewajiban hukum.",
+  "kycStorageNote": "Disimpan terenkripsi dan dihapus sesuai masa retensi di Kebijakan Privasi.",
+  "kycConsentCheck": "Saya setuju data identitas saya diproses untuk verifikasi",
+  "kycIdTypeTitle": "Pilih dokumen identitas",
+  "kycIdKtp": "KTP",
+  "kycIdPassport": "Paspor",
+  "kycIdTypeWhy": "Gunakan dokumen asli yang masih berlaku atas nama pemilik akun.",
+  "kycIdPhotoWhy": "Foto dokumen untuk mencocokkan nama dan nomor identitas.",
+  "kycIdFront": "Sisi depan",
+  "kycIdBackOptional": "Sisi belakang (opsional)",
+  "kycPhotoTips": "Letakkan di permukaan datar, pencahayaan cukup, tanpa pantulan cahaya, dan semua sudut terlihat.",
+  "kycSelfieWhy": "Swafoto untuk memastikan kamu pemilik dokumen.",
+  "kycSelfie": "Swafoto",
+  "livenessTitle": "Cek keaktifan (liveness)",
+  "livenessWhy": "Beberapa foto singkat untuk memastikan yang verifikasi adalah orang sungguhan, bukan foto dari foto.",
+  "livenessStep1": "Hadap ke kamera, lalu kedipkan mata",
+  "livenessStep2": "Tolehkan kepala sedikit ke kanan",
+  "kycDataWhy": "Pastikan data sama persis dengan dokumen.",
+  "kycFullName": "Nama lengkap",
+  "kycFullNameHelp": "Sesuai dokumen identitas",
+  "kycNik": "NIK",
+  "kycPassportNumber": "Nomor paspor",
+  "kycDob": "Tanggal lahir",
+  "kycNationality": "Kewarganegaraan",
+  "kycReviewTitle": "Periksa sebelum mengirim",
+  "payoutAccountAdd": "Tambah rekening",
+  "payoutAccountIntro": "Nama pemilik rekening harus sama dengan nama di identitas terverifikasi.",
+  "payoutAccountRemoveTitle": "Hapus rekening?",
+  "payoutAccountsNeedKyc": "Verifikasi identitas dulu",
+  "payoutAccountsNeedKycBody": "Rekening pencairan bisa ditambahkan setelah identitasmu terverifikasi (level 3).",
+  "payoutAccountsEmpty": "Belum ada rekening pencairan.",
+  "payoutAccountDefault": "Utama",
+  "payoutAccountMakeDefault": "Jadikan utama",
+  "notificationsTitle": "Notifikasi",
+  "notificationsMarkAll": "Tandai semua dibaca",
+  "notificationSettingsTitle": "Pengaturan notifikasi",
+  "notificationsEmptyTitle": "Belum ada notifikasi",
+  "notificationsEmptyBody": "Kabar tentang titipan, pembayaran, dan chat akan muncul di sini.",
+  "notifLocked": "Wajib untuk keamanan transaksi",
+  "pushOptionalNote": "Notifikasi push opsional. Tanpa push, kabar tetap muncul di aplikasi dan e-mail.",
+  "profileTitle": "Profil",
+  "editProfileTitle": "Ubah profil",
+  "displayName": "Nama tampilan",
+  "transactionEmail": "E-mail transaksi",
+  "transactionEmailHelp": "Struk dan kabar pembayaran dikirim ke sini. Perlu verifikasi kode.",
+  "emailVerified": "E-mail terverifikasi",
+  "emailPendingVerification": "E-mail belum diverifikasi. Kamu bisa verifikasi nanti.",
+  "profileSaved": "Profil disimpan",
+  "signOutTitle": "Keluar dari akun?",
+  "signOutBody": "Titipan dan dana di SafePay tetap aman. Kamu bisa masuk lagi kapan saja.",
+  "signOut": "Keluar",
+  "deletionScheduledNotice": "Akunmu dijadwalkan untuk dihapus. Batalkan di Privasi & data jika berubah pikiran.",
+  "payoutsTitle": "Pencairan",
+  "walletTitle": "Dompet & kredit",
+  "referralTitle": "Ajak teman",
+  "supportTitle": "Bantuan",
+  "settingsTitle": "Pengaturan",
+  "sessionsTitle": "Perangkat & sesi",
+  "sessionRevokeTitle": "Keluarkan perangkat ini?",
+  "sessionRevokeBody": "Perangkat itu harus masuk ulang untuk memakai akunmu.",
+  "sessionRevoke": "Keluarkan",
+  "sessionUnknownDevice": "Perangkat tidak dikenal",
+  "sessionThisDevice": "Perangkat ini",
+  "settingsLanguage": "Bahasa",
+  "languageIndonesian": "Bahasa Indonesia",
+  "languageEnglish": "English",
+  "settingsTheme": "Tema",
+  "themeSystem": "Ikuti sistem",
+  "themeLight": "Terang",
+  "themeDark": "Gelap",
+  "settingsGeneral": "Umum",
+  "settingsHaptics": "Getaran (haptics)",
+  "settingsHapticsHelp": "Getaran halus saat pembayaran berhasil atau ada peringatan.",
+  "settingsAbout": "Tentang",
+  "settingsLicenses": "Lisensi open source",
+  "dataLimitationsNote": "Estimasi bea masuk, pajak, dan kurs bersifat perkiraan. Nilai final mengikuti penetapan Bea Cukai dan kurs saat pembayaran dikunci.",
+  "privacyTitle": "Privasi & data",
+  "privacyIntro": "Kamu berhak mengakses, mengunduh, dan menghapus data pribadimu sesuai UU Pelindungan Data Pribadi.",
+  "privacyConsents": "Persetujuan",
+  "privacyExportTitle": "Unduh data saya",
+  "privacyExportBody": "Kami siapkan salinan data akunmu. Biasanya selesai dalam beberapa menit hingga 3×24 jam.",
+  "privacyExportRequest": "Minta salinan data",
+  "privacyExportRequested": "Permintaan diterima. Kami kabari saat siap.",
+  "privacyExportView": "Lihat",
+  "privacyExportViewTitle": "Data akun",
+  "deleteAccountTitle": "Hapus akun",
+  "deleteAccountExplain": "Akun dihapus permanen setelah masa tenggang 14 hari. Tidak bisa dilakukan selama masih ada transaksi aktif atau dana di SafePay. Data yang wajib disimpan menurut hukum (misalnya catatan transaksi) disimpan terpisah sesuai masa retensi.",
+  "deleteAccountBody": "Setelah 14 hari, profil, titipan, trip, dan chat dihapus dan tidak bisa dipulihkan. Kamu akan dikeluarkan dari semua perangkat.",
+  "deleteAccountConfirm": "Hapus akun",
+  "deleteAccountScheduled": "Penghapusan akun dijadwalkan",
+  "deletionCancel": "Batalkan penghapusan",
+  "deletionCancelled": "Penghapusan akun dibatalkan",
+  "referralApplied": "Kode referral dipakai",
+  "referralYourCode": "Kode referral kamu",
+  "referralShareWhatsapp": "Bagikan via WhatsApp",
+  "referralTerms": "Ketentuan",
+  "referralBuyerProgram": "Ajak penitip",
+  "referralTravelerProgram": "Ajak traveler",
+  "creditNotWithdrawable": "Kredit hanya untuk potongan titipan, tidak bisa dicairkan.",
+  "referralStats": "Statistik",
+  "referralInvited": "Diajak",
+  "referralPending": "Menunggu transaksi",
+  "referralRewarded": "Dapat hadiah",
+  "referralEarned": "Total kredit didapat",
+  "referralEarnedMonth": "Kredit bulan ini",
+  "referralRewards": "Riwayat hadiah",
+  "referralApplyTitle": "Punya kode referral?",
+  "referralApplyHelp": "Masukkan sebelum transaksi pertamamu.",
+  "referralApplyLabel": "Kode referral",
+  "referralApply": "Pakai",
+  "creditBalance": "Saldo JastipKita Credit",
+  "referralCardBody": "Ajak teman dan dapatkan kredit untuk titipan berikutnya.",
+  "creditHistory": "Riwayat kredit",
+  "creditHistoryEmpty": "Belum ada riwayat kredit.",
+  "createRequestTitle": "Buat titipan",
+  "requestPublished": "Titipan dipublikasikan. Traveler di rute ini akan dikabari.",
+  "requestSavedDraft": "Draf disimpan",
+  "extractionNeedsManual": "Sebagian data belum yakin. Periksa dan lengkapi form di bawah.",
+  "searchResults": "Hasil pencarian",
+  "sourceUrl": "Link",
+  "sourcePhoto": "Foto",
+  "sourceSearch": "Cari",
+  "sourceManual": "Manual",
+  "urlLabel": "Link produk",
+  "urlHint": "https://toko.com/produk",
+  "urlExtract": "Ambil detail produk",
+  "photoIntro": "Foto barang atau tangkapan layar produk. Hasil pengenalan wajib kamu periksa.",
+  "photoCamera": "Kamera",
+  "photoGallery": "Galeri",
+  "searchLabel": "Cari barang",
+  "searchHint": "Contoh: Tokyo Banana, sneakers Onitsuka",
+  "searchAction": "Cari",
+  "manualIntro": "Isi detail barang sendiri. Makin lengkap, makin akurat estimasinya.",
+  "requestFormTitle": "Detail barang",
+  "fieldProductName": "Nama produk",
+  "fieldMerchant": "Toko",
+  "fieldMerchantHint": "Nama toko atau situs",
+  "fieldCountry": "Negara asal",
+  "fieldCategory": "Kategori",
+  "fieldQuantity": "Jumlah",
+  "fieldVariant": "Varian",
+  "fieldVariantHint": "Ukuran, warna, dll.",
+  "fieldPrice": "Harga per barang",
+  "fieldCurrency": "Mata uang",
+  "fieldMaxBudget": "Anggaran maksimal (Rp)",
+  "fieldMaxBudgetHint": "Traveler tidak boleh membeli di atas harga yang kamu setujui",
+  "fieldNeededBy": "Dibutuhkan paling lambat",
+  "fieldDestinationCity": "Kota tujuan",
+  "fieldDestinationCityHint": "Contoh: Jakarta",
+  "fieldDeliveryPreference": "Preferensi pengiriman",
+  "deliveryAny": "Bebas",
+  "fieldNotes": "Catatan untuk traveler",
+  "fieldNotesHint": "Detail tambahan, link alternatif, dll.",
+  "requestCheckRules": "Cek aturan & estimasi biaya",
+  "requestPublish": "Simpan & cari traveler",
+  "requestPublishNeedsCheck": "Cek aturan barang terlebih dahulu.",
+  "requestPublishNeedsAck": "Centang pernyataan pembatasan barang terlebih dahulu.",
+  "requestSaveDraft": "Simpan draf",
+  "customsEstimateTitle": "Estimasi bea & pajak",
+  "customsEstimateTotal": "Estimasi total bea & pajak",
+  "customsTreatmentNote": "Dihitung dari aturan bea cukai barang bawaan penumpang. Nilai final ditetapkan petugas Bea Cukai.",
+  "titipanTitle": "Titipan saya",
+  "titipanTabRequests": "Permintaan",
+  "titipanTabTransactions": "Transaksi",
+  "titipanEmptyTitle": "Belum ada transaksi",
+  "titipanEmptyBody": "Setelah kamu menerima tawaran traveler, transaksinya muncul di sini.",
+  "requestsEmptyTitle": "Belum ada titipan",
+  "requestsEmptyBody": "Mulai dari link produk, foto, atau isi manual.",
+  "openRequestsTitle": "Titipan terbuka",
+  "openRequestsAllTrips": "Semua trip saya",
+  "openRequestsEmptyTitle": "Belum ada titipan terbuka",
+  "openRequestsEmptyBody": "Belum ada titipan yang cocok dengan rute tripmu. Cek lagi nanti.",
+  "requestDetailTitle": "Detail titipan",
+  "requestCancelTitle": "Batalkan titipan?",
+  "requestCancelBody": "Tawaran yang masuk akan ditutup. Belum ada dana yang dibayar.",
+  "requestCancelConfirm": "Batalkan titipan",
+  "requestCancelled": "Titipan dibatalkan",
+  "inviteSent": "Undangan terkirim ke traveler",
+  "offerAccepted": "Tawaran diterima. Lanjutkan ke pembayaran SafePay.",
+  "offerDeclined": "Tawaran ditolak",
+  "itemValueIdr": "Perkiraan harga barang",
+  "requestSeeTransaction": "Lihat transaksi",
+  "offersTitle": "Tawaran traveler",
+  "offersEmpty": "Belum ada tawaran. Undang traveler yang direkomendasikan di bawah.",
+  "recommendedTravelersTitle": "Traveler direkomendasikan",
+  "recommendedEmptyTitle": "Belum ada rekomendasi",
+  "recommendedEmptyBody": "Belum ada trip yang cocok dengan rute dan tanggal titipan ini.",
+  "inviteTraveler": "Undang",
+  "offerSafepayNote": "Pembayaran penitip ditahan SafePay. Fee kamu dicairkan setelah barang diterima penitip.",
+  "offerSend": "Kirim tawaran",
+  "offerNotOpen": "Titipan ini tidak lagi menerima tawaran.",
+  "offerSent": "Tawaran terkirim",
+  "offerChooseTrip": "Pilih trip",
+  "offerNoActiveTrip": "Belum ada trip aktif",
+  "offerNoActiveTripBody": "Publikasikan trip dengan rute yang sama sebelum mengirim tawaran.",
+  "offerTrip": "Trip",
+  "offerFeeLabel": "Fee traveler (Rp)",
+  "offerFeeHint": "Fee jasa kamu, di luar harga barang",
+  "offerMessageLabel": "Pesan untuk penitip",
+  "navHome": "Beranda",
+  "navTitipan": "Titipan",
+  "navTrips": "Trip",
+  "navOrders": "Pesanan",
+  "navChat": "Chat",
+  "navWallet": "Dompet",
+  "navProfile": "Profil",
+  "modeBuyer": "Penitip",
+  "modeTraveler": "Traveler",
+  "modeTravelerPill": "Mode traveler",
+  "faqCatAll": "Semua",
+  "faqCatGeneral": "Umum",
+  "faqCatBuyer": "Penitip",
+  "faqCatTraveler": "Traveler",
+  "faqCatPayment": "Pembayaran",
+  "faqCatCustoms": "Bea cukai",
+  "faqCatDelivery": "Pengiriman",
+  "faqCatDispute": "Sengketa",
+  "faqCatAccount": "Akun",
+  "faqCatReferral": "Referral",
+  "faqSearchLabel": "Cari bantuan",
+  "faqSearchHint": "Contoh: refund, bea masuk",
+  "faqEmpty": "Tidak ada artikel yang cocok",
+  "faqStillNeedHelp": "Masih butuh bantuan?",
+  "supportContactTitle": "Hubungi kami",
+  "supportWhatsApp": "WhatsApp layanan pelanggan",
+  "ticketsTitle": "Tiket bantuan",
+  "ticketsEmpty": "Belum ada tiket bantuan.",
+  "ticketCreate": "Buat tiket",
+  "ticketSla": "Target respons",
+  "ticketAgent": "Tim JastipKita",
+  "ticketSystem": "Sistem",
+  "ticketClosedNote": "Tiket ini sudah ditutup. Buat tiket baru bila masih butuh bantuan.",
+  "ticketReply": "Balas",
+  "ticketValidation": "Isi subjek (min. 3 karakter) dan pesan (min. 10 karakter).",
+  "ticketCategoryLabel": "Kategori",
+  "ticketSubject": "Subjek",
+  "ticketMessage": "Pesan",
+  "ticketLinked": "Tiket ini terhubung dengan transaksi terkait.",
+  "ticketSubmit": "Kirim tiket",
+  "ticketSlaNote": "Kami biasanya membalas dalam 1×24 jam kerja. Jangan kirim PIN, OTP, atau kata sandi.",
+  "checkoutTitle": "Pembayaran",
+  "checkoutStep": "Langkah terakhir",
+  "channelTitle": "Metode pembayaran",
+  "channelFeeOnSelect": "Biaya tampil setelah dipilih",
+  "channelNote": "Biaya pembayaran ikut tampil di rincian harga sebelum kamu bayar.",
+  "checkoutExpiredReason": "Rincian harga kedaluwarsa. Perbarui kurs dulu.",
+  "checkoutKycReason": "Verifikasi nomor HP dulu untuk membayar.",
+  "checkoutAckReason": "Centang pernyataan pembatasan barang dulu.",
+  "promoTitle": "Kode promo",
+  "promoLabel": "Masukkan kode",
+  "promoApply": "Pakai",
+  "creditUse": "Pakai JastipKita Credit",
+  "checkoutKycTitle": "Verifikasi nomor HP",
+  "checkoutKycBody": "Pembayaran lewat SafePay butuh nomor HP terverifikasi (level 2). Cuma butuh satu menit.",
+  "checkoutSafepayNote": "Dana ditahan SafePay. Traveler baru boleh membeli setelah harga dikonfirmasi, dan dana baru diteruskan setelah barang kamu terima.",
+  "totalToPay": "Total dibayar",
+  "handoverTitle": "Serah terima",
+  "handoverChecklistTitle": "Sebelum memberi PIN, pastikan:",
+  "handoverCheck1": "Barang sesuai pesanan (produk, varian, jumlah)",
+  "handoverCheck2": "Kondisi barang baik dan segel/kemasan utuh",
+  "handoverCheck3": "Struk atau bukti pembelian sudah kamu lihat",
+  "handoverWarning": "Berikan PIN atau QR hanya setelah barang ada di tanganmu. PIN = konfirmasi barang diterima.",
+  "pinLocked": "PIN terkunci karena terlalu banyak percobaan salah. Hubungi bantuan.",
+  "handoverPinLabel": "PIN serah terima",
+  "handoverQrSemantics": "Kode QR serah terima",
+  "handoverQrLabel": "Atau minta traveler memindai QR ini",
+  "handoverScreenshotNote": "Jangan kirim PIN lewat chat atau tangkapan layar.",
+  "handoverRefresh": "Muat ulang PIN",
+  "verifyHandover": "Verifikasi serah terima",
+  "verifyScanQr": "Pindai QR",
+  "verifyEnterPin": "Masukkan PIN",
+  "verifyTorch": "Senter",
+  "verifySwitchCamera": "Ganti kamera",
+  "verifyPinIntro": "Minta penitip menunjukkan PIN 6 digit dari aplikasinya setelah memeriksa barang.",
+  "verifySubmit": "Verifikasi",
+  "verifyWrongQr": "QR ini bukan untuk transaksi ini.",
+  "verifySuccess": "Serah terima terverifikasi",
+  "ordersTitle": "Pesanan",
+  "ordersTabOffers": "Tawaran saya",
+  "ordersTabOrders": "Pesanan",
+  "ordersEmptyTitle": "Belum ada pesanan",
+  "ordersEmptyBody": "Kirim tawaran ke titipan terbuka di rute tripmu.",
+  "offersMineEmpty": "Belum ada tawaran yang kamu kirim.",
+  "offerWithdrawTitle": "Tarik tawaran?",
+  "offerWithdrawBody": "Penitip tidak bisa lagi menerima tawaran ini.",
+  "offerWithdraw": "Tarik tawaran",
+  "offerWithdrawn": "Tawaran ditarik",
+  "paymentStatusTitle": "Status pembayaran",
+  "openPaymentPage": "Buka halaman pembayaran",
+  "checkPaymentStatus": "Cek status pembayaran",
+  "paymentPendingHelp": "Selesaikan pembayaran di halaman penyedia. Status diperbarui otomatis setelah pembayaran diterima.",
+  "justNow": "Baru saja",
+  "nextTravelerConfirmsPrice": "Traveler cek harga di toko",
+  "nextTravelerConfirmsPriceMeta": "Kamu dikabari bila harga berubah",
+  "nextPurchased": "Barang dibeli",
+  "nextHandover": "Serah terima & konfirmasi",
+  "totalPaid": "Total dibayar",
+  "txNumber": "No. transaksi",
+  "nextStepsTitle": "Langkah berikutnya",
+  "seeTitipanStatus": "Lihat status titipan",
+  "paymentExpiredTitle": "Waktu pembayaran habis",
+  "paymentFailedTitle": "Pembayaran gagal",
+  "paymentFailedBody": "Tidak ada dana yang ditarik. Coba lagi atau pilih metode lain.",
+  "payAgain": "Bayar lagi",
+  "payoutsEmptyTitle": "Belum ada pencairan",
+  "payoutsEmptyBody": "Fee traveler dicairkan setelah penitip mengonfirmasi barang diterima.",
+  "confirmReceiptTitle": "Konfirmasi barang diterima?",
+  "confirmReceiptBody": "Pastikan barang sudah kamu periksa. Setelah konfirmasi, dana SafePay diteruskan ke traveler dan tidak bisa ditarik kembali. Ada masalah? Buka sengketa, jangan konfirmasi.",
+  "confirmReceipt": "Barang sudah diterima",
+  "confirmReceiptDone": "Terima kasih! Dana diteruskan ke traveler.",
+  "pcAlertTitle": "Harga di toko berbeda",
+  "pcAlertBody": "Traveler menemukan harga berbeda dari yang kamu bayar. Tinjau dan putuskan sebelum waktu habis.",
+  "pcWaitingTraveler": "Menunggu jawaban traveler atas pertanyaanmu.",
+  "pcReview": "Tinjau harga",
+  "refundDestinationTitle": "Isi rekening refund",
+  "travelerLabel": "Traveler",
+  "autoConfirmIn": "Otomatis dikonfirmasi bila tidak ada sengketa dalam",
+  "paymentsTitle": "Pembayaran",
+  "refundsTitle": "Refund",
+  "txStatusTitle": "Status",
+  "invoiceCountdownLabel": "Bayar dalam",
+  "deliveryTitle": "Pengiriman",
+  "deliveryMethodLabel": "Metode",
+  "meetupPoint": "Titik temu",
+  "meetupTime": "Waktu",
+  "trackingNumber": "No. resi",
+  "proofTitle": "Bukti pembelian",
+  "proofUnderReview": "Sedang ditinjau tim",
+  "proofActualPrice": "Harga dibayar",
+  "proofPurchasedAt": "Dibeli pada",
+  "cancelTitle": "Batalkan transaksi",
+  "maxApprovedPrice": "Harga maksimal disetujui",
+  "yourTravelerFee": "Fee kamu",
+  "clarifyTitle": "Penitip bertanya soal harga",
+  "clarifyBody": "Jawab pertanyaan penitip atau kirim harga baru.",
+  "pcTravelerWaiting": "Menunggu penitip mengonfirmasi harga. Jangan beli dulu.",
+  "travelStatusTitle": "Status perjalanan",
+  "travelerTasksTitle": "Tugas traveler",
+  "customsTitle": "Deklarasi bea cukai",
+  "customsSubtitle": "Catat bea dan pajak yang dibayar saat tiba",
+  "deliverySetTitle": "Atur serah terima",
+  "deliveryNotSet": "Belum diatur",
+  "payoutTitle": "Pencairan fee",
+  "goToPayment": "Bayar dengan SafePay",
+  "continuePayment": "Lanjutkan pembayaran",
+  "showHandoverPin": "Tampilkan PIN serah terima",
+  "ratingTitle": "Beri ulasan",
+  "priceCheckTitle": "Cek harga di toko",
+  "shippedTitle": "Tandai dikirim",
+  "deliveredTitle": "Tandai sudah diserahkan",
+  "pcTitle": "Konfirmasi harga",
+  "pcWindowLabel": "Sisa waktu",
+  "pcExplain": "Harga di toko berbeda dari harga yang kamu bayar ke SafePay. Traveler belum boleh membeli sampai kamu memutuskan.",
+  "pcSecuredPrice": "Harga diamankan",
+  "pcActualPrice": "Harga di toko",
+  "pcTravelerNote": "Catatan traveler",
+  "pcReceiptAttached": "Foto label harga terlampir",
+  "pcNoteLabel": "Catatan (opsional)",
+  "pcNoteHint": "Wajib diisi jika bertanya ke traveler",
+  "pcApprove": "Setujui harga",
+  "pcAskTraveler": "Tanya traveler",
+  "pcReject": "Tolak & batalkan",
+  "pcRejectTitle": "Tolak harga baru?",
+  "pcRejectBody": "Transaksi dibatalkan dan dana SafePay dikembalikan penuh kepadamu.",
+  "pcClarifyNeedsNote": "Tulis pertanyaanmu untuk traveler.",
+  "pcApproved": "Harga disetujui. Traveler boleh membeli.",
+  "pcApprovedSupplemental": "Harga disetujui. Selesaikan pembayaran tambahan agar traveler bisa membeli.",
+  "pcRejected": "Harga ditolak. Dana dikembalikan.",
+  "pcClarifySent": "Pertanyaan terkirim ke traveler",
+  "pcNoFault": "Menolak harga tidak memengaruhi trust score kamu maupun traveler.",
+  "cancelConfirm": "Batalkan transaksi",
+  "cancelReasonLabel": "Alasan pembatalan",
+  "cancelDoneTitle": "Pembatalan diproses",
+  "cancelStageLabel": "Tahap",
+  "cancelRefund": "Dana dikembalikan",
+  "cancelCompensation": "Kompensasi traveler",
+  "cancelTrustPenalty": "Pengurangan trust score",
+  "cancelRefundNote": "Refund dikirim ke metode pembayaran asal atau rekening yang kamu isi. Waktu masuk tergantung bank/penyedia.",
+  "ratingThanks": "Terima kasih atas ulasanmu",
+  "ratingOverall": "Penilaian keseluruhan",
+  "ratingCommunication": "Komunikasi",
+  "ratingAccuracy": "Kesesuaian barang",
+  "ratingTimeliness": "Ketepatan waktu",
+  "ratingComment": "Ceritakan pengalamanmu (opsional)",
+  "ratingSubmit": "Kirim ulasan",
+  "refundDestinationSubmit": "Simpan rekening refund",
+  "bankFormInvalid": "Lengkapi bank, nomor rekening, dan nama pemilik.",
+  "bankLabel": "Bank",
+  "bankAccountNumber": "Nomor rekening",
+  "bankHolderName": "Nama pemilik rekening",
+  "bankHolderHelp": "Harus sama dengan nama di akunmu",
+  "bankMaskNote": "Nomor rekening disimpan terenkripsi dan hanya ditampilkan 4 digit terakhir.",
+  "clarifyBuyerAsked": "Pertanyaan penitip",
+  "clarifyAnswer": "Jawabanmu",
+  "clarifySubmit": "Kirim jawaban",
+  "courierName": "Nama kurir",
+  "shippedSubmit": "Tandai dikirim",
+  "deliveredNeedsProof": "Tambahkan minimal satu foto bukti serah terima.",
+  "deliveredIntro": "Unggah foto bukti barang sudah diterima penitip. Penitip tetap perlu konfirmasi atau PIN.",
+  "addPhoto": "Tambah foto",
+  "deliveredSubmit": "Tandai sudah diserahkan",
+  "priceCheckApprovedTitle": "Harga sesuai — silakan beli",
+  "priceCheckPendingTitle": "Menunggu konfirmasi penitip",
+  "priceCheckApprovedBody": "Harga masih dalam batas yang disetujui. Beli barangnya lalu unggah struk.",
+  "priceCheckPendingBody": "Harga berbeda dari yang dibayar penitip. JANGAN beli dulu sampai penitip menyetujui.",
+  "priceCheckIntro": "Cek harga di toko sebelum membeli. Bila berbeda, penitip akan diminta konfirmasi dulu.",
+  "priceCheckPerUnit": "Harga per barang, termasuk pajak toko",
+  "priceCheckReceipt": "Foto label harga",
+  "priceCheckReceiptHelp": "Foto label harga atau layar kasir. Membantu penitip memutuskan lebih cepat.",
+  "priceCheckSubmit": "Kirim harga",
+  "uploadPurchaseProof": "Unggah bukti pembelian",
+  "proofNeedsReceipt": "Tambahkan foto struk.",
+  "proofNeedsPhotos": "Tambahkan minimal satu foto produk.",
+  "proofNeedsVideo": "Barang bernilai tinggi wajib video unboxing/pemeriksaan.",
+  "proofNeedsSerial": "Isi nomor seri barang.",
+  "proofOverCeiling": "Total melebihi harga yang disetujui penitip. Minta konfirmasi harga dulu.",
+  "proofSubmitted": "Bukti pembelian terkirim",
+  "proofReceipt": "Struk pembelian",
+  "proofPhotosLabel": "Foto produk",
+  "proofVideo": "Video pemeriksaan",
+  "proofVideoHelp": "Rekam barang, segel, dan nomor seri dalam satu video singkat.",
+  "proofSerial": "Nomor seri",
+  "proofReceiptNumber": "Nomor struk",
+  "proofSubmit": "Kirim bukti",
+  "customsNeedsReceipt": "Tambahkan foto bukti pembayaran bea cukai.",
+  "customsSaved": "Deklarasi bea cukai disimpan",
+  "customsIntro": "Catat bea dan pajak yang benar-benar kamu bayar ke Bea Cukai. Penitip melihat nilai ini.",
+  "customsDuty": "Bea masuk (Rp)",
+  "customsVat": "PPN impor (Rp)",
+  "customsIncomeTax": "PPh 22 impor (Rp)",
+  "customsLuxuryTax": "PPnBM (Rp)",
+  "customsRef": "Nomor dokumen bea cukai",
+  "customsReceipt": "Bukti pembayaran bea cukai",
+  "customsSubmit": "Simpan deklarasi",
+  "deliveryMeetupRequired": "Isi titik temu dan waktunya.",
+  "deliverySaved": "Rencana serah terima disimpan",
+  "deliveryMeetupNote": "Pilih tempat umum yang ramai. Penitip memberi PIN setelah memeriksa barang.",
+  "meetupPointHint": "Contoh: Lobby Stasiun MRT Bundaran HI",
+  "meetupDate": "Tanggal",
+  "meetupPickTime": "Pilih jam",
+  "deliveryCourierNote": "Kirim dengan kurir yang ada nomor resinya. Masukkan resi setelah paket dikirim.",
+  "deliverySave": "Simpan",
+  "myTripsTitle": "Trip saya",
+  "tripCreated": "Trip disimpan sebagai draf. Unggah dokumen perjalanan untuk verifikasi.",
+  "tripCreateIntro": "Bagikan rencana perjalananmu. Dokumen perjalanan diverifikasi sebelum trip tampil.",
+  "tripArrivalBeforeDeparture": "Tanggal tiba tidak boleh sebelum tanggal berangkat.",
+  "tripSectionRoute": "Rute",
+  "tripOriginCountry": "Negara asal",
+  "tripOriginCity": "Kota asal",
+  "tripOriginCityHint": "Contoh: Tokyo",
+  "tripDestinationCity": "Kota tujuan di Indonesia",
+  "tripSectionDates": "Tanggal",
+  "tripDeparture": "Berangkat",
+  "tripArrival": "Tiba",
+  "tripDatesWibNote": "Tanggal ditampilkan dalam WIB",
+  "tripReturn": "Tanggal pulang (opsional)",
+  "tripSectionCapacity": "Kapasitas",
+  "tripCapacityKg": "Kapasitas bagasi (kg)",
+  "tripMaxItems": "Maksimal jumlah barang",
+  "tripSectionFee": "Fee traveler",
+  "tripFeeAmount": "Fee (Rp)",
+  "tripFeePercent": "Fee (%)",
+  "tripFeePerKgHelp": "Dihitung dari berat barang",
+  "tripSectionExcluded": "Kategori yang tidak diterima",
+  "tripExcludedHelp": "Barang dilarang selalu ditolak otomatis.",
+  "tripSaveDraft": "Simpan draf",
+  "tripDetailTitle": "Detail trip",
+  "tripCancelTitle": "Batalkan trip?",
+  "tripCancelBody": "Titipan yang sudah dibayar akan diproses sesuai kebijakan pembatalan, dan trust score bisa berkurang.",
+  "tripCancelConfirm": "Batalkan trip",
+  "tripCancelled": "Trip dibatalkan",
+  "tripDepart": "Saya berangkat",
+  "tripDepartTitle": "Tandai berangkat?",
+  "tripDepartBody": "Penitip dikabari bahwa kamu sedang dalam perjalanan. Pastikan semua barang titipan sudah dibeli.",
+  "tripDeparted": "Selamat jalan! Status trip diperbarui.",
+  "tripUploadDoc": "Unggah dokumen perjalanan",
+  "tripDocSubmitted": "Dokumen dikirim untuk verifikasi",
+  "tripInviteTitle": "Titip ke trip ini",
+  "tripNoteDraft": "Lengkapi dokumen perjalanan, lalu publikasikan trip.",
+  "tripNotePending": "Dokumen sedang diverifikasi. Biasanya kurang dari 1×24 jam.",
+  "tripNoteVerified": "Dokumen terverifikasi. Publikasikan agar penitip bisa menemukan tripmu.",
+  "tripNoteActive": "Trip tampil ke penitip di rute ini.",
+  "tripNoteFull": "Kapasitas penuh. Trip tidak menerima titipan baru.",
+  "tripNoteTraveling": "Selamat jalan! Perbarui status tiap titipan saat tiba.",
+  "tripNoteClosed": "Trip ini sudah tidak aktif.",
+  "tripDocsTitle": "Dokumen perjalanan",
+  "tripDocsEmpty": "Belum ada dokumen.",
+  "tripPublish": "Publikasikan trip",
+  "tripPublished": "Trip dipublikasikan",
+  "tripPublishNeedsKyc": "Verifikasi identitas (level 3) dan dokumen perjalanan dulu.",
+  "tripComplete": "Selesaikan trip",
+  "tripCompleted": "Trip selesai",
+  "tripTitipHere": "Titip ke trip ini",
+  "tripDocRequired": "Pilih file dokumen perjalanan terlebih dahulu.",
+  "tripDocIntro": "Unggah e-tiket, itinerary, atau boarding pass atas namamu untuk membuktikan perjalanan ini.",
+  "tripFlightNumber": "Nomor penerbangan",
+  "tripFlightDate": "Tanggal penerbangan",
+  "pickDocument": "Pilih dokumen",
+  "tripDocPrivacy": "Dokumen hanya dilihat tim verifikasi dan disimpan terenkripsi. Penitip hanya melihat badge Trip terverifikasi.",
+  "tripDocSubmit": "Kirim dokumen",
+  "inviteNoOpenRequests": "Belum ada titipan terbuka. Buat titipan dulu.",
+  "inviteChooseRequest": "Pilih titipan",
+  "trustExplainTitle": "Cara Trust Score dihitung",
+  "trustExplainBody": "Trust Score (0–100) dihitung otomatis dari rekam jejak di JastipKita. Komponennya:",
+  "trustFactorKyc": "Level verifikasi akun",
+  "trustFactorCompleted": "Transaksi selesai",
+  "trustFactorOnTime": "Ketepatan waktu",
+  "trustFactorRating": "Rating dari pengguna lain",
+  "trustFactorDisputes": "Sengketa yang kalah",
+  "trustFactorCancellations": "Pembatalan",
+  "trustFactorAccountAge": "Usia akun",
+  "trustExplainPrivacy": "Data sensitif pengguna lain tidak pernah ditampilkan.",
+  "kycLadderAchieved": "Tercapai",
+  "kycLadderNext": "Berikutnya",
+  "kycLadderLocked": "Terkunci",
+  "tripVerifiedBadge": "Trip terverifikasi",
+  "tripFullReason": "Kapasitas trip ini sudah penuh",
+  "totalLabel": "Total",
+  "miniGateBlocked": "Belum boleh beli",
+  "miniGateApproved": "Boleh dibeli",
+  "offerTravelerFee": "Fee traveler",
+  "offerExpiresIn": "Berlaku",
+  "offerAccept": "Terima tawaran",
+  "offerDecline": "Tolak",
+  "estimatedTravelerFee": "Estimasi fee traveler",
+  "breakdownTitle": "Rincian harga",
+  "breakdownAllFeesShown": "Semua biaya ditampilkan. Tidak ada biaya tersembunyi.",
+  "breakdownExpired": "Kurs dan harga perlu diperbarui sebelum membayar.",
+  "breakdownRefreshRate": "Perbarui kurs",
+  "ruleSource": "Dasar perhitungan",
+  "ruleEstimateNote": "Nilai ini estimasi. Nilai final mengikuti penetapan Bea Cukai; selisihnya diselesaikan sesuai ketentuan.",
+  "ruleFixedNote": "Nilai ini tetap setelah kamu membayar.",
+  "fxLocked": "Kurs dikunci",
+  "fxCountdownLabel": "Kurs berlaku",
+  "restrictionWhy": "Kenapa?",
+  "restrictionAcknowledge": "Saya memahami pembatasan ini dan bertanggung jawab atas kelengkapan izin/deklarasi.",
+  "restrictionProhibitedAlternative": "Cari barang lain yang serupa, atau hubungi bantuan bila menurutmu ini keliru.",
+  "restrictionDisclaimer": "Klasifikasi otomatis berdasarkan kategori dan kata kunci; bukan nasihat hukum.",
+  "safepayBlockedOverline": "SAFEPAY",
+  "safepayBlockedTitle": "JANGAN BELI DULU",
+  "safepayBlockedConfirmPrice": "Dana sudah aman di SafePay. Cek harga di toko dan kirim ke penitip sebelum membeli.",
+  "safepayBlockedAwaitingBuyer": "Menunggu penitip menyetujui harga. Jangan beli sampai status berubah menjadi Boleh dibeli.",
+  "safepayBlockedNotPaid": "Penitip belum membayar ke SafePay. Jangan beli apa pun.",
+  "safepayBlockedRule": "Aturan SafePay: traveler hanya membeli saat status Boleh dibeli.",
+  "safepayApprovedOverline": "SAFEPAY · BOLEH DIBELI",
+  "safepayApprovedTitle": "Silakan beli sekarang",
+  "safepayApprovedBody": "Penitip menyetujui harga. Beli barangnya lalu unggah struk.",
+  "safepaySecuredOverline": "SAFEPAY",
+  "safepaySecuredTitle": "Dana aman di SafePay",
+  "safepaySecuredBody": "Pembayaranmu ditahan SafePay dan baru diteruskan ke traveler setelah barang kamu terima.",
+  "safepaySecuredBodyTraveler": "Dana penitip ditahan SafePay. Fee kamu dicairkan setelah penitip mengonfirmasi barang diterima.",
+  "safepayPendingOverline": "SAFEPAY",
+  "safepayPendingTitle": "Menunggu pembayaran",
+  "safepayPendingBody": "Selesaikan pembayaran sebelum waktu habis. Traveler belum membeli apa pun.",
+  "safepayClosedOverline": "SAFEPAY",
+  "safepayClosedTitle": "Transaksi ditutup",
+  "safepayClosedBody": "Transaksi ini sudah selesai atau dibatalkan. Status dana terlihat di bagian pembayaran dan refund.",
+  "safepayClosedBodyTraveler": "Transaksi ini sudah selesai atau dibatalkan. Jangan membeli barang untuk transaksi ini.",
+  "purchaseGateDisabledReason": "Belum boleh membeli: tunggu status Boleh dibeli.",
+  "timelineDone": "selesai",
+  "timelineCurrent": "sedang berlangsung",
+  "timelineActionNeeded": "perlu tindakan",
+  "timelineUpcoming": "berikutnya",
+  "timelineStopped": "dihentikan",
+  "stepCreated": "Titipan dibuat",
+  "stepMatched": "Traveler dipilih",
+  "stepMatchedTraveler": "Tawaran diterima",
+  "stepPay": "Bayar ke SafePay",
+  "stepAwaitBuyerPayment": "Penitip membayar",
+  "stepSecured": "Dana aman di SafePay",
+  "stepPriceConfirm": "Konfirmasi harga",
+  "stepPriceConfirmTraveler": "Cek harga di toko",
+  "stepPurchased": "Barang dibeli",
+  "stepPurchaseTraveler": "Beli & unggah struk",
+  "stepTraveling": "Dalam perjalanan",
+  "stepArrived": "Tiba & bea cukai",
+  "stepHandover": "Serah terima",
+  "stepCompleted": "Selesai",
+  "segSecured": "Aman",
+  "segPurchased": "Dibeli",
+  "segFlying": "Terbang",
+  "segArrived": "Tiba",
+  "segHandover": "Diterima",
+  "countdownSemantics": "{label} sisa {minutes} menit {seconds} detik",
+  "@countdownSemantics": {
+    "description": "Screen-reader text of a countdown chip.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Bayar dalam"
+      },
+      "minutes": {
+        "type": "int",
+        "example": "14"
+      },
+      "seconds": {
+        "type": "int",
+        "example": "30"
+      }
+    }
+  },
+  "estimateSemanticsPrefix": "{label}, perkiraan",
+  "@estimateSemanticsPrefix": {
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Bea masuk"
+      }
+    }
+  },
+  "otpSentTo": "Kode 6 digit dikirim ke {destination}",
+  "@otpSentTo": {
+    "placeholders": {
+      "destination": {
+        "type": "String",
+        "example": "+62 812-••••-7890"
+      }
+    }
+  },
+  "otpDevCode": "Kode (sandbox): {code}",
+  "@otpDevCode": {
+    "description": "Only shown outside production when the API returns a dev code.",
+    "placeholders": {
+      "code": {
+        "type": "String",
+        "example": "123456"
+      }
+    }
+  },
+  "otpResendIn": "Kirim ulang dalam {seconds} dtk",
+  "@otpResendIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int",
+        "example": "30"
+      }
+    }
+  },
+  "onboardingPageSemantics": "Halaman {page} dari {total}",
+  "@onboardingPageSemantics": {
+    "placeholders": {
+      "page": {
+        "type": "int",
+        "example": "1"
+      },
+      "total": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "chatUnread": "{count} belum dibaca",
+  "@chatUnread": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "disputeForTransaction": "Transaksi {number}",
+  "@disputeForTransaction": {
+    "placeholders": {
+      "number": {
+        "type": "String",
+        "example": "JK-260927-0001"
+      }
+    }
+  },
+  "fileSelected": "Dipilih: {name}",
+  "@fileSelected": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "eticket.pdf"
+      }
+    }
+  },
+  "uploadProgress": "Mengunggah file {current} dari {total}…",
+  "@uploadProgress": {
+    "placeholders": {
+      "current": {
+        "type": "int",
+        "example": "1"
+      },
+      "total": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "disputeOpened": "Sengketa {number} dibuka. Dana tetap ditahan SafePay.",
+  "@disputeOpened": {
+    "placeholders": {
+      "number": {
+        "type": "String",
+        "example": "DSP-0001"
+      }
+    }
+  },
+  "kycNextRequirements": "Syarat untuk {level}",
+  "@kycNextRequirements": {
+    "placeholders": {
+      "level": {
+        "type": "String",
+        "example": "Identitas terverifikasi"
+      }
+    }
+  },
+  "stepOf": "Langkah {step} dari {total}",
+  "@stepOf": {
+    "placeholders": {
+      "step": {
+        "type": "int",
+        "example": "1"
+      },
+      "total": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
+  "livenessStepGeneric": "Foto gerakan {step}",
+  "@livenessStepGeneric": {
+    "placeholders": {
+      "step": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "kycPhotosReady": "{count} foto siap dikirim",
+  "@kycPhotosReady": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "payoutAccountRemoveBody": "Rekening {account} akan dihapus. Pencairan berikutnya memakai rekening utama.",
+  "@payoutAccountRemoveBody": {
+    "placeholders": {
+      "account": {
+        "type": "String",
+        "example": "BCA ••••1234"
+      }
+    }
+  },
+  "notificationUnreadSemantics": "Belum dibaca: {title}",
+  "@notificationUnreadSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Dana aman di SafePay"
+      }
+    }
+  },
+  "deletionScheduledOn": "Akunmu akan dihapus pada {date}. Batalkan sebelum tanggal itu jika berubah pikiran.",
+  "@deletionScheduledOn": {
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "11 Okt 2026"
+      }
+    }
+  },
+  "sessionLastActive": "Terakhir aktif {date}",
+  "@sessionLastActive": {
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "27 Sep 2026, 14:32 WIB"
+      }
+    }
+  },
+  "appVersionLabel": "Versi {version} · {environment}",
+  "@appVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "0.1.0"
+      },
+      "environment": {
+        "type": "String",
+        "example": "staging"
+      }
+    }
+  },
+  "referralShareMessage": "Titip barang dari luar negeri lebih aman pakai JastipKita — dana ditahan SafePay sampai barang diterima. Pakai kode {code} saat daftar: {link}",
+  "@referralShareMessage": {
+    "placeholders": {
+      "code": {
+        "type": "String",
+        "example": "ANDI25"
+      },
+      "link": {
+        "type": "String",
+        "example": "https://antarkitaindonesia.com/jastipkita/r/ANDI25/"
+      }
+    }
+  },
+  "referralBuyerTerms": "Kamu dapat {referrerCredit} dan temanmu {refereeCredit} dalam bentuk kredit setelah transaksi pertama temanmu (minimal {minimumOrder}) selesai. Maksimal {monthlyCap} per bulan. Kredit berlaku {expiryDays} hari dan tidak bisa dicairkan.",
+  "@referralBuyerTerms": {
+    "placeholders": {
+      "referrerCredit": {
+        "type": "String",
+        "example": "Rp25.000"
+      },
+      "refereeCredit": {
+        "type": "String",
+        "example": "Rp25.000"
+      },
+      "minimumOrder": {
+        "type": "String",
+        "example": "Rp300.000"
+      },
+      "monthlyCap": {
+        "type": "String",
+        "example": "Rp250.000"
+      },
+      "expiryDays": {
+        "type": "int",
+        "example": "90"
+      }
+    }
+  },
+  "referralTravelerTerms": "Ajak traveler baru: kamu dapat {credit} setelah traveler itu menyelesaikan {orders} pesanan.",
+  "@referralTravelerTerms": {
+    "placeholders": {
+      "credit": {
+        "type": "String",
+        "example": "Rp50.000"
+      },
+      "orders": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "creditAvailable": "Saldo tersedia {amount}",
+  "@creditAvailable": {
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "Rp25.000"
+      }
+    }
+  },
+  "creditExpiringSoon": "{amount} akan kedaluwarsa dalam {days} hari",
+  "@creditExpiringSoon": {
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "Rp25.000"
+      },
+      "days": {
+        "type": "int",
+        "example": "7"
+      }
+    }
+  },
+  "creditNextExpiry": "Kedaluwarsa berikutnya: {date}",
+  "@creditNextExpiry": {
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "31 Des 2026"
+      }
+    }
+  },
+  "creditExpires": "Berlaku s.d. {date}",
+  "@creditExpires": {
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "31 Des 2026"
+      }
+    }
+  },
+  "extractionConfidence": "Keyakinan {percent}%",
+  "@extractionConfidence": {
+    "placeholders": {
+      "percent": {
+        "type": "int",
+        "example": "82"
+      }
+    }
+  },
+  "requestBuyer": "Penitip: {name}",
+  "@requestBuyer": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Rina"
+      }
+    }
+  },
+  "requestOffersCount": "{count} tawaran",
+  "@requestOffersCount": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "modeSwitchSemantics": "Mode aktif: {mode}. Ketuk untuk ganti mode.",
+  "@modeSwitchSemantics": {
+    "placeholders": {
+      "mode": {
+        "type": "String",
+        "example": "Penitip"
+      }
+    }
+  },
+  "notificationsBadge": "Notifikasi, {count} belum dibaca",
+  "@notificationsBadge": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "ticketCreated": "Tiket {number} dibuat. Kami segera membalas.",
+  "@ticketCreated": {
+    "placeholders": {
+      "number": {
+        "type": "String",
+        "example": "TKT-000123"
+      }
+    }
+  },
+  "channelFee": "Biaya {amount}",
+  "@channelFee": {
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "Rp4.440"
+      }
+    }
+  },
+  "checkoutTraveler": "Traveler: {name}",
+  "@checkoutTraveler": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Andi"
+      }
+    }
+  },
+  "payWithSafepay": "Bayar {amount} via SafePay",
+  "@payWithSafepay": {
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "Rp1.250.000"
+      }
+    }
+  },
+  "handoverPinSemantics": "PIN serah terima {pin}",
+  "@handoverPinSemantics": {
+    "placeholders": {
+      "pin": {
+        "type": "String",
+        "example": "4 8 1 2 9 0"
+      }
+    }
+  },
+  "handoverAttempts": "Sisa percobaan: {count}",
+  "@handoverAttempts": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "verifyWrongPin": "PIN salah. Sisa percobaan: {remaining}",
+  "@verifyWrongPin": {
+    "placeholders": {
+      "remaining": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "statusUpdated": "Status diperbarui: {status}",
+  "@statusUpdated": {
+    "placeholders": {
+      "status": {
+        "type": "String",
+        "example": "Tiba di Indonesia"
+      }
+    }
+  },
+  "refundDestinationNeeded": "Refund {amount} menunggu rekening tujuan darimu.",
+  "@refundDestinationNeeded": {
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "Rp1.250.000"
+      }
+    }
+  },
+  "ratingShort": "★ {rating} ({count})",
+  "@ratingShort": {
+    "placeholders": {
+      "rating": {
+        "type": "String",
+        "example": "4,9"
+      },
+      "count": {
+        "type": "int",
+        "example": "128"
+      }
+    }
+  },
+  "markStatus": "Tandai: {status}",
+  "@markStatus": {
+    "placeholders": {
+      "status": {
+        "type": "String",
+        "example": "Dalam perjalanan"
+      }
+    }
+  },
+  "proofPhotos": "{count} foto produk",
+  "@proofPhotos": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "pcDifference": "Selisih {percent}% dari harga yang diamankan",
+  "@pcDifference": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "8.5"
+      }
+    }
+  },
+  "pcSupplemental": "Perlu pembayaran tambahan {amount} ke SafePay sebelum traveler membeli.",
+  "@pcSupplemental": {
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "Rp85.000"
+      }
+    }
+  },
+  "cancelStageIntro": "Tahap sekarang: {stage}. Hasil pembatalan mengikuti tahap ini.",
+  "@cancelStageIntro": {
+    "placeholders": {
+      "stage": {
+        "type": "String",
+        "example": "Setelah pembayaran"
+      }
+    }
+  },
+  "cancelDoneStatus": "Status transaksi: {status}",
+  "@cancelDoneStatus": {
+    "placeholders": {
+      "status": {
+        "type": "String",
+        "example": "Refund diproses"
+      }
+    }
+  },
+  "ratingStars": "{count} bintang",
+  "@ratingStars": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
+  "refundDestinationIntro": "Masukkan rekening untuk menerima refund {amount}. Nama pemilik harus sama dengan nama akunmu.",
+  "@refundDestinationIntro": {
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "Rp1.250.000"
+      }
+    }
+  },
+  "clarifyRevisedPrice": "Harga baru ({currency}, opsional)",
+  "@clarifyRevisedPrice": {
+    "placeholders": {
+      "currency": {
+        "type": "String",
+        "example": "JPY"
+      }
+    }
+  },
+  "photosSelected": "{count} foto dipilih",
+  "@photosSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "addFileFor": "Tambah {label}",
+  "@addFileFor": {
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "struk"
+      }
+    }
+  },
+  "priceCheckActual": "Harga di toko ({currency})",
+  "@priceCheckActual": {
+    "placeholders": {
+      "currency": {
+        "type": "String",
+        "example": "JPY"
+      }
+    }
+  },
+  "proofActualTotal": "Total dibayar ({currency})",
+  "@proofActualTotal": {
+    "placeholders": {
+      "currency": {
+        "type": "String",
+        "example": "JPY"
+      }
+    }
+  },
+  "proofCeilingHelp": "Maksimal {maximum} (harga yang disetujui penitip)",
+  "@proofCeilingHelp": {
+    "placeholders": {
+      "maximum": {
+        "type": "String",
+        "example": "¥12.000"
+      }
+    }
+  },
+  "meetupTimeValue": "Pukul {time}",
+  "@meetupTimeValue": {
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "14.30"
+      }
+    }
+  },
+  "tripExcludedList": "Tidak menerima: {categories}",
+  "@tripExcludedList": {
+    "placeholders": {
+      "categories": {
+        "type": "String",
+        "example": "Elektronik, Kosmetik"
+      }
+    }
+  },
+  "trustScoreFull": "Trust {score} · {tier}",
+  "@trustScoreFull": {
+    "placeholders": {
+      "score": {
+        "type": "int",
+        "example": "92"
+      },
+      "tier": {
+        "type": "String",
+        "example": "Sangat tepercaya"
+      }
+    }
+  },
+  "trustScoreShort": "Trust {score}",
+  "@trustScoreShort": {
+    "placeholders": {
+      "score": {
+        "type": "int",
+        "example": "92"
+      }
+    }
+  },
+  "trustScoreSemantics": "Trust score {score} dari 100, {tier}",
+  "@trustScoreSemantics": {
+    "placeholders": {
+      "score": {
+        "type": "int",
+        "example": "92"
+      },
+      "tier": {
+        "type": "String",
+        "example": "Sangat tepercaya"
+      }
+    }
+  },
+  "kycLevelShort": "L{level}",
+  "@kycLevelShort": {
+    "placeholders": {
+      "level": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "kycLevelSemantics": "Verifikasi level {level}, {name}",
+  "@kycLevelSemantics": {
+    "placeholders": {
+      "level": {
+        "type": "int",
+        "example": "3"
+      },
+      "name": {
+        "type": "String",
+        "example": "Identitas terverifikasi"
+      }
+    }
+  },
+  "kycLadderSemantics": "Level {level}, {name}: {state}",
+  "@kycLadderSemantics": {
+    "placeholders": {
+      "level": {
+        "type": "int",
+        "example": "3"
+      },
+      "name": {
+        "type": "String",
+        "example": "Identitas terverifikasi"
+      },
+      "state": {
+        "type": "String",
+        "example": "Tercapai"
+      }
+    }
+  },
+  "tripDates": "{departure} – {arrival}",
+  "@tripDates": {
+    "placeholders": {
+      "departure": {
+        "type": "String",
+        "example": "12 Okt"
+      },
+      "arrival": {
+        "type": "String",
+        "example": "19 Okt"
+      }
+    }
+  },
+  "tripCapacityRemaining": "Sisa {kg} kg",
+  "@tripCapacityRemaining": {
+    "placeholders": {
+      "kg": {
+        "type": "String",
+        "example": "6.5"
+      }
+    }
+  },
+  "tripCapacityUsedSemantics": "Kapasitas terpakai {percent} persen",
+  "@tripCapacityUsedSemantics": {
+    "placeholders": {
+      "percent": {
+        "type": "int",
+        "example": "60"
+      }
+    }
+  },
+  "requestNeededBy": "Dibutuhkan {date}",
+  "@requestNeededBy": {
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "20 Okt"
+      }
+    }
+  },
+  "breakdownShowLines": "Lihat semua {count} baris",
+  "@breakdownShowLines": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "11"
+      }
+    }
+  },
+  "ruleInfoFor": "Cara menghitung {label}",
+  "@ruleInfoFor": {
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Bea masuk"
+      }
+    }
+  },
+  "restrictionPermitAuthorities": "Instansi penerbit izin: {authorities}",
+  "@restrictionPermitAuthorities": {
+    "placeholders": {
+      "authorities": {
+        "type": "String",
+        "example": "BPOM"
+      }
+    }
+  },
+  "safepayApprovedBodyWithMax": "Penitip menyetujui harga. Beli sekarang dengan total maksimal {maximum}, lalu unggah struk.",
+  "@safepayApprovedBodyWithMax": {
+    "placeholders": {
+      "maximum": {
+        "type": "String",
+        "example": "¥12.000"
+      }
+    }
+  },
+  "timelineStepSemantics": "Langkah {step} dari {total}, {state}: {label}",
+  "@timelineStepSemantics": {
+    "placeholders": {
+      "step": {
+        "type": "int",
+        "example": "2"
+      },
+      "total": {
+        "type": "int",
+        "example": "8"
+      },
+      "state": {
+        "type": "String",
+        "example": "selesai"
+      },
+      "label": {
+        "type": "String",
+        "example": "Dana aman di SafePay"
+      }
+    }
+  },
+  "compactProgressSemantics": "Progres {done} dari {total}, sekarang {current}",
+  "@compactProgressSemantics": {
+    "placeholders": {
+      "done": {
+        "type": "int",
+        "example": "2"
+      },
+      "total": {
+        "type": "int",
+        "example": "5"
+      },
+      "current": {
+        "type": "String",
+        "example": "Dibeli"
+      }
+    }
+  }
+}

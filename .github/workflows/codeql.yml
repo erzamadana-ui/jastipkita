@@ -1,0 +1,67 @@
+# CodeQL (javascript-typescript).
+#
+# LICENSING / PLAN NOTE — read before enabling:
+#   Code scanning with CodeQL on a PRIVATE repository requires GitHub Code Security (GitHub Advanced Security),
+#   a paid add-on. The CodeQL CLI terms also restrict use on private code without that licence. This workflow
+#   therefore runs only when the repository variable CODEQL_ENABLED is "true" — set it after (a) the owner buys
+#   Code Security for this repository, or (b) the repository becomes public. Until then the free Semgrep job in
+#   ci.yml (dependency-audit) is the SAST signal. Owner approval is required for (a) (paid service).
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 20 * * 0' # Monday 03:23 WIB
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    if: vars.CODEQL_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended
+          config: |
+            paths:
+              - apps
+              - packages
+              - scripts
+              - infra
+            paths-ignore:
+              - '**/node_modules'
+              - '**/*.test.ts'
+              - '**/dist'
+              - apps/mobile
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript-typescript
+
+  skipped:
+    name: CodeQL disabled (see workflow header)
+    if: vars.CODEQL_ENABLED != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - run: echo "::notice title=CodeQL::skipped — set repository variable CODEQL_ENABLED=true only when the repo is public or GitHub Code Security is licensed (owner approval)."

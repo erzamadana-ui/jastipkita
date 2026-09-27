@@ -1,0 +1,25 @@
+# Docker build context = repository root (apps/api/Dockerfile). Allow-list: only what the API image needs.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig.base.json
+!apps/api
+!packages/core
+!packages/design-tokens
+!infra/docker/bundle-api.mjs
+
+# never send these, even inside allowed folders
+**/node_modules
+**/dist
+**/dist-node
+**/.wrangler
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+**/.dev.vars
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks

@@ -1,0 +1,279 @@
+---
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import Faq from '../components/Faq.astro';
+import { COUNTRY_PAGES, type CountryPage } from '../data/countries.ts';
+import { CURRENCY_META, KMK_RATES } from '../data/kmk-rates.ts';
+import restrictedData from '../data/restricted-items.generated.json';
+import { categoryRuleMap, type RestrictedRule, type Classification } from '../lib/restricted.ts';
+import { categoryMeta, categoryName, configVars, customsExample, fill } from '../lib/engine.ts';
+import { RULE_NON_PERSONAL } from '../lib/customs.ts';
+import { formatDecimalString, formatIdr } from '../lib/money.ts';
+import { breadcrumbLd, faqLd, serviceLd, webPageLd } from '../lib/seo.ts';
+import { url } from '../lib/paths.ts';
+
+export function getStaticPaths() {
+  return COUNTRY_PAGES.map((c) => ({ params: { slug: c.slug }, props: { country: c } }));
+}
+
+interface Props { country: CountryPage }
+const { country: c } = Astro.props;
+const rules = restrictedData.rules as unknown as RestrictedRule[];
+const catRules = categoryRuleMap(rules);
+const meta = CURRENCY_META[c.currency]!;
+const ex = customsExample(c.currency, c.example.unitPrice, c.example.quantity, c.example.categoryCode);
+const priceLabel = `${meta.symbol}${formatDecimalString(c.example.unitPrice)}`;
+const vars = {
+  ...configVars('id'),
+  EXAMPLE_TOTAL: formatIdr(ex.totalIdr),
+  EXAMPLE_PCT: ex.pct,
+  EXAMPLE_PRODUCT: `${c.example.product.toLowerCase()} ${priceLabel}`,
+};
+const faq = c.faq.map((f) => ({ q: fill(f.q, vars), a: fill(f.a, vars) }));
+const path = `/${c.slug}/`;
+const crumbs = [
+  { name: 'Beranda', path: '/' },
+  { name: `Jastip ${c.nameId}`, path },
+];
+const CLASS_LABEL: Record<Classification, string> = {
+  ALLOWED: 'Umumnya diizinkan',
+  DECLARATION_REQUIRED: 'Wajib deklarasi',
+  RESTRICTED: 'Terbatas',
+  PERMIT_REQUIRED: 'Butuh izin',
+  PROHIBITED: 'Dilarang',
+};
+const CLASS_CHIP: Record<Classification, string> = {
+  ALLOWED: 'chip-success',
+  DECLARATION_REQUIRED: 'chip-info',
+  RESTRICTED: 'chip-warning',
+  PERMIT_REQUIRED: 'chip-warning',
+  PROHIBITED: 'chip-error',
+};
+const restricted = c.restricted.map((r) => {
+  const rule = rules.find((x) => x.code === r.code);
+  if (!rule) throw new Error(`Unknown restricted rule code ${r.code} on ${c.slug}`);
+  return { ...r, rule };
+});
+const others = COUNTRY_PAGES.filter((o) => o.slug !== c.slug);
+const kmkRate = KMK_RATES.rates[c.currency]!;
+---
+<Base
+  title={c.title}
+  description={c.description}
+  path={path}
+  nav="negara"
+  jsonLd={[
+    webPageLd({ name: c.title, description: c.description, path }),
+    breadcrumbLd(crumbs),
+    serviceLd({ name: `Jastip ${c.nameId} — JastipKita`, description: c.description, path, areaServed: ['Indonesia'], serviceType: `Jasa titip belanja dari ${c.nameId} ke Indonesia` }),
+    faqLd(faq),
+  ]}
+>
+  <section class="page-hero">
+    <div class="container">
+      <Breadcrumbs items={crumbs} />
+      <div class="country-hero">
+        <div>
+          <span class="eyebrow" style="margin-top:18px"><Icon name="route" size={16} />{c.cities.slice(0, 3).join(' · ')} → Indonesia</span>
+          <h1>{c.h1}</h1>
+          <p class="lead">{c.lead}</p>
+          <div class="kicker-row">
+            <span class="chip">{meta.symbol} {c.currency} · {meta.nameId}</span>
+            <span class="chip chip-info"><Icon name="plane" />Soft launch</span>
+            <span class="chip"><Icon name="landmark" />Kurs pajak Rp {formatDecimalString(kmkRate)} / {c.currency}</span>
+          </div>
+          <div class="hero-ctas" style="margin-top:24px">
+            <a class="btn btn-primary" href={url(`/kalkulator-bea-cukai/?origin=${c.code}`)}><Icon name="calculator" />Hitung bea & pajak</a>
+            <a class="btn" href={url(`/cek-barang-terlarang/?origin=${c.code}`)}><Icon name="search" />Cek barang terlarang</a>
+            <a class="btn btn-ghost" href={url(`/trip/?origin=${c.code}`)}><Icon name="plane-takeoff" />Cari trip dari {c.nameId}</a>
+          </div>
+        </div>
+        <aside class="card example-card" aria-labelledby="example-title">
+          <div class="breakdown-head">
+            <h2 id="example-title" class="h-card">Contoh estimasi bea & pajak</h2>
+            <span class="badge-est">Estimasi</span>
+          </div>
+          <p class="small muted">{c.example.product} · {categoryName(c.example.categoryCode)} · {c.example.quantity} × <span class="tnum">{priceLabel}</span></p>
+          <table class="table ex-table" style="margin-top:14px">
+            <caption class="sr-only">Perhitungan estimasi bea masuk dan pajak impor untuk {c.example.product}</caption>
+            <tbody>
+              <tr><th scope="row">Nilai pabean <small>{priceLabel} × Rp {formatDecimalString(kmkRate)}</small></th><td class="num">{formatIdr(ex.customsValueIdr)}</td></tr>
+              <tr><th scope="row">Bea masuk <small>10% · dibulatkan ke atas ribuan</small></th><td class="num">{formatIdr(ex.dutyIdr)}</td></tr>
+              <tr><th scope="row">PPN impor <small>12% × DPP 11/12 dari nilai impor</small></th><td class="num">{formatIdr(ex.vatIdr)}</td></tr>
+              <tr><th scope="row">PPh 22 impor <small>5% dari nilai impor</small></th><td class="num">{formatIdr(ex.incomeTaxIdr)}</td></tr>
+              <tr class="total"><th scope="row">Total bea & pajak <small>≈ {ex.pct}% dari nilai barang</small></th><td class="num">{formatIdr(ex.totalIdr)}</td></tr>
+            </tbody>
+          </table>
+          <p class="xsmall muted" style="margin-top:12px">
+            {c.example.note} Barang titipan = barang bukan pribadi (tanpa pembebasan USD 500). Dasar: {RULE_NON_PERSONAL.sourceReference}. Kurs {KMK_RATES.reference} (berlaku 23–29 Sep 2026); Bea Cukai memakai kurs minggu kedatangan. Aturan diverifikasi {RULE_NON_PERSONAL.lastVerifiedAt} oleh tim riset (belum ditinjau ahli kepabeanan). <strong>Estimasi, bukan nasihat pajak.</strong>
+          </p>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-tight">
+    <div class="container">
+      <div class="country-intro">
+        <div class="prose-lite">
+          {c.intro.map((p) => <p>{p}</p>)}
+        </div>
+        <div class="grid" style="--gap:14px">
+          {c.highlights.map((h) => (
+            <div class="card highlight">
+              <span class="icon-tile"><Icon name={h.icon} /></span>
+              <div><h2 class="h-card" style="font-size:1rem">{h.title}</h2><p class="small muted">{fill(h.text, vars)}</p></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-tight" aria-labelledby="cat-title">
+    <div class="container">
+      <div class="section-head">
+        <span class="eyebrow">Kategori populer</span>
+        <h2 id="cat-title" class="h-section">Yang paling sering dititip dari {c.nameId}</h2>
+        <p class="lead">Status diambil langsung dari daftar aturan barang terbatas JastipKita (per {restrictedData.lastVerifiedAt}). Barang tetap diperiksa satu per satu saat membuat titipan.</p>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th scope="col">Kategori</th><th scope="col">Contoh</th><th scope="col">Status impor</th><th scope="col">Bukti pembelian tambahan</th></tr></thead>
+          <tbody>
+            {c.categories.map((cat) => {
+              const r = catRules[cat.code];
+              const cls: Classification = r?.classification ?? 'ALLOWED';
+              const m = categoryMeta(cat.code);
+              return (
+                <tr>
+                  <th scope="row">{categoryName(cat.code)}</th>
+                  <td>{cat.examples}</td>
+                  <td><span class={`chip ${CLASS_CHIP[cls]}`}>{CLASS_LABEL[cls]}{r?.maxQuantity ? ` · maks. ${r.maxQuantity}` : ''}</span></td>
+                  <td>{m?.requiresSerial || m?.requiresVideo ? [m.requiresSerial ? 'Nomor seri' : null, m.requiresVideo ? (m.requiresSerial ? 'video' : 'Video pembelian') : null].filter(Boolean).join(' + ') : 'Struk & foto'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-tight" aria-labelledby="restricted-title">
+    <div class="container">
+      <div class="section-head">
+        <span class="eyebrow" style="color:var(--jk-color-warning-text)">Perlu perhatian</span>
+        <h2 id="restricted-title" class="h-section">Barang dari {c.nameId} yang sering bermasalah</h2>
+      </div>
+      <div class="grid grid-2" style="--gap:14px">
+        {restricted.map(({ title, context, rule }) => (
+          <article class="card restricted-item">
+            <div class="ri-head">
+              <h3 class="h-card" style="font-size:1rem">{title}</h3>
+              <span class={`chip ${rule.status === 'ACTIVE' ? CLASS_CHIP[rule.classification] : ''}`}>{rule.status === 'ACTIVE' ? CLASS_LABEL[rule.classification] : 'Dalam kajian'}</span>
+            </div>
+            <p class="xsmall muted">{context}</p>
+            <p class="small" style="margin-top:8px">{rule.messageId}</p>
+            {rule.status !== 'ACTIVE' && <p class="xsmall muted" style="margin-top:6px">Aturan ini masih draf (belum berlaku otomatis di checkout) sampai diverifikasi.</p>}
+            {rule.permitAuthority && <p class="xsmall muted" style="margin-top:6px">Instansi: {rule.permitAuthority}</p>}
+          </article>
+        ))}
+      </div>
+      <p style="margin-top:20px"><a class="link-arrow" href={url(`/cek-barang-terlarang/?origin=${c.code}`)}>Cek barang lain dari {c.nameId}<Icon name="arrow-right" /></a></p>
+    </div>
+  </section>
+
+  <section class="section-tight" aria-labelledby="shop-title">
+    <div class="container">
+      <div class="shop-grid">
+        <div>
+          <span class="eyebrow">Tempat belanja</span>
+          <h2 id="shop-title" class="h-section" style="margin-top:10px">Di mana traveler biasa berbelanja</h2>
+          <ul class="merchant-list" role="list">
+            {c.merchants.map((m) => <li><Icon name="store" /><div><strong>{m.name}</strong><span>{m.kind}</span></div></li>)}
+          </ul>
+          <p class="xsmall muted" style="margin-top:12px">Nama toko disebut sebagai contoh tempat belanja umum, bukan mitra atau afiliasi JastipKita.</p>
+        </div>
+        <div>
+          <span class="eyebrow">Tips</span>
+          <h2 class="h-section" style="margin-top:10px">Supaya titipanmu mulus</h2>
+          <div class="grid" style="--gap:12px;margin-top:20px">
+            {c.tips.map((tip) => (
+              <div class="card card-muted" style="padding:18px 20px"><h3 class="h-card" style="font-size:1rem">{tip.title}</h3><p class="small muted" style="margin-top:4px">{fill(tip.text, vars)}</p></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-tight" aria-labelledby="how-title">
+    <div class="container">
+      <div class="card how-card">
+        <h2 id="how-title" class="h-card">Cara titip dari {c.nameId}</h2>
+        <ol class="how-steps" role="list">
+          <li><span>1</span><div><strong>Buat titipan</strong><p>Tempel link toko {c.nameId} atau isi detail barang; harga dalam {c.currency}.</p></div></li>
+          <li><span>2</span><div><strong>Pilih trip</strong><p>Traveler dari {c.cities[0]} atau {c.cities[1]} dengan tanggal tiba yang cocok.</p></div></li>
+          <li><span>3</span><div><strong>Bayar via SafePay</strong><p>Kurs dikunci 30 menit, bea & pajak tampil sebagai estimasi.</p></div></li>
+          <li><span>4</span><div><strong>Terima & konfirmasi</strong><p>PIN/QR atau kurir; dana diteruskan setelah kamu konfirmasi.</p></div></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-tight" aria-labelledby="faq-title">
+    <div class="container container-narrow">
+      <h2 id="faq-title" class="h-section" style="margin-bottom:24px">Tanya jawab jastip {c.nameId}</h2>
+      <Faq items={faq} openFirst />
+    </div>
+  </section>
+
+  <section class="section-tight" aria-labelledby="other-title">
+    <div class="container">
+      <h2 id="other-title" class="h-card" style="margin-bottom:14px">Negara lain</h2>
+      <div class="other-countries">
+        {others.map((o) => <a class="chip other-chip" href={url(`/${o.slug}/`)}><strong>{o.code}</strong> Jastip {o.nameId}</a>)}
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .country-hero { display: grid; gap: 28px; align-items: start; }
+  @media (min-width: 1024px) { .country-hero { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 48px; } }
+  .country-hero h1 { font-size: clamp(1.875rem, 1.3rem + 2.3vw, 2.875rem); font-weight: 700; letter-spacing: -0.022em; line-height: 1.12; margin-top: 12px; }
+  .country-hero .lead { margin-top: 14px; }
+  .example-card { padding: 22px; }
+  .ex-table th { font-weight: 500; background: none; padding-left: 0; }
+  .ex-table td { padding-right: 0; }
+  .ex-table tr:last-child th { border-bottom: 0; }
+  .ex-table th small { display: block; font-weight: 400; font-size: 0.75rem; color: var(--jk-color-on-surface-muted); }
+  .ex-table tr.total th, .ex-table tr.total td { font-weight: 600; border-top: 1px dashed var(--jk-color-outline); }
+  .ex-table tr.total td { font-size: 1.125rem; }
+  .country-intro { display: grid; gap: 24px; }
+  @media (min-width: 960px) { .country-intro { grid-template-columns: 1.1fr 0.9fr; gap: 48px; } }
+  .prose-lite p { font-size: 1.0625rem; line-height: 1.75; color: var(--jk-color-on-background); }
+  .prose-lite p + p { margin-top: 16px; }
+  .highlight { display: grid; grid-template-columns: 44px 1fr; gap: 14px; padding: 18px 20px; }
+  .restricted-item { padding: 18px 20px; }
+  .ri-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .shop-grid { display: grid; gap: 40px; }
+  @media (min-width: 960px) { .shop-grid { grid-template-columns: 1fr 1fr; gap: 56px; } }
+  .merchant-list { list-style: none; padding: 0; display: grid; gap: 10px; margin-top: 20px; }
+  .merchant-list li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding: 12px 14px; background: var(--jk-color-surface); border: 1px solid var(--card-border); border-radius: var(--jk-radius-md); }
+  .merchant-list :global(svg) { width: 20px; height: 20px; color: var(--jk-color-secondary); margin-top: 2px; }
+  .merchant-list strong { display: block; font-size: 0.9375rem; }
+  .merchant-list span { font-size: 0.8125rem; color: var(--jk-color-on-surface-muted); }
+  .how-card { padding: 24px; }
+  .how-steps { list-style: none; padding: 0; display: grid; gap: 16px; margin-top: 18px; }
+  @media (min-width: 840px) { .how-steps { grid-template-columns: repeat(4, 1fr); } }
+  .how-steps li { display: grid; grid-template-columns: 32px 1fr; gap: 12px; }
+  .how-steps li > span { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--soft-accent); color: var(--soft-accent-ink); font-weight: 600; font-size: 0.875rem; }
+  .how-steps strong { font-size: 0.9375rem; }
+  .how-steps p { font-size: 0.8125rem; color: var(--jk-color-on-surface-muted); margin-top: 2px; }
+  .other-countries { display: flex; flex-wrap: wrap; gap: 8px; }
+  .other-chip { text-decoration: none; padding: 8px 14px; font-size: 0.875rem; color: var(--jk-color-on-surface); }
+  .other-chip:hover { border-color: var(--jk-color-secondary); }
+</style>

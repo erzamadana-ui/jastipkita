@@ -1,0 +1,80 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { FAQ, FAQ_CATEGORIES, type FaqCategory } from '../../data/faq.ts';
+import { breadcrumbLd, faqLd, webPageLd, stripMarkup } from '../../lib/seo.ts';
+import { url } from '../../lib/paths.ts';
+import { CONFIG, formatWhatsapp, whatsappUrl } from '../../config.ts';
+
+const title = 'Pusat Bantuan JastipKita';
+const description = 'Jawaban seputar cara menitip, SafePay, bea cukai & pajak, serah terima, dispute & refund, akun, dan program referral JastipKita.';
+const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Bantuan', path: '/bantuan/' }];
+const cats = (Object.keys(FAQ_CATEGORIES) as FaqCategory[]).filter((c) => FAQ.some((f) => f.category === c));
+const wa = whatsappUrl('Halo JastipKita, saya butuh bantuan.');
+const index = FAQ.map((f) => ({ slug: f.slug, q: f.question, a: stripMarkup(f.answer).slice(0, 220), c: f.category, tags: f.tags }));
+---
+<Base title={title} description={description} path="/bantuan/" nav="bantuan" jsonLd={[webPageLd({ name: title, description, path: '/bantuan/' }), breadcrumbLd(crumbs), faqLd(FAQ.slice(0, 10).map((f) => ({ q: f.question, a: f.answer })))]}>
+  <section class="page-hero help-hero">
+    <div class="container container-narrow" style="text-align:center">
+      <Breadcrumbs items={crumbs} />
+      <h1>Ada yang bisa kami bantu?</h1>
+      <p class="lead" style="margin-inline:auto">Cari jawaban, atau jelajahi per topik.</p>
+      <form class="help-search" role="search" id="help-search" action="#hasil">
+        <label for="help-q" class="sr-only">Cari di pusat bantuan</label>
+        <Icon name="search" />
+        <input class="input" id="help-q" name="q" type="search" placeholder="mis. refund, bea cukai, PIN serah terima" autocomplete="off" minlength="2" maxlength="100" />
+      </form>
+      <p class="xsmall muted" id="help-source" style="margin-top:10px">Konten statis per 27 Sep 2026. Hasil dari server akan ditambahkan saat layanan aktif.</p>
+    </div>
+  </section>
+
+  <section class="section-tight" style="padding-top:8px">
+    <div class="container">
+      <div id="hasil" class="help-results" hidden aria-live="polite"></div>
+      <div id="help-browse">
+        <div class="grid grid-3" style="--gap:16px">
+          {cats.map((c) => {
+            const items = FAQ.filter((f) => f.category === c);
+            return (
+              <section class="card help-cat" aria-labelledby={`cat-${c}`}>
+                <div style="display:flex;gap:12px;align-items:center"><span class="icon-tile"><Icon name={FAQ_CATEGORIES[c].icon as any} /></span><h2 id={`cat-${c}`} class="h-card">{FAQ_CATEGORIES[c].id}</h2></div>
+                <ul role="list">
+                  {items.map((f) => <li><a href={url(`/bantuan/${f.slug}/`)}>{f.question}</a></li>)}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+      <div class="card contact-card">
+        <span class="icon-tile"><Icon name="headset" /></span>
+        <div>
+          <h2 class="h-card">Masih butuh bantuan?</h2>
+          <p class="small muted">Untuk transaksi, buka tiket dari halaman transaksi di aplikasi (nomor TKT-…) agar riwayatnya tercatat. Jangan pernah membagikan PIN serah terima, kode OTP, atau kata sandi kepada siapa pun, termasuk yang mengaku CS.</p>
+          <p class="small" style="margin-top:8px">
+            {wa ? <a href={wa} rel="noopener">WhatsApp {formatWhatsapp(CONFIG.supportWhatsapp)}</a> : 'Kanal WhatsApp CS segera diumumkan'}
+            {' · '}
+            {CONFIG.supportEmail ? <a href={`mailto:${CONFIG.supportEmail}`}>{CONFIG.supportEmail}</a> : 'e-mail CS segera diumumkan'}
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <script type="application/json" id="help-index" set:html={JSON.stringify(index).replace(/</g, '\\u003c')}></script>
+  <script>
+    import '../../scripts/help.ts';
+  </script>
+</Base>
+
+<style>
+  .help-hero h1 { margin-top: 18px; }
+  .help-hero :global(.breadcrumbs ol) { justify-content: center; }
+  .help-search { position: relative; margin-top: 24px; }
+  .help-search :global(svg) { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: var(--jk-color-on-surface-muted); }
+  .help-search input { min-height: 56px; padding-left: 50px; border-radius: var(--jk-radius-pill); box-shadow: var(--jk-elevation-level2); font-size: 1rem; }
+  .help-cat ul { list-style: none; padding: 0; margin-top: 14px; display: grid; gap: 4px; }
+  .help-cat a { display: block; padding: 6px 0; font-size: 0.9375rem; color: var(--jk-color-on-surface); text-decoration: none; line-height: 1.45; }
+  .help-cat a:hover { color: var(--jk-color-link); text-decoration: underline; }
+  .contact-card { display: grid; grid-template-columns: 44px 1fr; gap: 16px; margin-top: 24px; }
+</style>

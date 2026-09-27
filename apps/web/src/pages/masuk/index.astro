@@ -1,0 +1,79 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+import { url } from '../../lib/paths.ts';
+import { CONFIG } from '../../config.ts';
+---
+<Base title="Masuk" description="Masuk ke akun JastipKita dengan kode sekali pakai (OTP) lewat e-mail atau nomor HP." path="/masuk/" noindex>
+  <section class="section-tight">
+    <div class="container" style="max-width:520px">
+      <div class="card auth-card">
+        <span class="icon-tile"><Icon name="log-in" /></span>
+        <h1 class="auth-title">Masuk ke JastipKita</h1>
+        <p class="small muted">Tanpa kata sandi — kami kirim kode 6 digit. Akun baru dibuat otomatis setelah kamu menyetujui Syarat & Ketentuan dan Kebijakan Privasi.</p>
+
+        {CONFIG.apiIsPlaceholder && (
+          <div class="note note-warning" style="margin-top:16px"><Icon name="clock" /><p>Layanan akun belum dibuka untuk umum. Formulir ini akan berfungsi saat server JastipKita aktif.</p></div>
+        )}
+
+        <form id="otp-request" class="form-grid" style="margin-top:20px" novalidate>
+          <fieldset class="seg" aria-label="Metode">
+            <legend class="sr-only">Kirim kode lewat</legend>
+            <label><input type="radio" name="channel" value="EMAIL" checked /><span>E-mail</span></label>
+            <label><input type="radio" name="channel" value="WHATSAPP" /><span>WhatsApp</span></label>
+            <label><input type="radio" name="channel" value="SMS" /><span>SMS</span></label>
+          </fieldset>
+          <div class="field">
+            <label for="destination" id="dest-label">Alamat e-mail</label>
+            <input class="input" id="destination" name="destination" type="email" autocomplete="email" inputmode="email" required maxlength="254" placeholder="nama@email.com" />
+          </div>
+          <div class="error-text" id="req-error" role="alert" hidden></div>
+          <button class="btn btn-primary btn-block" type="submit" id="req-btn">Kirim kode</button>
+        </form>
+
+        <form id="otp-verify" class="form-grid" style="margin-top:20px" novalidate hidden>
+          <p class="small" id="sent-to"></p>
+          <div class="field">
+            <label for="code">Kode 6 digit</label>
+            <input class="input tnum otp-input" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="\d{6}" maxlength="6" required />
+          </div>
+          <fieldset id="consents" class="consents" hidden>
+            <legend class="small" style="font-weight:600;margin-bottom:8px">Akun baru — mohon setujui:</legend>
+            <label class="check"><input type="checkbox" name="tos" /><span>Saya menyetujui <a href={url('/legal/terms-of-service/')} target="_blank" rel="noopener">Syarat & Ketentuan</a> (wajib)</span></label>
+            <label class="check"><input type="checkbox" name="privacy" /><span>Saya telah membaca <a href={url('/legal/privacy-policy/')} target="_blank" rel="noopener">Kebijakan Privasi</a> dan menyetujui pemrosesan data saya (wajib)</span></label>
+            <label class="check"><input type="checkbox" name="marketing" /><span>Kirimi saya kabar promo & produk (opsional, bisa dicabut kapan saja) — <a href={url('/legal/marketing-consent/')} target="_blank" rel="noopener">detail</a></span></label>
+          </fieldset>
+          <div class="error-text" id="ver-error" role="alert" hidden></div>
+          <button class="btn btn-primary btn-block" type="submit" id="ver-btn">Verifikasi & masuk</button>
+          <button class="btn btn-ghost btn-block" type="button" id="restart">Ganti e-mail / nomor</button>
+        </form>
+
+        {CONFIG.enableGoogleLogin && CONFIG.googleClientId && (
+          <div style="margin-top:20px">
+            <div class="or"><span>atau</span></div>
+            <button class="btn btn-block" type="button" id="google-btn" data-client-id={CONFIG.googleClientId}>Masuk dengan Google</button>
+            <p class="xsmall muted" style="margin-top:6px">Memuat skrip Google Identity Services hanya setelah tombol ditekan.</p>
+          </div>
+        )}
+        <p class="xsmall muted" style="margin-top:20px">Sesi web disimpan di tab ini saja (sessionStorage) dan berakhir saat tab ditutup. Kami tidak memakai cookie pelacak.</p>
+      </div>
+    </div>
+  </section>
+  <script>
+    import '../../scripts/login.ts';
+  </script>
+</Base>
+<style>
+  .auth-card { padding: 28px; }
+  .auth-title { font-size: 1.5rem; font-weight: 600; margin-top: 14px; }
+  .seg { border: 0; padding: 4px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--jk-color-surface-muted); border-radius: var(--jk-radius-pill); border: 1px solid var(--card-border); }
+  .seg label { position: relative; }
+  .seg input { position: absolute; opacity: 0; inset: 0; }
+  .seg span { display: grid; place-items: center; min-height: 40px; border-radius: var(--jk-radius-pill); font-size: 0.875rem; font-weight: 500; cursor: pointer; }
+  .seg input:checked + span { background: var(--jk-color-surface); box-shadow: var(--jk-elevation-level1); color: var(--jk-color-on-surface); font-weight: 600; }
+  .seg input:focus-visible + span { outline: 2px solid var(--jk-color-focus-ring); outline-offset: 2px; }
+  .otp-input { font-size: 1.5rem; letter-spacing: 0.4em; text-align: center; }
+  .consents { border: 1px solid var(--card-border); border-radius: var(--jk-radius-md); padding: 14px; display: grid; gap: 10px; }
+  .or { display: flex; align-items: center; gap: 12px; color: var(--jk-color-on-surface-muted); font-size: 0.8125rem; margin-bottom: 14px; }
+  .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--jk-color-divider); }
+</style>

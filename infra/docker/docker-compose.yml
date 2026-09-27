@@ -1,0 +1,128 @@
+# Local development stack — NOT for staging/production (those run on Neon + Cloudflare Workers).
+#
+#   docker compose -f infra/docker/docker-compose.yml up -d db mailpit minio minio-init
+#   docker compose -f infra/docker/docker-compose.yml run --rm migrate      # migrations + seeds + dev API role
+#   docker compose -f infra/docker/docker-compose.yml up -d api             # API on http://localhost:8787
+#
+# Or run the API on the host with hot reload (`pnpm dev:api`) against the db container:
+#   DATABASE_URL=postgres://jk_api_dev:jk_api_dev@localhost:5432/jastipkita_dev
+#
+# Every password below is a LOCAL-ONLY placeholder for throw-away containers. Never reuse them anywhere.
+name: jastipkita
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: jastipkita_dev
+      TZ: UTC
+    ports: ['5432:5432']
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d jastipkita_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot: db/scripts/migrate.sh + seed.sh (psql only), then a LOGIN role for the API in jk_app.
+  migrate:
+    image: postgres:16
+    profiles: [tools]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/jastipkita_dev
+    volumes:
+      - ../../db:/db:ro
+    entrypoint: ['bash', '-c']
+    command:
+      - |
+        set -euo pipefail
+        bash /db/scripts/migrate.sh
+        bash /db/scripts/seed.sh
+        psql "$$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "DO $$$$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jk_api_dev') THEN
+            CREATE ROLE jk_api_dev LOGIN PASSWORD 'jk_api_dev' IN ROLE jk_app;
+          END IF; END $$$$"
+        bash /db/scripts/migrate.sh --status | tail -3
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ['8787:8787']
+    environment:
+      APP_ENV: development
+      PORT: '8787'
+      LOG_LEVEL: debug
+      API_BASE_URL: http://localhost:8787
+      WEB_BASE_URL: http://localhost:4321
+      ADMIN_BASE_URL: http://localhost:5173
+      CORS_ORIGINS: http://localhost:4321,http://localhost:5173
+      DATABASE_URL: postgres://jk_api_dev:jk_api_dev@db:5432/jastipkita_dev
+      DB_PROVIDER: postgres
+      # DEV-ONLY placeholders (≥ 32 chars as env.ts requires). Generate real ones with scripts/gen-secrets.sh.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-jwt-secret-000000000000000000}
+      DATA_ENCRYPTION_KEYS: ${DATA_ENCRYPTION_KEYS:-dev1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      HMAC_PEPPER: ${HMAC_PEPPER:-dev-only-insecure-hmac-pepper-00000000000000000}
+      OTP_DEV_ECHO: 'true'
+      PAYMENT_PROVIDER: mock
+      EMAIL_PROVIDER: log
+      SMS_PROVIDER: log
+      PUSH_PROVIDER: log
+      # memory storage by default. To exercise the S3 adapter against MinIO set STORAGE_PROVIDER=s3 and add
+      # "127.0.0.1 minio" to /etc/hosts so presigned URLs (http://minio:9000/…) resolve from your browser/emulator.
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-memory}
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: jastipkita-dev
+      S3_ACCESS_KEY_ID: jastipkita
+      S3_SECRET_ACCESS_KEY: jastipkita-dev-only
+      FX_PROVIDER: static
+      MALWARE_SCAN_PROVIDER: mock
+      WORKER_ENABLED: 'true'
+
+  # SMTP catcher + web UI (http://localhost:8025). NOTE: the API has no SMTP adapter yet (EMAIL_PROVIDER is
+  # log|resend), so API e-mails are only logged. Mailpit is here for the future SMTP adapter and manual tests.
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ['8025:8025', '1025:1025']
+
+  # S3-compatible object storage (console http://localhost:9001, user jastipkita / jastipkita-dev-only).
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: jastipkita
+      MINIO_ROOT_PASSWORD: jastipkita-dev-only
+    ports: ['9000:9000', '9001:9001']
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ['sh', '-c']
+    command:
+      - |
+        mc alias set local http://minio:9000 jastipkita jastipkita-dev-only &&
+        mc mb --ignore-existing local/jastipkita-dev &&
+        mc anonymous set none local/jastipkita-dev
+
+volumes:
+  pgdata:
+  miniodata:

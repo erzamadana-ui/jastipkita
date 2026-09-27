@@ -1,0 +1,128 @@
+# Nightly logical backup (pg_dump custom format) → encrypted with age → workflow artifact (14 days)
+# (+ optional copy to S3-compatible storage such as Cloudflare R2, lifecycle rules decide retention there).
+#
+# Secrets/variables (GitHub Environment of the target, docs/08-backup-dr.md §3):
+#   DATABASE_URL_BACKUP            secret  — DIRECT connection string of a read-only backup role, ?sslmode=require
+#   BACKUP_ENCRYPTION_PUBLIC_KEY   secret or variable — age recipient "age1…" (public key; the PRIVATE key never
+#                                  enters GitHub — it stays offline with the owner/DPO)
+#   BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY   optional
+#   DATABASE_URL_MIGRATOR          optional — when present the run is recorded in db_operations (Admin DB Center)
+# Missing DATABASE_URL_BACKUP or the public key → the job is skipped with a notice (never fails the schedule).
+# The plaintext dump never touches the runner disk: pg_dump | tee (TOC check) | age.
+name: DB backup
+
+on:
+  schedule:
+    - cron: '17 19 * * *' # 02:17 WIB daily
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which database
+        type: choice
+        options: [staging, production]
+        default: staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Backup ${{ inputs.environment || 'staging' }}
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment || 'staging' }}
+    timeout-minutes: 30
+    env:
+      TARGET: ${{ inputs.environment || 'staging' }}
+      DATABASE_URL_BACKUP: ${{ secrets.DATABASE_URL_BACKUP }}
+      AGE_RECIPIENT: ${{ vars.BACKUP_ENCRYPTION_PUBLIC_KEY || secrets.BACKUP_ENCRYPTION_PUBLIC_KEY }}
+    steps:
+      - name: Preconditions
+        id: pre
+        run: |
+          if [ -z "$DATABASE_URL_BACKUP" ] || [ -z "$AGE_RECIPIENT" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=db-backup::$TARGET backup skipped — DATABASE_URL_BACKUP and/or BACKUP_ENCRYPTION_PUBLIC_KEY not configured (docs/08-backup-dr.md §3)"
+          else
+            case "$AGE_RECIPIENT" in age1*) echo "run=true" >> "$GITHUB_OUTPUT" ;;
+              *) echo "::error::BACKUP_ENCRYPTION_PUBLIC_KEY must be an age recipient (age1…)"; exit 1 ;; esac
+          fi
+      - if: steps.pre.outputs.run == 'true'
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - if: steps.pre.outputs.run == 'true'
+        name: PostgreSQL client (≥ server major) + age
+        run: |
+          bash scripts/ci/install-pg-client.sh ${{ vars.PG_MAJOR || '17' }}
+          sudo apt-get install -y -qq age >/dev/null && age --version
+      - if: steps.pre.outputs.run == 'true'
+        name: Dump → encrypt (streaming, with TOC verification)
+        id: dump
+        run: |
+          set -euo pipefail
+          ts=$(date -u +%Y%m%dT%H%M%SZ)
+          f="jastipkita-$TARGET-$ts.dump.age"
+          out="$RUNNER_TEMP/backup"; mkdir -p "$out"
+          meta=$(psql -X -At "$DATABASE_URL_BACKUP" -c "SELECT current_setting('server_version') || '|' || coalesce((SELECT max(version) FROM schema_migrations), 'none')")
+          fifo="$RUNNER_TEMP/toc.fifo"; mkfifo "$fifo"
+          # reader lists the archive TOC, then drains the rest so tee never gets SIGPIPE
+          { pg_restore --list > "$RUNNER_TEMP/toc.txt"; cat > /dev/null; } < "$fifo" & reader=$!
+          pg_dump --format=custom --compress=6 "$DATABASE_URL_BACKUP" | tee "$fifo" | age -r "$AGE_RECIPIENT" -o "$out/$f"
+          wait "$reader"
+          entries=$(grep -c '^[0-9]' "$RUNNER_TEMP/toc.txt" || true)
+          tables=$(grep -c ' TABLE DATA ' "$RUNNER_TEMP/toc.txt" || true)
+          [ "$tables" -gt 0 ] || { echo "::error::dump contains no table data"; exit 1; }
+          sha=$(sha256sum "$out/$f" | cut -d' ' -f1); size=$(stat -c %s "$out/$f")
+          jq -n --arg file "$f" --arg env "$TARGET" --arg ts "$ts" --arg sha "$sha" --argjson size "$size" \
+                --arg server "${meta%%|*}" --arg schema "${meta##*|}" --arg pgdump "$(pg_dump --version)" \
+                --argjson entries "$entries" --argjson tables "$tables" \
+                --arg run "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                '{file:$file, environment:$env, createdAt:$ts, sha256:$sha, sizeBytes:$size, serverVersion:$server,
+                  schemaVersion:$schema, pgDump:$pgdump, tocEntries:$entries, tablesWithData:$tables, workflowRun:$run,
+                  encryption:"age (X25519) — private key held offline"}' > "$out/$f.manifest.json"
+          rm -f "$fifo" "$RUNNER_TEMP/toc.txt"
+          cat "$out/$f.manifest.json"
+          { echo "### Backup $TARGET"; echo '```json'; cat "$out/$f.manifest.json"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "file=$f" >> "$GITHUB_OUTPUT"; echo "sha=$sha" >> "$GITHUB_OUTPUT"; echo "size=$size" >> "$GITHUB_OUTPUT"
+          echo "schema=${meta##*|}" >> "$GITHUB_OUTPUT"
+      - if: steps.pre.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ env.TARGET }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/backup
+          retention-days: 14
+          compression-level: 0 # already compressed + encrypted
+      - name: Copy to S3-compatible storage (optional)
+        if: steps.pre.outputs.run == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: ${{ vars.BACKUP_S3_ENDPOINT || secrets.BACKUP_S3_ENDPOINT }}
+          BUCKET: ${{ vars.BACKUP_S3_BUCKET || secrets.BACKUP_S3_BUCKET }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$ENDPOINT" ] || [ -z "$BUCKET" ]; then
+            echo "::notice title=db-backup::S3/R2 copy not configured — artifact only (14 days)"; exit 0; fi
+          aws s3 cp --endpoint-url "$ENDPOINT" --only-show-errors "$RUNNER_TEMP/backup/" "s3://$BUCKET/db/$TARGET/" --recursive
+          echo "Copied to s3://$BUCKET/db/$TARGET/" >> "$GITHUB_STEP_SUMMARY"
+      - name: Record in db_operations (Admin DB Center, optional)
+        if: always() && steps.pre.outputs.run == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_MIGRATOR }}
+          STATUS: ${{ steps.dump.outcome == 'success' && 'SUCCEEDED' || 'FAILED' }}
+        run: |
+          [ -n "$DATABASE_URL" ] || { echo "DATABASE_URL_MIGRATOR not set — not recorded"; exit 0; }
+          env_upper=$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')
+          params=$(jq -nc --arg run "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                     --arg artifact "db-backup-$TARGET-${{ github.run_number }}" '{workflowRun:$run, artifact:$artifact, retentionDays:14}')
+          result=$(jq -nc --arg f "${{ steps.dump.outputs.file }}" --arg sha "${{ steps.dump.outputs.sha }}" \
+                     --arg size "${{ steps.dump.outputs.size }}" --arg schema "${{ steps.dump.outputs.schema }}" \
+                     '{file:$f, sha256:$sha, sizeBytes:($size|tonumber? // null), schemaVersion:$schema}')
+          psql -X -q -v ON_ERROR_STOP=1 -v env="$env_upper" -v status="$STATUS" -v params="$params" -v result="$result" <<'SQL'
+          INSERT INTO db_operations (type, status, environment, provider, reason, params, result, started_at, finished_at)
+          VALUES ('BACKUP', :'status', :'env', 'NEON', 'scheduled pg_dump (GitHub Actions)', :'params'::jsonb, :'result'::jsonb, now(), now());
+          SQL

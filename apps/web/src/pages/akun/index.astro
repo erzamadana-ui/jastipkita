@@ -1,0 +1,100 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+import { url } from '../../lib/paths.ts';
+---
+<Base title="Akun saya" description="Lihat profil JastipKita, unduh data, dan ajukan penghapusan akun." path="/akun/" noindex>
+  <section class="section-tight">
+    <div class="container" style="max-width:760px">
+      <h1 class="acc-title">Akun saya</h1>
+      <div id="acc-signed-out" class="card acc-card" hidden>
+        <span class="icon-tile"><Icon name="lock" /></span>
+        <div>
+          <h2 class="h-card">Masuk untuk melihat akunmu</h2>
+          <p class="small muted">Halaman ini menampilkan profil singkat dan tempat mengajukan penghapusan akun. Kalau belum bisa masuk, baca <a href={url('/hapus-akun/')}>cara menghapus akun & data</a>.</p>
+          <a class="btn btn-primary btn-sm" style="margin-top:14px" href={url('/masuk/?next=/jastipkita/akun/')}><Icon name="log-in" />Masuk</a>
+        </div>
+      </div>
+      <div id="acc-error" class="note note-error" hidden><Icon name="circle-alert" /><p></p></div>
+
+      <div id="acc-signed-in" hidden>
+        <div class="card">
+          <div class="acc-head">
+            <div class="pv-avatar" id="acc-initials" aria-hidden="true">?</div>
+            <div>
+              <h2 class="h-card" id="acc-name">—</h2>
+              <p class="small muted" id="acc-contact">—</p>
+            </div>
+            <span class="kyc-badge" id="acc-kyc"><span class="dot"></span><span></span></span>
+          </div>
+          <dl class="acc-dl">
+            <div><dt>Trust Score</dt><dd id="acc-trust" class="tnum">—</dd></div>
+            <div><dt>Mode aktif</dt><dd id="acc-mode">—</dd></div>
+            <div><dt>Kode referral</dt><dd id="acc-ref" class="tnum">—</dd></div>
+            <div><dt>Bergabung</dt><dd id="acc-since">—</dd></div>
+          </dl>
+          <div class="acc-actions">
+            <button class="btn btn-sm" type="button" id="acc-export"><Icon name="download" />Minta salinan data saya</button>
+            <button class="btn btn-sm btn-ghost" type="button" id="acc-logout"><Icon name="log-out" />Keluar</button>
+          </div>
+          <p class="xsmall muted" id="acc-export-msg" role="status"></p>
+        </div>
+
+        <div id="acc-pending" class="note note-warning" style="margin-top:20px" hidden>
+          <Icon name="clock" />
+          <div><p id="acc-pending-text"></p><button class="btn btn-sm" type="button" id="acc-cancel" style="margin-top:10px">Batalkan penghapusan</button></div>
+        </div>
+
+        <section class="card danger-card" id="hapus" aria-labelledby="del-title">
+          <h2 id="del-title" class="h-card"><Icon name="trash-2" size={20} class="inline-icon" /> Hapus akun</h2>
+          <ul class="small del-list">
+            <li>Penghapusan dijadwalkan <strong>14 hari</strong> setelah diajukan. Selama masa itu kamu bisa masuk lagi untuk membatalkannya; semua sesi lain langsung dikeluarkan.</li>
+            <li>Ditolak sementara bila masih ada transaksi berjalan, dispute terbuka, refund, atau payout yang belum selesai.</li>
+            <li>Setelah final, profil dianonimkan. Data yang wajib disimpan hukum (mis. catatan keuangan & audit) disimpan terpisah sampai masa retensinya habis — <a href={url('/hapus-akun/')}>lihat rinciannya</a>.</li>
+            <li>JastipKita Credit dan kode referral hangus.</li>
+          </ul>
+          <form id="del-form" class="form-grid" novalidate>
+            <div class="field">
+              <label for="del-reason">Alasan (opsional)</label>
+              <textarea class="textarea" id="del-reason" name="reason" maxlength="500" placeholder="Bantu kami memperbaiki layanan"></textarea>
+            </div>
+            <label class="check"><input type="checkbox" name="confirm" required /><span>Saya mengerti akun saya akan dihapus permanen setelah 14 hari.</span></label>
+            <div class="error-text" id="del-error" role="alert" hidden></div>
+            <button class="btn btn-danger" type="submit" id="del-btn">Hapus akun saya</button>
+          </form>
+        </section>
+      </div>
+      <p class="xsmall muted" style="margin-top:24px">Butuh bantuan lain? <a href={url('/bantuan/')}>Pusat bantuan</a> · <a href={url('/legal/privacy-policy/')}>Kebijakan Privasi</a></p>
+    </div>
+  </section>
+
+  <dialog id="del-dialog" class="dialog" aria-labelledby="dlg-title">
+    <form method="dialog">
+      <h2 id="dlg-title" class="h-card">Hapus akun JastipKita?</h2>
+      <p class="small muted" style="margin-top:8px">Akun dijadwalkan terhapus dalam 14 hari dan kamu akan dikeluarkan dari semua perangkat. Kamu masih bisa membatalkannya selama masa tenggang.</p>
+      <div class="dlg-actions">
+        <button class="btn" value="cancel">Batal</button>
+        <button class="btn btn-danger" value="confirm">Ya, hapus akun</button>
+      </div>
+    </form>
+  </dialog>
+  <script>
+    import '../../scripts/account.ts';
+  </script>
+</Base>
+<style>
+  .acc-title { font-size: 1.875rem; font-weight: 700; margin-bottom: 20px; }
+  .acc-card { display: grid; grid-template-columns: 44px 1fr; gap: 16px; }
+  .acc-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .acc-head #acc-kyc { margin-left: auto; }
+  .acc-dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 20px; }
+  @media (min-width: 600px) { .acc-dl { grid-template-columns: repeat(4, 1fr); } }
+  .acc-dl dt { font-size: 0.75rem; color: var(--jk-color-on-surface-muted); }
+  .acc-dl dd { margin: 2px 0 0; font-weight: 600; }
+  .acc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+  .danger-card { margin-top: 20px; border-color: color-mix(in srgb, var(--jk-color-error) 40%, var(--card-border)); }
+  .del-list { margin: 12px 0 18px; padding-left: 1.2em; display: grid; gap: 6px; color: var(--jk-color-on-surface-muted); }
+  .dialog { border: 0; border-radius: var(--jk-radius-xl); padding: 24px; max-width: 400px; width: calc(100% - 32px); background: var(--jk-color-surface-elevated); color: var(--jk-color-on-surface); box-shadow: var(--jk-elevation-level4); }
+  .dialog::backdrop { background: var(--jk-color-scrim); }
+  .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+</style>

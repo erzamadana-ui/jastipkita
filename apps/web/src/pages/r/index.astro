@@ -1,0 +1,45 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+import StoreButtons from '../../components/StoreButtons.astro';
+import { url } from '../../lib/paths.ts';
+import { BUSINESS } from '../../lib/engine.ts';
+import { formatIdr } from '../../lib/money.ts';
+const rb = BUSINESS['referral.buyer'];
+---
+<Base title="Kamu diundang ke JastipKita" description="Undangan bergabung ke JastipKita — titip belanja luar negeri lewat traveler terverifikasi dengan SafePay." path="/r/" noindex>
+  <section class="section-tight">
+    <div class="container" style="max-width:600px">
+      <div class="card referral">
+        <span class="icon-tile success"><Icon name="gift" /></span>
+        <h1 class="ref-title">Kamu diundang ke JastipKita</h1>
+        <p class="small muted">Titip belanja dari luar negeri lewat traveler terverifikasi. Dana ditahan SafePay sampai barang kamu terima.</p>
+        <div class="ref-code" id="ref-box" hidden>
+          <span class="xsmall muted">Kode undangan</span>
+          <div class="ref-row"><strong class="tnum" id="ref-code"></strong><button type="button" class="btn btn-sm" id="ref-copy"><Icon name="copy" />Salin</button></div>
+          <span class="xsmall muted" id="ref-copied" role="status"></span>
+        </div>
+        <p class="error-text" id="ref-invalid" hidden><Icon name="circle-alert" size={16} />Kode undangan tidak ditemukan di tautan ini.</p>
+        {rb.enabled && (
+          <ul class="list-check" role="list" style="margin-top:18px">
+            <li><Icon name="check" /><span>Kamu dan pengundang masing-masing mendapat <strong>{formatIdr(rb.refereeCreditIdr)} JastipKita Credit</strong> setelah transaksi pertamamu selesai dengan nilai minimal {formatIdr(rb.minFirstTransactionIdr)}.</span></li>
+            <li><Icon name="check" /><span>Credit berlaku {rb.creditExpiryDays} hari, hanya sebagai potongan saat checkout, dan tidak dapat dicairkan.</span></li>
+          </ul>
+        )}
+        <p class="xsmall muted" style="margin-top:10px">Ketentuan program dapat berubah dan berlaku batas bulanan. Masukkan kode ini saat mendaftar di aplikasi.</p>
+        <div style="margin-top:20px"><StoreButtons /></div>
+        <p style="margin-top:18px"><a class="link-arrow" href={url('/')}>Pelajari cara kerja JastipKita<Icon name="arrow-right" /></a></p>
+      </div>
+    </div>
+  </section>
+  <script>
+    import '../../scripts/referral.ts';
+  </script>
+</Base>
+<style>
+  .referral { padding: 28px; }
+  .ref-title { font-size: 1.5rem; font-weight: 600; margin-top: 14px; }
+  .ref-code { margin-top: 18px; padding: 14px 16px; border: 1px dashed var(--jk-color-outline); border-radius: var(--jk-radius-md); background: var(--jk-color-surface-muted); display: grid; gap: 4px; }
+  .ref-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .ref-row strong { font-size: 1.5rem; letter-spacing: 0.08em; }
+</style>

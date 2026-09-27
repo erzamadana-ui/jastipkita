@@ -1,0 +1,64 @@
+# Dependabot version updates (security alerts are separate and free for private repos: Settings → Code security).
+# PRs target develop; grouped to keep the PR count (and CI minutes) low.
+version: 2
+updates:
+  - package-ecosystem: npm # pnpm workspace (pnpm-lock.yaml is detected and updated)
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    labels: [dependencies]
+    groups:
+      production-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+      development-minor-patch:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # majors of the core stack are migrated deliberately (typecheck + full test run), not by bot
+      - dependency-name: 'hono'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'zod'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'astro'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: Asia/Jakarta
+    commit-message:
+      prefix: 'ci(deps)'
+    labels: [dependencies, ci]
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: pub # Flutter app
+    directory: /apps/mobile
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(mobile-deps)'
+    labels: [dependencies, mobile]
+    groups:
+      pub-minor-patch:
+        update-types: [minor, patch]

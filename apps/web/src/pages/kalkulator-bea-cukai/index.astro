@@ -1,0 +1,21 @@
+---
+import Base from '../../layouts/Base.astro';
+import CalculatorPage from '../../components/CalculatorPage.astro';
+import { breadcrumbLd, faqLd, webPageLd } from '../../lib/seo.ts';
+
+const title = 'Kalkulator Bea Cukai & Pajak Jastip (PMK 34/2025)';
+const description =
+  'Hitung estimasi bea masuk 10%, PPN, dan PPh 22 barang titipan dari luar negeri sesuai PMK 34/2025. Gratis, dengan sumber aturan dan tanggal verifikasi. Estimasi, bukan nasihat pajak.';
+const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Kalkulator bea & pajak', path: '/kalkulator-bea-cukai/' }];
+const faq = [
+  { q: 'Apakah barang jastip mendapat pembebasan USD 500?', a: 'Tidak. Pembebasan FOB USD 500 per orang per kedatangan hanya untuk barang pribadi penumpang. Barang yang dibeli untuk orang lain adalah barang bukan pribadi (PMK 34/2025 Pasal 24 ayat (3)), sehingga bea masuk dan pajak dihitung dari nilai penuh.' },
+  { q: 'Kurs apa yang dipakai?', a: 'Bea Cukai memakai kurs pajak mingguan dari Keputusan Menteri Keuangan (periode Rabu–Selasa) pada minggu kedatangan. Kalkulator ini memakai kurs minggu ini sebagai perkiraan, sehingga hasil final bisa sedikit berbeda.' },
+  { q: 'Kenapa hasil kalkulator bisa berbeda dengan tagihan Bea Cukai?', a: 'Nilai pabean dan tarif ditetapkan pejabat Bea dan Cukai saat pemeriksaan, kurs yang dipakai adalah kurs minggu kedatangan, dan penerapan pembulatan di lapangan belum dikonfirmasi. Karena itu hasil ini selalu diberi label estimasi.' },
+  { q: 'Bagaimana dengan traveler yang tidak punya NPWP?', a: 'Teks PMK 34/2025 menyebut PPh 22 5% tanpa membedakan NPWP, sedangkan UU PPh mengatur tarif lebih tinggi bagi wajib pajak tanpa NPWP. Perlakuan pastinya belum terverifikasi; kamu bisa mensimulasikan skenario 10% di pengaturan lanjutan.' },
+  { q: 'Apakah tas atau jam branded kena pajak barang mewah (PPnBM)?', a: 'Menurut daftar barang mewah selain kendaraan yang berlaku (PMK 96/PMK.03/2021 jo PMK 15/PMK.03/2023), tas, jam, perhiasan, dan parfum branded tidak termasuk objek PPnBM.' },
+];
+---
+<Base title={title} description={description} path="/kalkulator-bea-cukai/" nav="kalkulator" alternates={[{ lang: 'en', path: '/en/customs-calculator/' }]}
+  jsonLd={[webPageLd({ name: title, description, path: '/kalkulator-bea-cukai/' }), breadcrumbLd(crumbs), faqLd(faq)]}>
+  <CalculatorPage lang="id" crumbs={crumbs} faq={faq} />
+</Base>

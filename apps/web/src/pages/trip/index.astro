@@ -1,0 +1,98 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { PRODUCT_CATEGORIES } from '@jastipkita/core';
+import { COUNTRY_PAGES } from '../../data/countries.ts';
+import { breadcrumbLd, webPageLd } from '../../lib/seo.ts';
+import { url } from '../../lib/paths.ts';
+import { whatsappUrl } from '../../config.ts';
+
+const title = 'Cari Trip Traveler Jastip dari Luar Negeri';
+const description = 'Temukan traveler terverifikasi yang sedang ke Jepang, Korea, Singapura, AS, Malaysia, atau Australia dan pulang ke Indonesia. Filter per negara, tanggal, dan kategori barang.';
+const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Cari trip', path: '/trip/' }];
+const cats = [...PRODUCT_CATEGORIES].sort((a, b) => a.nameId.localeCompare(b.nameId, 'id'));
+const wa = whatsappUrl('Halo JastipKita, kabari saya saat trip traveler sudah tersedia.');
+---
+<Base title={title} description={description} path="/trip/" nav="trip" jsonLd={[webPageLd({ name: title, description, path: '/trip/', type: 'SearchResultsPage' }), breadcrumbLd(crumbs)]}>
+  <section class="page-hero">
+    <div class="container">
+      <Breadcrumbs items={crumbs} />
+      <span class="eyebrow" style="margin-top:18px"><Icon name="plane-takeoff" size={16} />Trip discovery</span>
+      <h1>Cari traveler yang sedang ke luar negeri</h1>
+      <p class="lead">Hanya trip berstatus aktif yang tampil. Nama traveler disingkat (nama depan + inisial) untuk melindungi privasi; detail lengkap terlihat di aplikasi setelah match.</p>
+    </div>
+  </section>
+
+  <section class="section-tight" style="padding-top:0">
+    <div class="container">
+      <form class="card trip-filters" id="trip-form" novalidate>
+        <div class="field">
+          <label for="f-origin">Dari negara</label>
+          <select class="select" id="f-origin" name="originCountry">
+            <option value="">Semua negara</option>
+            {COUNTRY_PAGES.map((c) => <option value={c.code}>{c.nameId}</option>)}
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-dest">Kota tujuan (Indonesia)</label>
+          <input class="input" id="f-dest" name="destinationCity" placeholder="mis. Jakarta" maxlength="100" autocomplete="address-level2" />
+        </div>
+        <div class="field">
+          <label for="f-arrival">Tiba paling lambat</label>
+          <input class="input" id="f-arrival" name="arrivalBy" type="date" />
+        </div>
+        <div class="field">
+          <label for="f-cat">Kategori barang</label>
+          <select class="select" id="f-cat" name="categoryCode">
+            <option value="">Semua kategori</option>
+            {cats.map((c) => <option value={c.code}>{c.nameId}</option>)}
+          </select>
+        </div>
+        <label class="check trip-verified"><input type="checkbox" name="verifiedOnly" checked />Hanya trip terverifikasi</label>
+        <button class="btn btn-primary" type="submit"><Icon name="search" />Cari trip</button>
+      </form>
+
+      <div id="trip-results" class="trip-results" aria-live="polite" aria-busy="true">
+        {[0, 1, 2].map(() => <div class="card skeleton-card" aria-hidden="true"><div class="skeleton" style="height:22px;width:60%"></div><div class="skeleton" style="height:14px;width:40%;margin-top:12px"></div><div class="skeleton" style="height:6px;margin-top:20px"></div><div class="skeleton" style="height:40px;width:50%;margin-top:18px;border-radius:999px"></div></div>)}
+      </div>
+      <div id="trip-more-wrap" hidden style="text-align:center;margin-top:20px"><button class="btn" id="trip-more" type="button">Muat lebih banyak</button></div>
+
+      <template id="trip-unavailable">
+        <div class="card coming-soon">
+          <span class="icon-tile"><Icon name="clock" /></span>
+          <div>
+            <h2 class="h-card">Layanan segera hadir</h2>
+            <p class="small muted">Pencarian trip akan aktif saat JastipKita resmi diluncurkan. Kami tidak menampilkan trip contoh atau traveler fiktif — yang tampil nanti hanyalah trip nyata yang sudah diverifikasi.</p>
+            <div class="coming-actions">
+              <a class="btn btn-primary btn-sm" href={url('/kalkulator-bea-cukai/')}><Icon name="calculator" />Hitung biaya titip</a>
+              <a class="btn btn-sm" href={url('/cek-barang-terlarang/')}><Icon name="search" />Cek barang terlarang</a>
+              {wa && <a class="btn btn-sm" href={wa} rel="noopener"><Icon name="message-circle" />Kabari saya via WhatsApp</a>}
+            </div>
+          </div>
+        </div>
+      </template>
+      <template id="trip-empty">
+        <div class="card coming-soon">
+          <span class="icon-tile"><Icon name="plane" /></span>
+          <div><h2 class="h-card">Belum ada trip yang cocok</h2><p class="small muted">Coba longgarkan filter atau simpan draf titipan di aplikasi — traveler bisa menawarkan diri saat trip baru muncul.</p></div>
+        </div>
+      </template>
+    </div>
+  </section>
+
+  <script>
+    import '../../scripts/trips.ts';
+  </script>
+</Base>
+
+<style>
+  .trip-filters { display: grid; gap: 14px; padding: 20px; align-items: end; }
+  @media (min-width: 720px) { .trip-filters { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1080px) { .trip-filters { grid-template-columns: 1.1fr 1.1fr 0.9fr 1.1fr auto auto; } }
+  .trip-verified { min-height: 48px; align-items: center; white-space: nowrap; }
+  .trip-results { display: grid; gap: 16px; margin-top: 20px; }
+  @media (min-width: 720px) { .trip-results { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1080px) { .trip-results { grid-template-columns: repeat(3, 1fr); } }
+  .skeleton-card { min-height: 180px; }
+</style>

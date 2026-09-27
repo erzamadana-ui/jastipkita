@@ -1,0 +1,49 @@
+---
+import Icon from './Icon.astro';
+import { formatIdr } from '../lib/money.ts';
+import type { ExampleLine } from '../lib/engine.ts';
+
+interface Props {
+  lines: ExampleLine[];
+  lang?: 'id' | 'en';
+  caption?: string;
+  foot?: string;
+}
+const { lines, lang = 'id', caption, foot } = Astro.props;
+const id = lang === 'id';
+const groups: Record<string, string> = id
+  ? { ITEM_PRICE: 'Barang & bea', PROTECTION_FEE: 'Layanan JastipKita', DISCOUNT: 'Potongan' }
+  : { ITEM_PRICE: 'Item & duties', PROTECTION_FEE: 'JastipKita services', DISCOUNT: 'Deductions' };
+const total = lines.find((l) => l.type === 'TOTAL');
+const body = lines.filter((l) => l.type !== 'TOTAL');
+---
+<div class="card breakdown">
+  <div class="breakdown-head">
+    <h3>{caption ?? (id ? 'Rincian biaya' : 'Price breakdown')}</h3>
+    <span class="chip chip-success"><Icon name="list-checks" />{id ? 'Semua biaya ditampilkan' : 'Every fee shown'}</span>
+  </div>
+  <ol class="bd-lines" role="list" aria-label={id ? 'Rincian 11 baris' : '11-line breakdown'}>
+    {body.map((l, i) => (
+      <>
+        {groups[l.type] && <li class="bd-group-label" aria-hidden="true">{groups[l.type]}</li>}
+        <li class:list={['bd-line', { neg: l.amountIdr < 0, zero: l.amountIdr === 0 }]}>
+          <span class="num tnum" aria-hidden="true">{i + 1}</span>
+          <span class="lbl">
+            <span class="name">{id ? l.labelId : l.labelEn}</span>
+            {l.isEstimate && <span class="badge-est">{id ? 'Estimasi' : 'Estimate'}</span>}
+            {l.sub && <small>{id ? l.sub.id : l.sub.en}</small>}
+          </span>
+          <span class="val tnum">{formatIdr(l.amountIdr, lang)}</span>
+        </li>
+      </>
+    ))}
+  </ol>
+  {total && (
+    <div class="bd-total">
+      <span class="num tnum" aria-hidden="true">11</span>
+      <span class="lbl">{id ? total.labelId : total.labelEn}</span>
+      <span class="val tnum">{formatIdr(total.amountIdr, lang)}</span>
+    </div>
+  )}
+  {foot && <p class="bd-foot">{foot}</p>}
+</div>

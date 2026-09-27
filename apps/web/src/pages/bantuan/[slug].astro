@@ -1,0 +1,61 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { FAQ, FAQ_CATEGORIES, type FaqArticle } from '../../data/faq.ts';
+import { breadcrumbLd, faqLd, stripMarkup } from '../../lib/seo.ts';
+import { url } from '../../lib/paths.ts';
+
+export function getStaticPaths() {
+  return FAQ.map((f) => ({ params: { slug: f.slug }, props: { article: f } }));
+}
+interface Props { article: FaqArticle }
+const { article: f } = Astro.props;
+const path = `/bantuan/${f.slug}/`;
+const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Bantuan', path: '/bantuan/' }, { name: FAQ_CATEGORIES[f.category].id, path: '/bantuan/' }, { name: f.question, path }];
+const desc = stripMarkup(f.answer).slice(0, 155).replace(/\s\S*$/, '') + '…';
+const related = FAQ.filter((x) => x.category === f.category && x.slug !== f.slug).slice(0, 4);
+const LINKS: Record<string, string> = {
+  'Kalkulator bea & pajak': url('/kalkulator-bea-cukai/'),
+  'Cek barang terlarang': url('/cek-barang-terlarang/'),
+  'Hapus akun & data': url('/hapus-akun/'),
+  'Kebijakan Refund': url('/legal/refund-policy/'),
+  'Syarat & Ketentuan': url('/legal/terms-of-service/'),
+};
+function toHtml(s: string): string {
+  const esc = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc
+    .split(/\n{2,}/)
+    .map((p) => `<p>${p.replace(/\*\*(.+?)\*\*/g, (_m, t: string) => (LINKS[t] ? `<a href="${LINKS[t]}"><strong>${t}</strong></a>` : `<strong>${t}</strong>`)).replace(/\*(.+?)\*/g, '<em>$1</em>')}</p>`)
+    .join('');
+}
+---
+<Base title={f.question} description={desc} path={path} nav="bantuan" ogType="article" jsonLd={[breadcrumbLd(crumbs.filter((_, i) => i !== 2)), faqLd([{ q: f.question, a: f.answer }])]}>
+  <section class="page-hero">
+    <div class="container container-narrow">
+      <Breadcrumbs items={crumbs.filter((_, i) => i !== 2)} />
+      <span class="chip" style="margin-top:18px"><Icon name={FAQ_CATEGORIES[f.category].icon as any} />{FAQ_CATEGORIES[f.category].id}</span>
+      <h1>{f.question}</h1>
+    </div>
+  </section>
+  <section class="section-tight" style="padding-top:0">
+    <div class="container container-narrow">
+      <article class="prose" set:html={toHtml(f.answer)} />
+      <p class="xsmall muted" style="margin-top:28px">Diperbarui 27 Sep 2026 · Angka mengikuti konfigurasi bisnis saat ini dan dapat berubah; ketentuan yang mengikat ada di <a href={url('/legal/')}>dokumen legal</a>.</p>
+      {related.length > 0 && (
+        <div style="margin-top:40px">
+          <h2 class="h-card">Artikel terkait</h2>
+          <ul class="related" role="list">{related.map((r) => <li><a href={url(`/bantuan/${r.slug}/`)}>{r.question}<Icon name="chevron-right" /></a></li>)}</ul>
+        </div>
+      )}
+      <p style="margin-top:28px"><a class="link-arrow" href={url('/bantuan/')}><Icon name="arrow-left" />Kembali ke pusat bantuan</a></p>
+    </div>
+  </section>
+</Base>
+<style>
+  .page-hero h1 { font-size: clamp(1.625rem, 1.2rem + 1.8vw, 2.375rem); }
+  .related { list-style: none; padding: 0; margin-top: 12px; display: grid; gap: 8px; }
+  .related a { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; background: var(--jk-color-surface); border: 1px solid var(--card-border); border-radius: var(--jk-radius-md); color: var(--jk-color-on-surface); text-decoration: none; font-weight: 500; }
+  .related a:hover { border-color: var(--jk-color-secondary); }
+  .related :global(svg) { width: 18px; height: 18px; flex: none; color: var(--jk-color-on-surface-muted); }
+</style>

@@ -1,0 +1,19 @@
+---
+import Base from '../../layouts/Base.astro';
+import Landing from '../../components/Landing.astro';
+import { serviceLd, webPageLd } from '../../lib/seo.ts';
+
+const title = 'JastipKita — Buy from Abroad via Verified Travelers, Funds Held by SafePay';
+const description =
+  'Indonesian P2P traveler-shopping marketplace: buy from Japan, Korea, Singapore, the US, Malaysia and Australia through verified travelers. SafePay holds funds until delivery; every fee shown upfront.';
+---
+<Base
+  title={title}
+  description={description}
+  path="/en/"
+  lang="en"
+  alternates={[{ lang: 'id', path: '/' }]}
+  jsonLd={[webPageLd({ name: title, description, path: '/en/', lang: 'en' }), serviceLd({ name: 'JastipKita — traveler shopping service', description, path: '/en/' })]}
+>
+  <Landing lang="en" />
+</Base>

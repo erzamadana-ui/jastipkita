@@ -1,0 +1,88 @@
+---
+import Icon from './Icon.astro';
+import Breadcrumbs from './Breadcrumbs.astro';
+import CustomsCalculator from './CustomsCalculator.astro';
+import Faq from './Faq.astro';
+import { COUNTRY_PAGES } from '../data/countries.ts';
+import { CURRENCY_META, KMK_RATES } from '../data/kmk-rates.ts';
+import { customsExample, categoryName } from '../lib/engine.ts';
+import { formatDecimalString, formatIdr } from '../lib/money.ts';
+import { url } from '../lib/paths.ts';
+import type { Crumb } from '../lib/seo.ts';
+
+interface Props { lang: 'id' | 'en'; crumbs: Crumb[]; faq: Array<{ q: string; a: string }> }
+const { lang, crumbs, faq } = Astro.props;
+const id = lang === 'id';
+const t = (a: string, b: string) => (id ? a : b);
+const rows = COUNTRY_PAGES.map((c) => ({ c, ex: customsExample(c.currency, c.example.unitPrice, c.example.quantity, c.example.categoryCode) }));
+---
+<section class="page-hero">
+  <div class="container">
+    <Breadcrumbs items={crumbs} lang={lang} />
+    <span class="eyebrow" style="margin-top:18px"><Icon name="calculator" size={16} />{t('Alat gratis', 'Free tool')}</span>
+    <h1>{t('Kalkulator bea masuk & pajak impor barang jastip', 'Import duty & tax calculator for jastip items')}</h1>
+    <p class="lead">{t(
+      'Hitung estimasi bea masuk, PPN, dan PPh 22 untuk barang titipan dari luar negeri berdasarkan PMK 34/2025 — aturan yang berlaku untuk barang bawaan penumpang yang bukan barang pribadi.',
+      'Estimate import duty, VAT and income tax art. 22 for items bought abroad on someone else’s behalf, based on PMK 34/2025 — the rule for passenger goods that are not personal goods.',
+    )}</p>
+  </div>
+</section>
+
+<section class="section-tight" style="padding-top:0">
+  <div class="container">
+    <CustomsCalculator lang={lang} />
+  </div>
+</section>
+
+<section class="section-tight" aria-labelledby="formula-title">
+  <div class="container">
+    <div class="grid grid-2" style="--gap:24px;align-items:start">
+      <div>
+        <span class="eyebrow">{t('Cara menghitung', 'How it is calculated')}</span>
+        <h2 id="formula-title" class="h-section" style="margin-top:10px">{t('Rumus PMK 34/2025 untuk barang titipan', 'The PMK 34/2025 formula for non-personal goods')}</h2>
+        <ol class="formula" role="list">
+          <li><span><strong>{t('Nilai pabean', 'Customs value')}</strong> = {t('harga dibayar × jumlah × kurs pajak', 'price paid × quantity × tax exchange rate')}</span></li>
+          <li><span><strong>{t('Bea masuk', 'Import duty')}</strong> = 10% × {t('nilai pabean (tanpa pembebasan USD 500)', 'customs value (no USD 500 exemption)')}</span></li>
+          <li><span><strong>{t('Nilai impor', 'Import value')}</strong> = {t('nilai pabean + bea masuk', 'customs value + duty')}</span></li>
+          <li><span><strong>PPN</strong> = 12% × 11/12 × {t('nilai impor (efektif 11%)', 'import value (effectively 11%)')}</span></li>
+          <li><span><strong>PPh 22</strong> = 5% × {t('nilai impor', 'import value')}</span></li>
+        </ol>
+        <p class="small muted" style="margin-top:14px">{t(
+          'Perkiraan cepat: 10% + 1,1 × (11% + 5%) ≈ 27,6% dari nilai barang. Engine JastipKita membulatkan setiap komponen ke atas ke ribuan rupiah (konservatif, maks. +Rp999 per komponen). PPnBM tidak berlaku untuk tas, jam, perhiasan, atau parfum branded.',
+          'Quick check: 10% + 1.1 × (11% + 5%) ≈ 27.6% of the item value. The JastipKita engine rounds every component up to the next IDR 1,000 (conservative, at most +IDR 999 each). Luxury-goods tax (PPnBM) does not apply to branded bags, watches, jewellery or perfume.',
+        )}</p>
+      </div>
+      <div class="card">
+        <h3 class="h-card">{t('Contoh per negara', 'Examples by country')}</h3>
+        <p class="xsmall muted">{t(`Kurs ${KMK_RATES.reference} (23–29 Sep 2026)`, `Rates ${KMK_RATES.reference} (23–29 Sep 2026)`)}</p>
+        <div class="table-wrap" style="margin-top:12px;border:0">
+          <table class="table">
+            <thead><tr><th scope="col">{t('Barang', 'Item')}</th><th scope="col" class="num">{t('Nilai', 'Value')}</th><th scope="col" class="num">{t('Bea & pajak', 'Duty & tax')}</th></tr></thead>
+            <tbody>
+              {rows.map(({ c, ex }) => (
+                <tr>
+                  <td><a href={url(`/${c.slug}/`)}>{id ? c.nameId : c.nameEn}</a><br /><small class="muted">{categoryName(c.example.categoryCode, lang)} · {CURRENCY_META[c.currency]?.symbol}{formatDecimalString(c.example.unitPrice, lang)}</small></td>
+                  <td class="num">{formatIdr(ex.customsValueIdr, lang)}</td>
+                  <td class="num"><strong>{formatIdr(ex.totalIdr, lang)}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-tight" aria-labelledby="calc-faq">
+  <div class="container container-narrow">
+    <h2 id="calc-faq" class="h-section" style="margin-bottom:24px">{t('Pertanyaan tentang bea & pajak jastip', 'Questions about duties on jastip items')}</h2>
+    <Faq items={faq} />
+  </div>
+</section>
+
+<style>
+  .formula { list-style: none; padding: 0; margin-top: 20px; display: grid; gap: 8px; counter-reset: f; }
+  .formula li { counter-increment: f; display: grid; grid-template-columns: 28px 1fr; gap: 10px; font-size: 0.9375rem; padding: 10px 14px; background: var(--jk-color-surface); border: 1px solid var(--card-border); border-radius: var(--jk-radius-md); }
+  .formula li::before { content: counter(f); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--soft-accent); color: var(--soft-accent-ink); font-size: 0.75rem; font-weight: 600; }
+</style>

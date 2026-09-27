@@ -1,0 +1,21 @@
+---
+import Icon from './Icon.astro';
+import { url } from '../lib/paths.ts';
+
+interface Props { lang: 'id' | 'en' }
+const { lang } = Astro.props;
+const id = lang === 'id';
+---
+<section class="consent" role="dialog" aria-modal="false" aria-labelledby="consent-title" aria-describedby="consent-desc" data-consent hidden>
+  <h2 id="consent-title"><Icon name="cookie" />{id ? 'Privasi & cookie' : 'Privacy & cookies'}</h2>
+  <p id="consent-desc">
+    {id
+      ? 'Kami hanya memakai penyimpanan yang benar-benar diperlukan (mis. mengingat pilihan ini dan sesi masuk). Saat ini tidak ada pelacak atau analitik pihak ketiga yang terpasang. Bila kelak analitik diaktifkan, ia hanya berjalan setelah kamu setuju.'
+      : 'We only use strictly necessary storage (e.g. remembering this choice and your sign-in session). No third-party trackers or analytics are installed today. If analytics are ever enabled, they will only run after you agree.'}
+    {' '}<a href={url('/legal/cookie-policy/')}>{id ? 'Kebijakan cookie' : 'Cookie policy'}</a>
+  </p>
+  <div class="actions">
+    <button type="button" class="btn btn-sm" data-consent-choice="necessary">{id ? 'Hanya yang diperlukan' : 'Necessary only'}</button>
+    <button type="button" class="btn btn-primary btn-sm" data-consent-choice="analytics">{id ? 'Izinkan analitik (bila ada)' : 'Allow analytics (if any)'}</button>
+  </div>
+</section>

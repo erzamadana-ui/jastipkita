@@ -1,0 +1,232 @@
+# Deploy PRODUCTION — manual only, owner approval required.
+#
+# Gates (all must pass before anything touches production):
+#   1. request job (no secrets): actor ∈ vars.PRODUCTION_DEPLOYERS, confirmation phrase, ref is on main,
+#      CI succeeded for that exact commit.
+#   2. deploy job runs in GitHub Environment "production" → required reviewers (when the plan supports it,
+#      see docs/07-deployment.md §8) — ONE approval covers the whole job.
+#   3. Live-payment decision: production variable ALLOW_LIVE_PAYMENTS must be explicitly "true" or "false" and equal
+#      the input checkbox; LIVE additionally needs decision_ref == vars.LIVE_PAYMENTS_DECISION_REF (written record).
+# Then: backup (Neon branch, or encrypted pg_dump) → migrate → deploy Worker → smoke → auto-rollback of the Worker
+# on smoke failure. Database changes are forward-only: DB rollback = restore from the pre-deploy branch
+# (docs/runbooks/db-restore.md).
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to deploy (branch, tag or SHA on main)
+        type: string
+        default: main
+      confirm:
+        description: Type DEPLOY PRODUCTION
+        type: string
+        required: true
+      allow_live_payments:
+        description: Owner approved LIVE payments (must equal production variable ALLOW_LIVE_PAYMENTS)
+        type: boolean
+        default: false
+      decision_ref:
+        description: Reference of the written owner decision for LIVE payments (required when live)
+        type: string
+        default: ''
+      skip_migrations:
+        description: Skip database migrations
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  WRANGLER: npx --yes wrangler@4
+  WRANGLER_SEND_METRICS: 'false'
+
+jobs:
+  request:
+    name: Request checks (no secrets)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.ref.outputs.sha }}
+    steps:
+      - name: Actor and confirmation
+        env:
+          DEPLOYERS: ${{ vars.PRODUCTION_DEPLOYERS || 'erzamadana-ui' }}
+          ACTOR: ${{ github.actor }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          IFS=',' read -ra allowed <<<"$DEPLOYERS"
+          ok=false; for a in "${allowed[@]}"; do [ "$(echo "$a" | xargs)" = "$ACTOR" ] && ok=true; done
+          [ "$ok" = true ] || { echo "::error::$ACTOR is not in PRODUCTION_DEPLOYERS"; exit 1; }
+          [ "$CONFIRM" = "DEPLOY PRODUCTION" ] || { echo "::error::confirmation phrase mismatch"; exit 1; }
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: ref
+        name: Ref must be on main
+        run: |
+          sha=$(git rev-parse HEAD)
+          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha is not on main"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: CI passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.ref.outputs.sha }}
+        run: |
+          n=$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=$SHA&status=success&per_page=1" --jq '.total_count')
+          [ "${n:-0}" -gt 0 ] || { echo "::error::no successful CI run for $SHA — push to main and wait for CI first"; exit 1; }
+
+  deploy:
+    name: Deploy production
+    needs: request
+    runs-on: ubuntu-24.04
+    environment:
+      name: production
+      url: ${{ vars.API_BASE_URL }}
+    timeout-minutes: 45
+    env:
+      SHA: ${{ needs.request.outputs.sha }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Live-payment decision gate
+        env:
+          RECORDED: ${{ vars.ALLOW_LIVE_PAYMENTS }}
+          REQUESTED: ${{ inputs.allow_live_payments }}
+          DECISION_REF: ${{ inputs.decision_ref }}
+          RECORDED_REF: ${{ vars.LIVE_PAYMENTS_DECISION_REF }}
+        run: |
+          case "$RECORDED" in true|false) ;; *)
+            echo "::error::production variable ALLOW_LIVE_PAYMENTS is not recorded (must be 'true' or 'false') — refusing"; exit 1 ;; esac
+          [ "$RECORDED" = "$REQUESTED" ] || { echo "::error::input allow_live_payments=$REQUESTED differs from recorded decision $RECORDED — refusing"; exit 1; }
+          if [ "$RECORDED" = true ]; then
+            [ -n "$DECISION_REF" ] && [ "$DECISION_REF" = "$RECORDED_REF" ] || {
+              echo "::error::LIVE payments need decision_ref equal to LIVE_PAYMENTS_DECISION_REF (written owner decision)"; exit 1; }
+          fi
+          echo "payments mode for this deploy: $([ "$RECORDED" = true ] && echo LIVE || echo SANDBOX)" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SHA }}
+          persist-credentials: false
+      - name: PostgreSQL client + age
+        run: |
+          bash scripts/ci/install-pg-client.sh ${{ vars.PG_MAJOR || '17' }}
+          sudo apt-get install -y -qq age >/dev/null
+
+      # ---------------------------------------------------------------- 1. backup (no backup → no deploy)
+      - name: Pre-deploy backup
+        id: backup
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          NEON_PARENT_BRANCH_ID: ${{ vars.NEON_PRODUCTION_BRANCH_ID }}
+          KEEP: ${{ vars.NEON_PREDEPLOY_BRANCHES_KEEP || '3' }}
+          DATABASE_URL_BACKUP: ${{ secrets.DATABASE_URL_BACKUP }}
+          BACKUP_ENCRYPTION_PUBLIC_KEY: ${{ vars.BACKUP_ENCRYPTION_PUBLIC_KEY || secrets.BACKUP_ENCRYPTION_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          api=https://console.neon.tech/api/v2
+          if [ -n "$NEON_API_KEY" ] && [ -n "$NEON_PROJECT_ID" ]; then
+            name="predeploy-$(date -u +%Y%m%d-%H%M%S)-${SHA::7}"
+            body=$(jq -n --arg n "$name" --arg p "$NEON_PARENT_BRANCH_ID" '{branch: ({name: $n} + (if $p != "" then {parent_id: $p} else {} end))}')
+            id=$(curl -fsS -X POST "$api/projects/$NEON_PROJECT_ID/branches" -H "Authorization: Bearer $NEON_API_KEY" \
+                   -H 'Accept: application/json' -H 'Content-Type: application/json' -d "$body" | jq -r '.branch.id')
+            [ -n "$id" ] && [ "$id" != null ] || { echo "::error::Neon branch creation failed"; exit 1; }
+            echo "method=neon-branch" >> "$GITHUB_OUTPUT"; echo "ref=$name ($id)" >> "$GITHUB_OUTPUT"
+            echo "Backup: Neon branch **$name** (\`$id\`) — restore point for this deploy" >> "$GITHUB_STEP_SUMMARY"
+            # prune older pre-deploy branches (free plans have a small branch quota)
+            curl -fsS "$api/projects/$NEON_PROJECT_ID/branches" -H "Authorization: Bearer $NEON_API_KEY" \
+              | jq -r '.branches | map(select(.name | startswith("predeploy-"))) | sort_by(.created_at) | reverse | .[]?.id' \
+              | tail -n +$((KEEP + 1)) | while read -r old; do
+                  curl -fsS -X DELETE "$api/projects/$NEON_PROJECT_ID/branches/$old" -H "Authorization: Bearer $NEON_API_KEY" >/dev/null \
+                    && echo "pruned old pre-deploy branch $old"
+                done
+          elif [ -n "$DATABASE_URL_BACKUP" ] && [ -n "$BACKUP_ENCRYPTION_PUBLIC_KEY" ]; then
+            mkdir -p "$RUNNER_TEMP/backup"; f="jastipkita-production-predeploy-$(date -u +%Y%m%dT%H%M%SZ).dump.age"
+            pg_dump -Fc -Z6 "$DATABASE_URL_BACKUP" | age -r "$BACKUP_ENCRYPTION_PUBLIC_KEY" -o "$RUNNER_TEMP/backup/$f"
+            sha256sum "$RUNNER_TEMP/backup/$f" | tee "$RUNNER_TEMP/backup/$f.sha256"
+            echo "method=pg_dump" >> "$GITHUB_OUTPUT"; echo "ref=$f" >> "$GITHUB_OUTPUT"; echo "file=$f" >> "$GITHUB_OUTPUT"
+            echo "Backup: encrypted dump **$f** (artifact)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::no backup method configured (NEON_API_KEY+NEON_PROJECT_ID or DATABASE_URL_BACKUP+BACKUP_ENCRYPTION_PUBLIC_KEY) — refusing to deploy production"
+            exit 1
+          fi
+      - if: steps.backup.outputs.method == 'pg_dump'
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-production-predeploy-${{ github.run_number }}
+          path: ${{ runner.temp }}/backup
+          retention-days: 30
+
+      # ---------------------------------------------------------------- 2. migrate (forward-only)
+      - name: Migrate
+        if: inputs.skip_migrations != true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_MIGRATOR }}
+        run: |
+          set -euo pipefail
+          [ -n "$DATABASE_URL" ] || { echo "::error::DATABASE_URL_MIGRATOR missing"; exit 1; }
+          bash db/scripts/migrate.sh --verify
+          v=$(psql -X -At -c "SHOW server_version_num")
+          if [ "$v" -ge 160000 ]; then export PGOPTIONS="-c createrole_self_grant=set,inherit"; fi
+          bash db/scripts/migrate.sh | tee -a "$GITHUB_STEP_SUMMARY"
+          bash db/scripts/seed.sh
+          bash db/scripts/migrate.sh --verify
+
+      # ---------------------------------------------------------------- 3. deploy Worker
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter "@jastipkita/api..."
+      - name: Build and validate Worker configuration
+        id: cfg
+        env:
+          VARS_JSON: ${{ toJSON(vars) }}
+          SECRETS_JSON: ${{ toJSON(secrets) }}
+          EXPECT_LIVE: ${{ vars.ALLOW_LIVE_PAYMENTS }}
+        run: |
+          ver=$(node -p "require('./apps/api/package.json').version")
+          export APP_VERSION="$ver+${SHA::7}"
+          pnpm --filter @jastipkita/api exec tsx ../../scripts/ci/worker-config.ts production
+      - name: Deploy Worker
+        id: deploy
+        run: |
+          mapfile -t VAR_ARGS < <(grep -v '^$' "$RUNNER_TEMP/worker-vars.args")
+          $WRANGLER deploy --config infra/cloudflare/wrangler.toml --env production "${VAR_ARGS[@]}" \
+            --message "production ${SHA::7} (run ${{ github.run_id }}, backup ${{ steps.backup.outputs.ref }})"
+      - name: Push Worker secrets
+        run: $WRANGLER secret bulk "$RUNNER_TEMP/worker-secrets.json" --config infra/cloudflare/wrangler.toml --env production
+      - name: Remove secrets file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/worker-secrets.json"
+
+      # ---------------------------------------------------------------- 4. smoke + rollback
+      - name: Smoke test
+        id: smoke
+        env:
+          MODES: ${{ vars.ALLOW_LIVE_PAYMENTS == 'true' && 'LIVE' || 'SANDBOX' }}
+        run: bash scripts/ci/smoke-health.sh "${{ vars.API_BASE_URL }}" production "$MODES" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Roll back Worker to the previous version (smoke failed)
+        if: failure() && steps.deploy.outcome == 'success'
+        run: |
+          $WRANGLER rollback --config infra/cloudflare/wrangler.toml --env production -y \
+            -m "auto-rollback: smoke failed in run ${{ github.run_id }}"
+          {
+            echo "## WARNING: Worker rolled back"
+            echo "The previous Worker version is live again. The database was NOT rolled back (forward-only)."
+            echo "If the migration damaged data: follow docs/runbooks/db-restore.md using backup **${{ steps.backup.outputs.ref }}**."
+          } >> "$GITHUB_STEP_SUMMARY"

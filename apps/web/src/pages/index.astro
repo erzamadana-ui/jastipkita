@@ -1,0 +1,27 @@
+---
+import Base from '../layouts/Base.astro';
+import Landing from '../components/Landing.astro';
+import { faqLd, serviceLd, webPageLd } from '../lib/seo.ts';
+import { FAQ } from '../data/faq.ts';
+
+const title = 'JastipKita — Jastip Luar Negeri Aman, Dana Ditahan SafePay';
+const description =
+  'Titip belanja dari Jepang, Korea, Singapura, AS, Malaysia & Australia lewat traveler terverifikasi. Dana ditahan SafePay sampai barang diterima, rincian biaya 11 baris termasuk estimasi bea & pajak.';
+const teaser = ['apa-itu-safepay', 'estimasi-bea-masuk', 'harga-barang-berubah', 'kapan-traveler-boleh-membeli', 'cara-membuka-dispute']
+  .map((s) => FAQ.find((x) => x.slug === s)!)
+  .map((x) => ({ q: x.question, a: x.answer }));
+---
+<Base
+  title={title}
+  description={description}
+  path="/"
+  lang="id"
+  alternates={[{ lang: 'en', path: '/en/' }]}
+  jsonLd={[
+    webPageLd({ name: title, description, path: '/' }),
+    serviceLd({ name: 'JastipKita — jasa titip belanja luar negeri', description, path: '/', areaServed: ['Indonesia'] }),
+    faqLd(teaser),
+  ]}
+>
+  <Landing lang="id" />
+</Base>

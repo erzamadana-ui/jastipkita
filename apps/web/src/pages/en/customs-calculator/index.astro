@@ -1,0 +1,19 @@
+---
+import Base from '../../../layouts/Base.astro';
+import CalculatorPage from '../../../components/CalculatorPage.astro';
+import { breadcrumbLd, faqLd, webPageLd } from '../../../lib/seo.ts';
+
+const title = 'Indonesia Import Duty & Tax Calculator for Jastip Items (PMK 34/2025)';
+const description =
+  'Estimate Indonesian import duty (10%), VAT and income tax art. 22 on items bought abroad for someone else, per PMK 34/2025. Free, with rule source and verification date. An estimate, not tax advice.';
+const crumbs = [{ name: 'Home', path: '/en/' }, { name: 'Customs calculator', path: '/en/customs-calculator/' }];
+const faq = [
+  { q: 'Do jastip items get the USD 500 exemption?', a: 'No. The FOB USD 500 per person per arrival exemption only covers a passenger’s personal goods. Items bought for someone else are non-personal goods (PMK 34/2025 art. 24(3)), so duty and taxes apply to the full value.' },
+  { q: 'Which exchange rate is used?', a: 'Customs uses the weekly tax exchange rate set by Ministry of Finance decree (Wednesday–Tuesday) for the week of arrival. This calculator uses this week’s rate as an approximation.' },
+  { q: 'Why might Customs charge a different amount?', a: 'Customs officers determine the customs value and tariff on inspection, the arrival-week rate applies, and rounding practice at the airport is not yet confirmed. That is why results are always labelled as estimates.' },
+];
+---
+<Base title={title} description={description} path="/en/customs-calculator/" lang="en" nav="kalkulator" alternates={[{ lang: 'id', path: '/kalkulator-bea-cukai/' }]}
+  jsonLd={[webPageLd({ name: title, description, path: '/en/customs-calculator/', lang: 'en' }), breadcrumbLd(crumbs), faqLd(faq)]}>
+  <CalculatorPage lang="en" crumbs={crumbs} faq={faq} />
+</Base>
