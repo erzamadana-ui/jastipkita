@@ -1,0 +1,56 @@
+import type { Context, MiddlewareHandler } from 'hono';
+import type { AppDeps, AppEnv } from '../context';
+import { AppError, fromPgError } from '../lib/errors';
+import { randomToken } from '../lib/crypto';
+
+/** Injects deps, request id, client IP; logs one line per request. */
+export function requestContext(deps: AppDeps): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const incoming = c.req.header('x-request-id');
+    const requestId = incoming && /^[A-Za-z0-9._-]{8,64}$/.test(incoming) ? incoming : randomToken(12);
+    c.set('requestId', requestId);
+    c.set('deps', deps);
+    c.set('auth', undefined);
+    const ip =
+      c.req.header('cf-connecting-ip') ??
+      c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
+      c.req.header('x-real-ip') ??
+      undefined;
+    c.set('ip', ip);
+    const started = Date.now();
+    await next();
+    c.header('x-request-id', requestId);
+    deps.logger.info('http.request', {
+      requestId,
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      ms: Date.now() - started,
+      userId: c.get('auth')?.userId,
+    });
+  };
+}
+
+export function errorResponse(c: Context<AppEnv>, err: unknown) {
+  const requestId = c.get('requestId');
+  const deps = c.get('deps');
+  let appErr: AppError;
+  if (err instanceof AppError) appErr = err;
+  else {
+    const mapped = fromPgError(err);
+    if (mapped) appErr = mapped;
+    else {
+      deps?.logger.error('http.unhandled_error', {
+        requestId,
+        error: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : String(err),
+      });
+      appErr = new AppError(500, 'INTERNAL_ERROR', 'Terjadi kesalahan pada server');
+    }
+  }
+  if (appErr.status >= 500 && !(err instanceof AppError)) {
+    // already logged
+  } else if (appErr.status >= 500) {
+    deps?.logger.error('http.app_error', { requestId, code: appErr.code, message: appErr.message });
+  }
+  return c.json({ error: { code: appErr.code, message: appErr.message, details: appErr.details ?? {}, requestId } }, appErr.status);
+}

@@ -1,0 +1,109 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "JastipKita API",
+    "version": "0.1.0",
+    "description": "JastipKita — Titip Mudah, Aman, Terpercaya. P2P shopping & traveler marketplace API. Money = integer IDR; timestamps = ISO-8601 UTC. Financial mutations require Idempotency-Key."
+  },
+  "servers": [
+    {
+      "url": "https://api.example.com"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "env": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string"
+          },
+          "database": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "latencyMs": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "schemaVersion": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "ok",
+              "latencyMs",
+              "schemaVersion"
+            ]
+          },
+          "integrations": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "MOCK | SANDBOX | LIVE per integration — never claim LIVE when sandboxed"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "env",
+          "time",
+          "database",
+          "integrations"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Service health, schema version and integration modes",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}
