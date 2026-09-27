@@ -215,9 +215,10 @@ export async function requestRefund(deps: AppDeps, db: TxSql, transactionId: str
   if (!Number.isSafeInteger(input.amountIdr) || input.amountIdr <= 0) throw Errors.validation({ amountIdr: 'must be a positive integer' });
   let tx = await loadTx(db, transactionId, { forUpdate: true });
   if (!tx) throw Errors.notFound('Transaksi', 'TRANSACTION_NOT_FOUND');
-  const [existing] = await db<{ id: string }[]>`SELECT id FROM refunds WHERE idempotency_key LIKE ${`${input.idempotencyKey}:%`} LIMIT 1`;
+  // starts_with, not LIKE: the key embeds a client Idempotency-Key, whose % / _ would act as wildcards (SEC-10)
+  const [existing] = await db<{ id: string }[]>`SELECT id FROM refunds WHERE starts_with(idempotency_key, ${`${input.idempotencyKey}:`}) LIMIT 1`;
   if (existing) {
-    const rows = await db<Record<string, unknown>[]>`SELECT * FROM refunds WHERE idempotency_key LIKE ${`${input.idempotencyKey}:%`}`;
+    const rows = await db<Record<string, unknown>[]>`SELECT * FROM refunds WHERE starts_with(idempotency_key, ${`${input.idempotencyKey}:`})`;
     return rows.map((r) => camel<RefundRow>(r));
   }
   await setDbActor(db, input.actorType, input.requestedBy);

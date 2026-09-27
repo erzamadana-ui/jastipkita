@@ -102,8 +102,13 @@ function ipv6Blocked(g: number[]): string | null {
   if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && (g5 === 0xffff || g5 === 0)) {
     return ipv4Blocked(embedded()) ?? (g5 === 0 ? 'IPV4_COMPATIBLE' : null);
   }
-  // NAT64 64:ff9b::/96
+  // IPv4-translated ::ffff:0:a.b.c.d (RFC 2765)
+  if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0xffff && g5 === 0) return ipv4Blocked(embedded()) ?? 'IPV4_TRANSLATED';
+  // NAT64 64:ff9b::/96 (well-known) and 64:ff9b:1::/48 (local-use, RFC 8215 — always internal)
   if (g0 === 0x64 && g1 === 0xff9b && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) return ipv4Blocked(embedded());
+  if (g0 === 0x64 && g1 === 0xff9b && g2 === 1) return 'NAT64_LOCAL_USE';
+  // Teredo 2001:0::/32 tunnels to an (obfuscated) IPv4 — never a legitimate merchant address
+  if (g0 === 0x2001 && g1 === 0) return 'TEREDO';
   // 6to4 2002::/16 embeds an IPv4 in g1..g2
   if (g0 === 0x2002) return ipv4Blocked([g1 >> 8, g1 & 0xff, g2 >> 8, g2 & 0xff]);
   if ((g0 & 0xfe00) === 0xfc00) return 'UNIQUE_LOCAL'; // fc00::/7 (incl. fd00:ec2::254 AWS metadata)
@@ -151,18 +156,43 @@ export function checkUrlSyntax(raw: string | URL): URL {
   return url;
 }
 
-/** Default resolver: node:dns when available (Node); on runtimes without DNS APIs returns []. */
-export const defaultResolver: Resolver = async (hostname) => {
-  try {
-    const dns = await import('node:dns');
-    const res = await dns.promises.lookup(hostname, { all: true, verbatim: true });
+type LookupFn = (hostname: string, opts: { all: true; verbatim: true }) => Promise<{ address: string }[]>;
+
+/**
+ * Resolver factory (exported for tests). `loadLookup` returns null when the runtime has no DNS API at all
+ * (Cloudflare Workers without node:dns — those isolates cannot reach private networks anyway).
+ * SEC-05: every resolution FAILURE is fatal (fail closed). Before, any error other than ENOTFOUND/EAI_AGAIN/ENODATA
+ * returned [] — "no addresses to check" — so an attacker's DNS answering SERVFAIL/timeout to our check and a private
+ * address to fetch()'s own lookup slipped through on Node deployments.
+ */
+export function makeResolver(loadLookup: () => Promise<LookupFn | null>): Resolver {
+  return async (hostname) => {
+    let lookup: LookupFn | null;
+    try {
+      lookup = await loadLookup();
+    } catch {
+      lookup = null;
+    }
+    if (!lookup) return [];
+    let res: { address: string }[];
+    try {
+      res = await lookup(hostname, { all: true, verbatim: true });
+    } catch (err) {
+      const code = String((err as { code?: string }).code ?? '');
+      // a runtime shim that does not implement lookup() is "no DNS API", not a resolution failure
+      if (code === 'ERR_METHOD_NOT_IMPLEMENTED' || code === 'ERR_NOT_IMPLEMENTED') return [];
+      throw new UrlNotAllowedError('DNS_RESOLUTION_FAILED', 'Domain tidak ditemukan');
+    }
+    if (!res.length) throw new UrlNotAllowedError('DNS_RESOLUTION_FAILED', 'Domain tidak ditemukan');
     return res.map((r) => r.address);
-  } catch (err) {
-    const code = (err as { code?: string }).code;
-    if (code === 'ENOTFOUND' || code === 'EAI_AGAIN' || code === 'ENODATA') throw new UrlNotAllowedError('DNS_RESOLUTION_FAILED', 'Domain tidak ditemukan');
-    return [];
-  }
-};
+  };
+}
+
+/** Default resolver: node:dns when available (Node); on runtimes without DNS APIs returns []. */
+export const defaultResolver: Resolver = makeResolver(async () => {
+  const dns = await import('node:dns');
+  return typeof dns.promises?.lookup === 'function' ? (dns.promises.lookup as unknown as LookupFn) : null;
+});
 
 /** Full check: syntax + every resolved address must be public. */
 export async function assertPublicUrl(raw: string | URL, resolve: Resolver): Promise<URL> {

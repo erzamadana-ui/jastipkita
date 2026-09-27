@@ -159,7 +159,7 @@ jobs:
           fi
       - name: Cloudflare Worker bundle (wrangler dry-run, no credentials)
         run: |
-          npx --yes wrangler@4 deploy --config infra/cloudflare/wrangler.toml --env staging --dry-run --outdir "$RUNNER_TEMP/worker"
+          npx --yes wrangler@4.142.0 deploy --config infra/cloudflare/wrangler.toml --env staging --dry-run --outdir "$RUNNER_TEMP/worker"
           size=$(gzip -9 -c "$RUNNER_TEMP/worker/worker.js" | wc -c)
           echo "Worker bundle: $(( size / 1024 )) KiB gzip (Workers Free limit 3 MiB)" | tee -a "$GITHUB_STEP_SUMMARY"
           if [ "$size" -gt 2831155 ]; then echo "::warning::Worker bundle is above 90% of the 3 MiB free-plan limit"; fi

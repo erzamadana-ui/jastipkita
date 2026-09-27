@@ -41,9 +41,10 @@ export async function issueSession(
   const refresh = randomToken(32);
   const refreshExp = new Date(now.getTime() + deps.env.REFRESH_TOKEN_TTL_DAYS * 86400_000);
   await db`
-    INSERT INTO refresh_tokens (user_id, family_id, token_hash, device_id, created_at, expires_at, ip_hash, user_agent)
+    INSERT INTO refresh_tokens (user_id, family_id, token_hash, device_id, created_at, expires_at, ip_hash, user_agent, mfa_verified_at)
     VALUES (${userId}, ${familyId}, ${Buffer.from(await sha256(refresh))}, ${meta.deviceId ?? null}, ${now}, ${refreshExp},
-            ${meta.ipHash ? Buffer.from(meta.ipHash) : null}, ${meta.userAgent?.slice(0, 400) ?? null})`;
+            ${meta.ipHash ? Buffer.from(meta.ipHash) : null}, ${meta.userAgent?.slice(0, 400) ?? null},
+            ${meta.mfaAt ? new Date(meta.mfaAt * 1000) : null})`;
   const access = await signAccessToken(deps, userId, familyId, meta.mfaAt ?? null);
   return {
     accessToken: access.token,
@@ -66,8 +67,8 @@ export async function rotateRefreshToken(deps: AppDeps, refreshToken: string, me
     | { ok: false; code: 'REFRESH_INVALID' | 'REFRESH_REVOKED' | 'REFRESH_EXPIRED' | 'ACCOUNT_INACTIVE' };
   // Revocations must COMMIT even when the caller gets an error, so failures are returned, not thrown.
   const outcome = (await deps.sql.begin(async (tx) => {
-    const [row] = await tx<{ id: string; user_id: string; family_id: string; expires_at: Date; revoked_at: Date | null; revoked_reason: string | null; device_id: string | null; reuse_detected_at: Date | null }[]>`
-      SELECT id, user_id, family_id, expires_at, revoked_at, revoked_reason, device_id, reuse_detected_at FROM refresh_tokens WHERE token_hash = ${hash} FOR UPDATE`;
+    const [row] = await tx<{ id: string; user_id: string; family_id: string; expires_at: Date; revoked_at: Date | null; revoked_reason: string | null; device_id: string | null; reuse_detected_at: Date | null; mfa_verified_at: Date | null }[]>`
+      SELECT id, user_id, family_id, expires_at, revoked_at, revoked_reason, device_id, reuse_detected_at, mfa_verified_at FROM refresh_tokens WHERE token_hash = ${hash} FOR UPDATE`;
     if (!row) return { ok: false, code: 'REFRESH_INVALID' } as Outcome;
     if (row.revoked_at) {
       if (row.revoked_reason === 'ROTATED' && !row.reuse_detected_at) {
@@ -86,9 +87,9 @@ export async function rotateRefreshToken(deps: AppDeps, refreshToken: string, me
     const next = randomToken(32);
     const exp = new Date(now.getTime() + deps.env.REFRESH_TOKEN_TTL_DAYS * 86400_000);
     const [ins] = await tx<{ id: string }[]>`
-      INSERT INTO refresh_tokens (user_id, family_id, token_hash, device_id, created_at, expires_at, ip_hash, user_agent)
+      INSERT INTO refresh_tokens (user_id, family_id, token_hash, device_id, created_at, expires_at, ip_hash, user_agent, mfa_verified_at)
       VALUES (${row.user_id}, ${row.family_id}, ${Buffer.from(await sha256(next))}, ${row.device_id}, ${now}, ${exp},
-              ${meta.ipHash ? Buffer.from(meta.ipHash) : null}, ${meta.userAgent?.slice(0, 400) ?? null})
+              ${meta.ipHash ? Buffer.from(meta.ipHash) : null}, ${meta.userAgent?.slice(0, 400) ?? null}, ${row.mfa_verified_at})
       RETURNING id`;
     await tx`UPDATE refresh_tokens SET revoked_at = ${now}, revoked_reason = 'ROTATED', replaced_by = ${ins!.id} WHERE id = ${row.id}`;
     const access = await signAccessToken(deps, row.user_id, row.family_id);
@@ -108,6 +109,14 @@ export async function rotateRefreshToken(deps: AppDeps, refreshToken: string, me
   if (outcome.code === 'ACCOUNT_INACTIVE') throw Errors.forbidden('Akun tidak aktif', 'ACCOUNT_INACTIVE');
   const msg = outcome.code === 'REFRESH_EXPIRED' ? 'Sesi kedaluwarsa' : outcome.code === 'REFRESH_INVALID' ? 'Refresh token tidak valid' : 'Sesi berakhir, silakan masuk kembali';
   throw Errors.unauthorized(msg, outcome.code);
+}
+
+/**
+ * SEC-01: records a successful MFA verification (TOTP / recovery code) on the session family. Admin routes
+ * require it server-side (middleware/auth.ts requireAdmin); it survives refresh-token rotation.
+ */
+export async function markSessionMfaVerified(db: Db, sessionId: string, userId: string, at: Date): Promise<void> {
+  await db`UPDATE refresh_tokens SET mfa_verified_at = ${at} WHERE family_id = ${sessionId} AND user_id = ${userId} AND revoked_at IS NULL`;
 }
 
 export async function revokeSession(db: Db, sessionId: string, reason: 'LOGOUT' | 'ADMIN' | 'ACCOUNT_DELETED' | 'PASSWORD_CHANGED', now: Date): Promise<void> {

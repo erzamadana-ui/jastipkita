@@ -43,9 +43,14 @@ export const requireIdempotency: MiddlewareHandler<AppEnv> = async (c, next) => 
     if (row.status === 'IN_PROGRESS' && row.locked_until && row.locked_until > now) {
       throw Errors.conflict('IDEMPOTENCY_IN_PROGRESS', 'Permintaan yang sama sedang diproses');
     }
-    // FAILED (5xx) or stale lock → allow retry
-    await sql`UPDATE idempotency_keys SET status = 'IN_PROGRESS', locked_until = ${new Date(now.getTime() + 60_000)}
-               WHERE user_id = ${auth.userId} AND key = ${key}`;
+    // FAILED (5xx / thrown) or stale lock → allow ONE retry. The claim is a compare-and-set: concurrent retries of
+    // the same key race on this UPDATE and only the winner runs the handler (SEC-04; before, all of them did).
+    const claimed = await sql`
+      UPDATE idempotency_keys SET status = 'IN_PROGRESS', locked_until = ${new Date(now.getTime() + 60_000)}
+       WHERE user_id = ${auth.userId} AND key = ${key}
+         AND (status = 'FAILED' OR (status = 'IN_PROGRESS' AND (locked_until IS NULL OR locked_until <= ${now})))
+       RETURNING 1`;
+    if (claimed.length === 0) throw Errors.conflict('IDEMPOTENCY_IN_PROGRESS', 'Permintaan yang sama sedang diproses');
   }
 
   try {

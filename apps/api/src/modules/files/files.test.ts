@@ -153,7 +153,12 @@ describe('files: upload → complete', () => {
     expect(own.status).toBe(403);
     const support = await t.createUser({ roles: ['SUPPORT'] });
     expect((await t.request('GET', `/v1/files/${c.body.fileId}/content`, { token: support.accessToken })).status).toBe(403);
-    const reviewer = await t.createUser({ roles: ['OPERATIONS'] });
+    // SEC-01: a reviewer whose session has not passed MFA gets MFA_REQUIRED, not the document
+    const reviewerNoMfa = await t.createUser({ roles: ['OPERATIONS'] });
+    const blocked = await t.request('GET', `/v1/files/${c.body.fileId}/content`, { token: reviewerNoMfa.accessToken });
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.error.code).toBe('MFA_REQUIRED');
+    const reviewer = await t.createUser({ roles: ['OPERATIONS'], mfa: true });
     const url = await t.request('GET', `/v1/files/${c.body.fileId}/url`, { token: reviewer.accessToken });
     expect(url.body).toMatchObject({ requiresAuth: true, expiresAt: null });
     const stream = await t.app.request(new URL(url.body.url).pathname, { headers: { authorization: `Bearer ${reviewer.accessToken}` } });

@@ -1,7 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../context';
 import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../lib/openapi';
-import { getAuth, optionalAuth, requireAdmin, requireAuth } from '../../middleware/auth';
+import { getAuth, optionalAuth, requireAdminRole, requireAuth } from '../../middleware/auth';
 import { rateLimit } from '../../middleware/rate-limit';
 import { OkSchema } from '../me/schemas';
 import { requestMeta } from './common';
@@ -176,7 +176,8 @@ export function registerAuth(app: App) {
       summary: 'Start TOTP enrollment (admins)',
       description: 'Returns the secret ONCE (stored encrypted). Confirm with a code to activate.',
       security: bearer,
-      middleware: [requireAuth, requireAdmin] as const,
+      // role only: an admin must be able to enroll BEFORE the session can be MFA-verified (SEC-01)
+      middleware: [requireAuth, requireAdminRole, rateLimit({ name: 'auth.mfa.enroll', limit: 10, windowSec: 3600, key: 'user' })] as const,
       responses: { 200: jsonContent(MfaEnrollResponse), ...errorResponses },
     }),
     async (c) => c.json(await svc.mfaEnroll(c.get('deps'), getAuth(c), await requestMeta(c)), 200),

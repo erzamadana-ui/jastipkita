@@ -121,10 +121,11 @@ export const requireAuthAllowPendingDeletion: MiddlewareHandler<AppEnv> = async 
   if (claims.typ !== 'access' || typeof claims.sub !== 'string' || typeof claims.sid !== 'string') {
     throw Errors.unauthorized('Token tidak valid atau kedaluwarsa', 'TOKEN_INVALID');
   }
-  const [u] = await deps.sql<{ id: string; status: AuthContext['status']; kyc_level: number; active_mode: AuthContext['activeMode'] }[]>`
-    SELECT u.id, u.status, u.kyc_level, u.active_mode FROM users u
-     WHERE u.id = ${claims.sub}
-       AND EXISTS (SELECT 1 FROM refresh_tokens rt WHERE rt.family_id = ${claims.sid} AND rt.user_id = u.id AND rt.revoked_at IS NULL)`;
+  const [u] = await deps.sql<{ id: string; status: AuthContext['status']; kyc_level: number; active_mode: AuthContext['activeMode']; session_mfa_at: Date | null }[]>`
+    SELECT u.id, u.status, u.kyc_level, u.active_mode, s.session_mfa_at FROM users u
+      JOIN LATERAL (SELECT count(*) AS n, max(rt.mfa_verified_at) AS session_mfa_at FROM refresh_tokens rt
+                     WHERE rt.family_id = ${claims.sid} AND rt.user_id = u.id AND rt.revoked_at IS NULL) s ON s.n > 0
+     WHERE u.id = ${claims.sub}`;
   if (!u) throw Errors.unauthorized('Sesi berakhir, silakan masuk kembali', 'SESSION_REVOKED');
   if (u.status === 'SUSPENDED') throw Errors.forbidden('Akun ditangguhkan', 'ACCOUNT_SUSPENDED');
   if (u.status !== 'ACTIVE' && u.status !== 'PENDING_DELETION') throw Errors.forbidden('Akun tidak aktif', 'ACCOUNT_INACTIVE');
@@ -137,6 +138,7 @@ export const requireAuthAllowPendingDeletion: MiddlewareHandler<AppEnv> = async 
     activeMode: u.active_mode,
     roles: roles.map((r) => r.role_code),
     mfaAt: typeof claims.mfa_at === 'number' ? claims.mfa_at : null,
+    sessionMfaAt: u.session_mfa_at ? Math.floor(new Date(u.session_mfa_at).getTime() / 1000) : null,
   });
   await next();
 };

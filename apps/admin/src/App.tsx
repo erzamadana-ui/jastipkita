@@ -1,7 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
 import { isApiError } from './api/errors';
+import { requestStepUp } from './api/mfa';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { MfaProvider } from './auth/MfaProvider';
 import { CAP, homePath, type Capability } from './auth/permissions';
@@ -43,7 +44,18 @@ const AuditPage = lazy(() => import('./pages/content/AuditPage'));
 const InfraPage = lazy(() => import('./pages/infra/InfraPage'));
 
 export function makeQueryClient() {
-  return new QueryClient({
+  const qc: QueryClient = new QueryClient({
+    // The API requires an MFA-verified admin session for EVERY /v1/admin/* call (SEC-01, docs/security/review-2026-09.md);
+    // when it lapses (default 12 h) a read answers MFA_REQUIRED → run the TOTP step-up once, then refetch.
+    queryCache: new QueryCache({
+      onError: (err, query) => {
+        if (isApiError(err) && err.code === 'MFA_REQUIRED') {
+          void requestStepUp().then((ok) => {
+            if (ok) void qc.invalidateQueries({ queryKey: query.queryKey });
+          });
+        }
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: 15_000,
@@ -53,6 +65,7 @@ export function makeQueryClient() {
       mutations: { retry: false },
     },
   });
+  return qc;
 }
 
 function RequireCap({ cap, children }: { cap: Capability; children: ReactNode }) {

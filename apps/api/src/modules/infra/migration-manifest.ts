@@ -34,4 +34,5 @@ export const MIGRATION_MANIFEST: readonly MigrationManifestEntry[] = [
   { version: '0050', name: 'engagement', file: '0050_engagement.sql', checksum: '7e9e94d19f651f15b6b8e9066703a1a25fd10eb84cea78aad75f86be7a3b82b8' },
   { version: '0060', name: 'admin', file: '0060_admin.sql', checksum: '85b9ca778a381d3b9f55499d08ca819f9f75ad547050d384ae44109b6afed3fb' },
   { version: '0070', name: 'legal_public_documents', file: '0070_legal_public_documents.sql', checksum: 'c76428f49f7d550e0191aa6a03172842e0fdb0e0da99306bf4d874a07bbbe14f' },
+  { version: '0080', name: 'security_hardening', file: '0080_security_hardening.sql', checksum: 'ba6bb0d907c33fbf53d3dc2a39d07ec5648171581c9ba294f1b7cd7a38f448cf' },
 ];

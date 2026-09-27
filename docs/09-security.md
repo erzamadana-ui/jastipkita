@@ -28,7 +28,9 @@
   (tetap berlaku lintas isolate Worker); Google/Apple ID token diverifikasi (issuer, audience, nonce).
 - JWT akses HS256 15 menit; refresh token opak 256-bit (SHA-256 di DB), sekali pakai, rotasi, **deteksi reuse**
   mencabut seluruh keluarga sesi + `security_events` HIGH.
-- Admin: TOTP wajib + step-up ≤ 15 menit untuk aksi sensitif, anti-replay per time-step, kunci setelah 5 gagal/15 menit.
+- Admin: TOTP wajib **ditegakkan di API** — setiap `/v1/admin/*` dan akses file staf butuh sesi yang lolos MFA ≤ 12 jam
+  (`refresh_tokens.mfa_verified_at`, bertahan saat refresh) + step-up ≤ 15 menit untuk aksi sensitif, anti-replay per time-step, kunci
+  setelah 5 gagal/15 menit (review 2026-09 SEC-01; sebelumnya gerbang login TOTP hanya di UI).
 - Tidak ada cookie → tidak ada permukaan CSRF; token hanya di header `Authorization`.
 
 ### 2.3 Otorisasi
@@ -42,7 +44,8 @@
 - Setiap route didefinisikan dengan zod (`@hono/zod-openapi`); gagal validasi → 422 terstruktur.
 - SQL selalu parameterized (tagged template postgres.js; tidak ada `sql.unsafe` di kode runtime).
 - Error 5xx tidak membocorkan stack/pesan internal ke klien (hanya `INTERNAL_ERROR` + `requestId`); detail di log.
-- Fetch URL dari pengguna (ekstraksi produk) dijaga SSRF guard (skema, port, IP privat/metadata, redirect, ukuran, waktu).
+- Fetch URL dari pengguna (ekstraksi produk) dijaga SSRF guard (skema, port, IP privat/metadata termasuk bentuk IPv6
+  IPv4-translated/NAT64/Teredo, redirect per hop, ukuran, waktu); kegagalan resolusi DNS = ditolak (fail-closed, SEC-05).
 
 ### 2.5 Perlindungan data
 - AES-256-GCM dengan AAD per baris/kolom (`<table>.<col>:<id>`), `kid` untuk rotasi kunci; file KYC/TRIP_DOC
@@ -99,6 +102,10 @@
 - Web statis tanpa form yang mengirim data sensitif ke pihak ketiga.
 
 ## 3. Gap & tindakan (diurutkan menurut risiko)
+
+> Review keamanan internal 2026-09 (`docs/security/review-2026-09.md`): 11 temuan diperbaiki (SEC-01…SEC-11); terbuka sebelum
+> production: SEC-12 (pembajakan tujuan refund pasca-ATO, sebelum Iluma aktif), SEC-13 (trust-on-first-use TOTP admin),
+> SEC-14 (web berbagi origin `antarkitaindonesia.com` tanpa CSP). Tabel di bawah = gap infrastruktur/proses yang tetap berlaku.
 | # | Gap | Risiko | Tindakan | PIC | Kapan |
 |---|---|---|---|---|---|
 | 1 | Pemindai malware MOCK | file berbahaya ke staf/pengguna | deploy clamd + shim HTTP; `MALWARE_SCAN_PROVIDER=clamav-http` | Eng + Owner (biaya) | sebelum beta publik |

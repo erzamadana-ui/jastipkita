@@ -14,12 +14,7 @@ export function requestContext(deps: AppDeps): MiddlewareHandler<AppEnv> {
     const perRequest = (c.env as { __deps?: AppDeps } | undefined)?.__deps;
     c.set('deps', perRequest ?? deps);
     c.set('auth', undefined);
-    const ip =
-      c.req.header('cf-connecting-ip') ??
-      c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
-      c.req.header('x-real-ip') ??
-      undefined;
-    c.set('ip', ip);
+    c.set('ip', clientIp(c.req.header('cf-connecting-ip'), c.req.header('x-forwarded-for'), c.req.header('x-real-ip')));
     const started = Date.now();
     await next();
     c.header('x-request-id', requestId);
@@ -32,6 +27,24 @@ export function requestContext(deps: AppDeps): MiddlewareHandler<AppEnv> {
       userId: c.get('auth')?.userId,
     });
   };
+}
+
+/**
+ * Client IP for rate limits, OTP quotas, signup risk and security events.
+ * Cloudflare (Workers, or a Node origin behind Cloudflare) sets CF-Connecting-IP and strips client-supplied copies.
+ * Without it, X-Forwarded-For is appended to by every proxy: its LEFT-most entry is whatever the client sent, so
+ * only the RIGHT-most entry (written by our own reverse proxy) is trustworthy (SEC-06 — rotating a fake
+ * X-Forwarded-For used to bypass every per-IP limit on Node deployments).
+ */
+export function clientIp(cfConnectingIp: string | undefined, xForwardedFor: string | undefined, xRealIp: string | undefined): string | undefined {
+  const clean = (v: string | undefined) => {
+    const s = v?.trim();
+    return s && s.length <= 64 && /^[0-9A-Fa-f:.]+$/.test(s) ? s : undefined;
+  };
+  const cf = clean(cfConnectingIp);
+  if (cf) return cf;
+  const hops = (xForwardedFor ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  return clean(hops[hops.length - 1]) ?? clean(xRealIp);
 }
 
 export function errorResponse(c: Context<AppEnv>, err: unknown) {

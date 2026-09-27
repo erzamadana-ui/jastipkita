@@ -30,6 +30,11 @@ export interface AuthContext {
   roles: string[];
   /** epoch seconds of the last MFA verification in this session (admin step-up), if any */
   mfaAt: number | null;
+  /**
+   * epoch seconds of the last MFA verification recorded server-side for the session family
+   * (refresh_tokens.mfa_verified_at; survives token refresh). Admin routes require it (SEC-01).
+   */
+  sessionMfaAt?: number | null;
 }
 
 export interface AppVariables {

@@ -39,6 +39,8 @@ export const EnvSchema = z
     ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().min(60).max(3600).default(900),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
     ADMIN_MFA_STEP_UP_SEC: z.coerce.number().int().min(60).max(3600).default(900),
+    /** SEC-01: an admin session must have passed MFA within this window for ANY /v1/admin/* call (default 12 h). */
+    ADMIN_SESSION_MFA_MAX_AGE_SEC: z.coerce.number().int().min(900).max(7 * 86400).default(43200),
 
     /** "kid1:base64key32,kid2:base64key32" — first entry is the active key; others decrypt-only (rotation). */
     DATA_ENCRYPTION_KEYS: z.string().min(10),
@@ -125,6 +127,16 @@ export const EnvSchema = z
     }
     if (prodLike && env.STORAGE_PROVIDER === 'memory') {
       ctx.addIssue({ code: 'custom', path: ['STORAGE_PROVIDER'], message: 'memory storage is for development/test only' });
+    }
+    // SEC-08: production must never run with log/mock security-relevant providers (OTP codes that are never
+    // delivered, uploads that are never scanned, KYC that auto-approves).
+    if (env.APP_ENV === 'production') {
+      if (env.EMAIL_PROVIDER === 'log') ctx.addIssue({ code: 'custom', path: ['EMAIL_PROVIDER'], message: 'log e-mail provider is forbidden in production' });
+      if (env.SMS_PROVIDER === 'log') ctx.addIssue({ code: 'custom', path: ['SMS_PROVIDER'], message: 'log SMS provider is forbidden in production' });
+      if (env.MALWARE_SCAN_PROVIDER !== 'clamav-http' || !env.CLAMAV_HTTP_URL) {
+        ctx.addIssue({ code: 'custom', path: ['MALWARE_SCAN_PROVIDER'], message: 'production requires MALWARE_SCAN_PROVIDER=clamav-http with CLAMAV_HTTP_URL' });
+      }
+      if (env.KYC_PROVIDER === 'mock') ctx.addIssue({ code: 'custom', path: ['KYC_PROVIDER'], message: 'mock KYC provider is forbidden in production' });
     }
   });
 

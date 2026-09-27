@@ -14,8 +14,9 @@
  *   - The target must be ACTIVE and have a verified e-mail; the grant is written to user_roles (granted_by NULL = CLI)
  *     and to the hash-chained audit log (actor_type SYSTEM, action rbac.role_granted_cli).
  *   - Nothing secret is printed. DATABASE_URL is read from the environment only.
- *   - Admin routes require a fresh MFA step-up for sensitive actions: the new admin must enrol TOTP
- *     (POST /v1/auth/mfa/totp/enroll → /confirm) before using sensitive admin endpoints.
+ *   - Every /v1/admin/* route requires an MFA-verified session (SEC-01) and sensitive actions a fresh step-up: the new
+ *     admin must enrol TOTP (POST /v1/auth/mfa/totp/enroll → /confirm) IMMEDIATELY after the grant — until then any
+ *     holder of that account's OTP could enrol their own authenticator (trust-on-first-use window).
  */
 import postgres from 'postgres';
 

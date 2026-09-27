@@ -12,6 +12,7 @@ import {
   type RiskLevel,
 } from '@jastipkita/core';
 import type { AppDeps, AuthContext } from '../../context';
+import type { TxSql } from '../../db/sql';
 import { AppError, Errors } from '../../lib/errors';
 import { CHANNEL_LIMITS, PAYMENT_CHANNELS, channelSupportsProviderRefund } from '../../providers/payment/channels';
 import { audit } from '../../services/audit';
@@ -422,6 +423,14 @@ export async function checkout(deps: AppDeps, auth: AuthContext, id: string, inp
       const c = await availableCredit(db, auth.userId, now);
       if (c.availableIdr < creditUsed) throw Errors.unprocessable('CREDIT_INSUFFICIENT', 'Saldo JastipKita Credit berubah; buat penawaran baru', { availableIdr: c.availableIdr, requiredIdr: creditUsed });
     }
+    // SEC-02: promotion limits were only evaluated when the quote was built; re-check them under a per-promotion
+    // lock so N quotes (or N concurrent checkouts) cannot all redeem a once-per-user / last-unit promotion.
+    await revalidatePromotions(db, {
+      buyerId: auth.userId,
+      transactionId: tx.id,
+      applied: (meta.promotion.applied as { promoId: string; valueIdr: number }[]).filter((a) => a.valueIdr > 0),
+      now,
+    });
     const payment = await createPayment(deps, db, {
       tx,
       purpose: 'CHECKOUT',
@@ -485,3 +494,54 @@ export async function checkout(deps: AppDeps, auth: AuthContext, id: string, inp
   });
 }
 
+/**
+ * SEC-02 (docs/security/review-2026-09.md): re-validates the promotions a quote applied, inside the checkout DB
+ * transaction and serialized per promotion (advisory lock), against the redemptions that exist NOW:
+ * status/date window, per-user and global usage, budget, and "first transaction" (another transaction of the
+ * buyer already past MATCHED — including one awaiting payment — disqualifies). Any failure → 422
+ * PROMO_NO_LONGER_VALID: the buyer requests a new quote (which will no longer carry the discount).
+ */
+export async function revalidatePromotions(
+  db: TxSql,
+  input: { buyerId: string; transactionId: string; applied: { promoId: string; valueIdr: number }[]; now: Date },
+): Promise<void> {
+  const ids = [...new Set(input.applied.map((a) => a.promoId))].sort();
+  for (const id of ids) {
+    await db`SELECT pg_advisory_xact_lock(hashtextextended(${`promo:${id}`}, 0))`;
+    const [p] = await db<{
+      status: string;
+      type: string;
+      starts_at: Date;
+      ends_at: Date | null;
+      conditions: Record<string, unknown> | null;
+      usage_limit_per_user: number | null;
+      usage_limit_total: number | null;
+      budget_total_idr: string | null;
+      budget_used_idr: string;
+      usage_count: number;
+    }[]>`
+      SELECT status, type, starts_at, ends_at, conditions, usage_limit_per_user, usage_limit_total, budget_total_idr::text,
+             budget_used_idr::text, usage_count
+        FROM promotions WHERE id = ${id}`;
+    const fail = (reason: string) =>
+      Errors.unprocessable('PROMO_NO_LONGER_VALID', 'Promo sudah tidak berlaku untuk transaksi ini; buat penawaran harga baru', { promoId: id, reason });
+    if (!p || p.status !== 'ACTIVE') throw fail('NOT_ACTIVE');
+    if (input.now.getTime() < new Date(p.starts_at).getTime() || (p.ends_at && input.now.getTime() >= new Date(p.ends_at).getTime())) {
+      throw fail('OUTSIDE_DATE_WINDOW');
+    }
+    const [u] = await db<{ mine: number; total: number; used: string }[]>`
+      SELECT count(*) FILTER (WHERE user_id = ${input.buyerId})::int AS mine, count(*)::int AS total, coalesce(sum(amount_idr), 0)::text AS used
+        FROM promotion_redemptions
+       WHERE promotion_id = ${id} AND status IN ('RESERVED','APPLIED') AND transaction_id <> ${input.transactionId}`;
+    if (p.usage_limit_per_user !== null && u!.mine >= p.usage_limit_per_user) throw fail('PER_USER_LIMIT_REACHED');
+    if (p.usage_limit_total !== null && Math.max(u!.total, p.usage_count) >= p.usage_limit_total) throw fail('GLOBAL_LIMIT_REACHED');
+    if (p.budget_total_idr !== null && Math.max(Number(u!.used), Number(p.budget_used_idr)) >= Number(p.budget_total_idr)) throw fail('BUDGET_EXHAUSTED');
+    if (p.type === 'FIRST_TRANSACTION' || (p.conditions as { firstTransactionOnly?: boolean } | null)?.firstTransactionOnly === true) {
+      const [other] = await db<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM transactions
+         WHERE buyer_id = ${input.buyerId} AND id <> ${input.transactionId}
+           AND status NOT IN ('REQUEST_CREATED','MATCHED','CANCELLED')`;
+      if (other!.n > 0) throw fail('NOT_FIRST_TRANSACTION');
+    }
+  }
+}

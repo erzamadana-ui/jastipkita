@@ -1,7 +1,7 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import { jwtVerify } from 'jose';
 import type { AppEnv, AuthContext } from '../context';
-import { Errors } from '../lib/errors';
+import { AppError, Errors } from '../lib/errors';
 
 export interface AccessTokenClaims {
   sub: string;
@@ -32,11 +32,13 @@ export async function verifyAccessToken(c: Context<AppEnv>, token: string): Prom
 
 export async function loadAuth(c: Context<AppEnv>, claims: AccessTokenClaims): Promise<AuthContext | null> {
   const { sql } = c.get('deps');
-  const rows = await sql<{ id: string; status: AuthContext['status']; kyc_level: number; active_mode: AuthContext['activeMode'] }[]>`
-    SELECT u.id, u.status, u.kyc_level, u.active_mode
+  const rows = await sql<{ id: string; status: AuthContext['status']; kyc_level: number; active_mode: AuthContext['activeMode']; session_mfa_at: Date | null }[]>`
+    SELECT u.id, u.status, u.kyc_level, u.active_mode, s.session_mfa_at
       FROM users u
-     WHERE u.id = ${claims.sub}
-       AND EXISTS (SELECT 1 FROM refresh_tokens rt WHERE rt.family_id = ${claims.sid} AND rt.user_id = u.id AND rt.revoked_at IS NULL)`;
+      JOIN LATERAL (SELECT count(*) AS n, max(rt.mfa_verified_at) AS session_mfa_at
+                      FROM refresh_tokens rt
+                     WHERE rt.family_id = ${claims.sid} AND rt.user_id = u.id AND rt.revoked_at IS NULL) s ON s.n > 0
+     WHERE u.id = ${claims.sub}`;
   const u = rows[0];
   if (!u) return null;
   const roles = await rolesFor(c, u.id);
@@ -48,6 +50,7 @@ export async function loadAuth(c: Context<AppEnv>, claims: AccessTokenClaims): P
     activeMode: u.active_mode,
     roles: roles.roles,
     mfaAt: typeof claims.mfa_at === 'number' ? claims.mfa_at : null,
+    sessionMfaAt: u.session_mfa_at ? Math.floor(new Date(u.session_mfa_at).getTime() / 1000) : null,
   };
 }
 
@@ -125,15 +128,21 @@ export function requireKycLevel(level: number): MiddlewareHandler<AppEnv> {
   };
 }
 
+/** Marker on middleware returned by requirePermission (lets tests enumerate every route's declared permissions). */
+export const REQUIRED_PERMISSIONS = Symbol.for('jastipkita.requiredPermissions');
+
 /** RBAC: requires ALL listed permissions. Admin routes also get least-privilege checks per action. */
 export function requirePermission(...permissions: string[]): MiddlewareHandler<AppEnv> {
-  return async (c, next) => {
+  if (permissions.length === 0) throw new Error('requirePermission() needs at least one permission');
+  const mw: MiddlewareHandler<AppEnv> = async (c, next) => {
     const a = getAuth(c);
     const { perms } = await rolesFor(c, a.userId);
     const missing = permissions.filter((p) => !perms.has(p));
     if (missing.length) throw Errors.forbidden('Izin tidak cukup', 'PERMISSION_DENIED', { missing });
     await next();
   };
+  Object.defineProperty(mw, REQUIRED_PERMISSIONS, { value: Object.freeze([...permissions]) });
+  return mw;
 }
 
 export async function hasPermission(c: Context<AppEnv>, permission: string): Promise<boolean> {
@@ -152,9 +161,35 @@ export const requireRecentMfa: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
-/** Any admin role (used on /v1/admin/* in addition to per-route permissions). */
+/**
+ * SEC-01: true when the session has passed MFA (TOTP / recovery code) within ADMIN_SESSION_MFA_MAX_AGE_SEC —
+ * either the access token's `mfa_at` (step-up) or the session family's server-side `mfa_verified_at`
+ * (survives refresh). A future timestamp (clock skew / forged row) never counts.
+ */
+export function hasSessionMfa(auth: AuthContext, env: { ADMIN_SESSION_MFA_MAX_AGE_SEC: number }, now: Date): boolean {
+  const nowSec = Math.floor(now.getTime() / 1000);
+  const at = Math.max(auth.mfaAt ?? 0, auth.sessionMfaAt ?? 0);
+  return at > 0 && at <= nowSec + 60 && nowSec - at <= env.ADMIN_SESSION_MFA_MAX_AGE_SEC;
+}
+
+/** Any admin role — WITHOUT the session-MFA requirement. Only for MFA enrollment itself. */
+export const requireAdminRole: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const a = getAuth(c);
+  if (a.roles.length === 0) throw Errors.forbidden('Khusus admin', 'ADMIN_ONLY');
+  await next();
+};
+
+/**
+ * Any admin role AND an MFA-verified session (used on /v1/admin/* in addition to per-route permissions).
+ * The admin SPA's login-time TOTP gate is only a UI convenience; this is the server-side control (SEC-01).
+ * Error code MFA_REQUIRED (details.scope = SESSION) makes the SPA run its TOTP step-up and retry.
+ */
 export const requireAdmin: MiddlewareHandler<AppEnv> = async (c, next) => {
   const a = getAuth(c);
   if (a.roles.length === 0) throw Errors.forbidden('Khusus admin', 'ADMIN_ONLY');
+  const { env, clock } = c.get('deps');
+  if (!hasSessionMfa(a, env, clock.now())) {
+    throw new AppError(403, 'MFA_REQUIRED', 'Verifikasi MFA diperlukan untuk sesi admin', { scope: 'SESSION' });
+  }
   await next();
 };

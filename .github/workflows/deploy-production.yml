@@ -45,7 +45,7 @@ concurrency:
 
 env:
   NODE_VERSION: '22'
-  WRANGLER: npx --yes wrangler@4
+  WRANGLER: npx --yes wrangler@4.142.0 # pinned exactly (SEC-11): this job holds CLOUDFLARE_API_TOKEN + Worker secrets; bump deliberately
   WRANGLER_SEND_METRICS: 'false'
 
 jobs:

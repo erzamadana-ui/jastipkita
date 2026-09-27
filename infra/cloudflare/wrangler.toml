@@ -61,6 +61,7 @@ DB_POOL_MAX = "1"
 ACCESS_TOKEN_TTL_SEC = "900"
 REFRESH_TOKEN_TTL_DAYS = "30"
 ADMIN_MFA_STEP_UP_SEC = "900"
+ADMIN_SESSION_MFA_MAX_AGE_SEC = "43200"    # admin session must pass TOTP within 12 h (security review SEC-01)
 OTP_DEV_ECHO = "false"
 # Payments: Xendit TEST mode (keys xnd_development_…). Never "live" on staging (CI refuses).
 PAYMENT_PROVIDER = "xendit"
@@ -124,6 +125,7 @@ DB_POOL_MAX = "1"
 ACCESS_TOKEN_TTL_SEC = "900"
 REFRESH_TOKEN_TTL_DAYS = "30"
 ADMIN_MFA_STEP_UP_SEC = "900"
+ADMIN_SESSION_MFA_MAX_AGE_SEC = "43200"    # admin session must pass TOTP within 12 h (security review SEC-01)
 OTP_DEV_ECHO = "false"
 PAYMENT_PROVIDER = "xendit"
 # XENDIT_ENV / ALLOW_LIVE_PAYMENTS are forced by deploy-production.yml from the recorded owner decision.

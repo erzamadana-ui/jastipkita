@@ -15,7 +15,7 @@ import { generateTotpSecret, numericCode, randomBytes, timingSafeEqual, totpUri,
 import { AppError, Errors } from '../../lib/errors';
 import { audit } from '../../services/audit';
 import { emitEvent } from '../../services/outbox';
-import { issueSession, revokeSession, rotateRefreshToken, signAccessToken, type IssuedSession } from '../../services/session';
+import { issueSession, markSessionMfaVerified, revokeSession, rotateRefreshToken, signAccessToken, type IssuedSession } from '../../services/session';
 import { recomputeKycLevel } from '../kyc/level';
 import { fingerprintHash, insertConsents, loadProfile, missingSignupConsents, upsertUserDevice } from '../me/repository';
 import type { ConsentInput, DeviceInput, Profile } from '../me/schemas';
@@ -482,9 +482,24 @@ export async function refresh(deps: AppDeps, refreshToken: string, req: RequestM
   return { tokens: tokensOf(s) };
 }
 
+/**
+ * SEC-07: a logged-out session's device stops receiving this user's push notifications (shared / handed-over
+ * phones used to keep showing chat previews, PIN reminders and payout notices of the previous account). The link is
+ * kept when another live session of the same user still uses the device; logging in again re-links it.
+ */
+async function unlinkSessionDevice(tx: TxSql, userId: string, sessionId: string, now: Date) {
+  await tx`
+    UPDATE user_devices ud SET revoked_at = ${now}
+     WHERE ud.user_id = ${userId} AND ud.revoked_at IS NULL
+       AND ud.device_id IN (SELECT rt.device_id FROM refresh_tokens rt WHERE rt.family_id = ${sessionId} AND rt.device_id IS NOT NULL)
+       AND NOT EXISTS (SELECT 1 FROM refresh_tokens o
+                        WHERE o.user_id = ${userId} AND o.device_id = ud.device_id AND o.revoked_at IS NULL AND o.family_id <> ${sessionId})`;
+}
+
 export async function logout(deps: AppDeps, auth: AuthContext, req: RequestMeta) {
   await inTx(deps, async (tx) => {
     await revokeSession(tx, auth.sessionId, 'LOGOUT', deps.clock.now());
+    await unlinkSessionDevice(tx, auth.userId, auth.sessionId, deps.clock.now());
     await securityEvent(deps, tx, { userId: auth.userId, type: 'LOGOUT', req, meta: { sessionId: auth.sessionId } });
   });
 }
@@ -506,6 +521,7 @@ export async function revokeUserSession(deps: AppDeps, auth: AuthContext, sessio
   await inTx(deps, async (tx) => {
     if (!(await repo.sessionBelongsTo(tx, auth.userId, sessionId))) throw Errors.notFound('Sesi', 'SESSION_NOT_FOUND');
     await revokeSession(tx, sessionId, 'LOGOUT', deps.clock.now());
+    await unlinkSessionDevice(tx, auth.userId, sessionId, deps.clock.now());
     await securityEvent(deps, tx, { userId: auth.userId, type: 'SESSION_REVOKED', req, meta: { sessionId, current: sessionId === auth.sessionId } });
   });
 }
@@ -574,6 +590,7 @@ export async function mfaConfirm(deps: AppDeps, auth: AuthContext, code: string,
       await tx`INSERT INTO mfa_recovery_codes (user_id, code_hash) VALUES (${auth.userId}, ${buf(await deps.crypto.hashIdentifier('mfa_recovery', `${auth.userId}:${c}`))})
                ON CONFLICT DO NOTHING`;
     }
+    await markSessionMfaVerified(tx, auth.sessionId, auth.userId, now);
     await securityEvent(deps, tx, { userId: auth.userId, type: 'MFA_ENABLED', severity: 'MEDIUM', req, meta: { factorId: f.id } });
     await audit(tx, { actorType: 'ADMIN', actorId: auth.userId, action: 'auth.mfa.enabled', entityType: 'mfa_factor', entityId: f.id, meta: {} });
     return ok({ recoveryCodes: codes, mfaAt: Math.floor(now.getTime() / 1000) });
@@ -599,6 +616,7 @@ export async function mfaVerify(deps: AppDeps, auth: AuthContext, input: { code?
         await mfaFailure(deps, tx, auth.userId, req, 'INVALID_RECOVERY_CODE', f.id);
         return fail(Errors.badRequest('MFA_CODE_INVALID', 'Kode pemulihan salah atau sudah dipakai'));
       }
+      await markSessionMfaVerified(tx, auth.sessionId, auth.userId, now);
       await securityEvent(deps, tx, { userId: auth.userId, type: 'MFA_RECOVERY_CODE_USED', severity: 'HIGH', req, meta: { factorId: f.id } });
       return ok({ mfaAt, method: 'RECOVERY_CODE' });
     }
@@ -613,6 +631,7 @@ export async function mfaVerify(deps: AppDeps, auth: AuthContext, input: { code?
       return fail(Errors.badRequest('MFA_CODE_REPLAYED', 'Kode MFA sudah dipakai, tunggu kode berikutnya'));
     }
     await tx`UPDATE mfa_factors SET last_used_step = ${step}, last_used_at = ${now} WHERE id = ${f.id}`;
+    await markSessionMfaVerified(tx, auth.sessionId, auth.userId, now);
     await securityEvent(deps, tx, { userId: auth.userId, type: 'MFA_VERIFIED', req, meta: { factorId: f.id, sessionId: auth.sessionId } });
     return ok({ mfaAt, method: 'TOTP' });
   });

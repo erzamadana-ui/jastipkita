@@ -11,6 +11,7 @@
 import type { AppDeps, AuthContext } from '../../context';
 import { bytesToHex, hexToBytes, sha256 } from '../../lib/crypto';
 import { AppError, Errors } from '../../lib/errors';
+import { hasSessionMfa } from '../../middleware/auth';
 import { audit } from '../../services/audit';
 import { SECURITY, securityEvent, u8, userHasPermission, type RequestMeta } from '../auth/common';
 import { encryptObject, decryptObject } from './envelope';
@@ -181,13 +182,21 @@ export async function getFileMeta(deps: AppDeps, auth: AuthContext, fileId: stri
 async function authorizeView(deps: AppDeps, auth: AuthContext, f: repo.FileRow): Promise<'OWNER' | 'COUNTERPARTY' | 'STAFF' | 'PUBLIC'> {
   const deny = () => Errors.forbidden('Anda tidak memiliki akses ke file ini', 'FILE_ACCESS_DENIED');
   const isOwner = f.owner_id === auth.userId;
+  // SEC-01: staff access to other users' files needs the same MFA-verified admin session as /v1/admin/*.
+  const staff = async (permission: string): Promise<boolean> => {
+    if (!(await userHasPermission(deps, auth.userId, permission))) return false;
+    if (!hasSessionMfa(auth, deps.env, deps.clock.now())) {
+      throw new AppError(403, 'MFA_REQUIRED', 'Verifikasi MFA diperlukan untuk sesi admin', { scope: 'SESSION' });
+    }
+    return true;
+  };
   switch (f.purpose) {
     case 'KYC':
-      if (await userHasPermission(deps, auth.userId, 'kyc.review')) return 'STAFF';
+      if (await staff('kyc.review')) return 'STAFF';
       throw deny();
     case 'TRIP_DOC':
       if (isOwner) return 'OWNER';
-      if (await userHasPermission(deps, auth.userId, 'trips.verify')) return 'STAFF';
+      if (await staff('trips.verify')) return 'STAFF';
       throw deny();
     case 'EXPORT':
       if (isOwner) return 'OWNER';
@@ -197,8 +206,8 @@ async function authorizeView(deps: AppDeps, auth: AuthContext, f: repo.FileRow):
     default:
       if (isOwner) return 'OWNER';
       if (COUNTERPARTY_PURPOSES.includes(f.purpose) && (await repo.isCounterparty(deps.sql, f.id, auth.userId))) return 'COUNTERPARTY';
-      if (await userHasPermission(deps, auth.userId, 'disputes.manage')) return 'STAFF';
-      if (f.purpose !== 'CHAT' && f.purpose !== 'EVIDENCE' && (await userHasPermission(deps, auth.userId, 'transactions.read'))) return 'STAFF';
+      if (await staff('disputes.manage')) return 'STAFF';
+      if (f.purpose !== 'CHAT' && f.purpose !== 'EVIDENCE' && (await staff('transactions.read'))) return 'STAFF';
       throw deny();
   }
 }

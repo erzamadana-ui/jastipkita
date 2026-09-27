@@ -9,14 +9,17 @@ Binding references: `docs/00-domain-model.md` (§2 KYC levels, §3/§4 FSMs, §1
 
 Every admin route is `createRoute` (OpenAPI tag `Admin · …`) and runs
 `requireAuth → requireAdmin → requirePermission(<least privilege>)` (+ `requireRecentMfa` for sensitive writes,
-+ `requireIdempotency` for financial writes). Every write is audited through `services/audit.ts` / `jk_audit` into the
++ `requireIdempotency` for financial writes). `requireAdmin` = an admin role **and an MFA-verified session**
+(TOTP/recovery code verified in this session within `ADMIN_SESSION_MFA_MAX_AGE_SEC`, default 12 h, recorded server-side in
+`refresh_tokens.mfa_verified_at` and kept across refresh) — security review SEC-01. Only `POST /v1/auth/mfa/totp/enroll` uses the
+role-only guard `requireAdminRole`. Every write is audited through `services/audit.ts` / `jk_audit` into the
 hash-chained `audit_logs` with `before`/`after` (never raw PII) and `meta.actorRoles` + `meta.requestId`. The DB session
 of every admin write carries `jk.actor_type='ADMIN'`, `jk.actor_id`, `jk.request_id`, so DB-side FSM events and
 guard triggers see the real admin.
 
 Errors use the standard `{error:{code,message,details,requestId}}` shape. Admin-specific codes:
-`ADMIN_ONLY` (403, no admin role), `PERMISSION_DENIED` (403, `details.missing`), `MFA_REQUIRED` (403, step-up older
-than 15 min), `IDEMPOTENCY_KEY_REQUIRED` (400), `MAKER_CHECKER_VIOLATION` (403), `ROLE_REQUIRED` (403, e.g. FINANCE_SUPER_ADMIN).
+`ADMIN_ONLY` (403, no admin role), `PERMISSION_DENIED` (403, `details.missing`), `MFA_REQUIRED` (403: `details.scope = SESSION` → the
+session never passed MFA or it is older than 12 h; no scope → step-up older than 15 min), `IDEMPOTENCY_KEY_REQUIRED` (400), `MAKER_CHECKER_VIOLATION` (403), `ROLE_REQUIRED` (403, e.g. FINANCE_SUPER_ADMIN).
 
 ---
 

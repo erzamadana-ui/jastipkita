@@ -8,6 +8,45 @@ Legend: **ADD** backward-compatible addition · **CHG** changed value/behaviour 
 
 ---
 
+## 2026-09-28 — security review (`docs/security/review-2026-09.md`)
+
+OpenAPI document unchanged (no path/schema changes); the behaviour below changed.
+
+### Admin (all `/v1/admin/*`) — SEC-01
+- **CHG** Every admin operation now requires an **MFA-verified session**, not only sensitive writes: an admin whose session never passed
+  TOTP/recovery code (or passed it more than `ADMIN_SESSION_MFA_MAX_AGE_SEC`, default 12 h, ago) gets
+  `403 MFA_REQUIRED` with `details.scope = "SESSION"`. `POST /v1/auth/mfa/totp/confirm` and `POST /v1/auth/mfa/verify` mark the session
+  (server-side, survives `POST /v1/auth/refresh`), so the Admin SPA's existing step-up flow (verify → retry) handles it. Sensitive writes still
+  need a step-up ≤ 15 min (`403 MFA_REQUIRED` without `scope`). The SPA now also runs the step-up for queries that fail with MFA_REQUIRED.
+- **CHG** Staff access to other users' files (`GET /v1/files/{id}`, `/url`, `/content` via `kyc.review`, `trips.verify`, `disputes.manage`,
+  `transactions.read`) requires the same MFA-verified session (`403 MFA_REQUIRED`).
+- **CHG** `POST /v1/auth/mfa/totp/enroll` needs only an admin role (not a verified session — otherwise nobody could enrol) and is
+  rate-limited to 10/hour per user.
+
+### Money
+- **ADD** `POST /v1/transactions/{id}/checkout` → `422 PROMO_NO_LONGER_VALID` `{promoId, reason: NOT_ACTIVE | OUTSIDE_DATE_WINDOW |
+  PER_USER_LIMIT_REACHED | GLOBAL_LIMIT_REACHED | BUDGET_EXHAUSTED | NOT_FIRST_TRANSACTION}` when a promotion applied by the quote is no
+  longer available at checkout (SEC-02). Clients: request a new quote (it will no longer carry the discount), then checkout.
+- **CHG** `POST /v1/webhooks/payments/{provider}`: a payment callback the provider's own API does not confirm (status not paid, or the
+  re-check unavailable) now answers `500 WEBHOOK_PROCESSING_FAILED` and changes nothing; the provider retries and the PENDING-payment
+  reconciliation settles it (SEC-03). Previously the callback token alone secured the payment.
+- **CHG** Idempotency: concurrent retries of a key whose first attempt failed now get `409 IDEMPOTENCY_IN_PROGRESS` except one (SEC-04).
+
+### Identity
+- **CHG** `POST /v1/auth/logout` and `DELETE /v1/auth/sessions/{id}` also stop push notifications of that account on the session's device
+  (the device is re-linked on the next login) (SEC-07).
+- **CHG** Client IP for rate limits / OTP quotas: `CF-Connecting-IP`, else the **right-most** `X-Forwarded-For` entry (SEC-06).
+
+### Config
+- **CHG** `APP_ENV=production` refuses to start with `EMAIL_PROVIDER=log`, `SMS_PROVIDER=log`, `KYC_PROVIDER=mock`, or a malware scanner other
+  than `clamav-http` with `CLAMAV_HTTP_URL` (SEC-08). **ADD** `ADMIN_SESSION_MFA_MAX_AGE_SEC` (900–604800, default 43200).
+
+### Database
+- **DB** `0080_security_hardening`: `refresh_tokens.mfa_verified_at`; `refund_destinations` ciphertext columns nullable (only after
+  anonymization, CHECK paired); `anonymize_user()` also scrubs refund bank destinations and offer/invite messages (SEC-09).
+
+---
+
 ## 2026-09-27 — contract gaps (Flutter & admin)
 
 ### OpenAPI document (all clients)

@@ -4,7 +4,7 @@
  */
 import type { AppDeps } from '../../context';
 import type { TxSql } from '../../db/sql';
-import { Errors } from '../../lib/errors';
+import { AppError, Errors } from '../../lib/errors';
 import { providerEnv } from '../../providers/payment';
 import { normalizeChannel } from '../../providers/payment/channels';
 import { audit } from '../../services/audit';
@@ -153,18 +153,23 @@ async function applySuccess(deps: AppDeps, db: TxSql, tx: TxRow, payment: Paymen
   let providerAmount = e.amountIdr;
   let providerCurrency = e.currency ?? 'IDR';
   if (e.source === 'WEBHOOK' && payment.providerRef) {
+    // SEC-03: the static callback token alone must never secure funds. The provider's own view (GET) has to
+    // confirm the payment; otherwise nothing changes and the webhook answers 5xx, so the provider retries and
+    // the PENDING-payment reconciliation poll settles it later (fail closed — a leaked token cannot mint money).
+    let p: Awaited<ReturnType<typeof deps.providers.payment.getPayment>>;
     try {
-      const p = await deps.providers.payment.getPayment(payment.providerRef);
-      if (p.status !== 'SECURED') {
-        deps.logger.warn('payment.webhook_not_confirmed_by_provider', { paymentId: payment.id, providerStatus: p.status });
-      }
-      if (providerAmount === undefined) providerAmount = p.amountIdr;
-      if (p.amountIdr !== payment.amountIdr) providerAmount = p.amountIdr;
-      providerCurrency = e.currency ?? p.currency;
+      p = await deps.providers.payment.getPayment(payment.providerRef);
     } catch (err) {
-      // Provider re-check unavailable: the verified callback token stays the authority; amounts still checked.
       deps.logger.warn('payment.provider_recheck_failed', { paymentId: payment.id, error: err instanceof Error ? err.message : String(err) });
+      throw new AppError(503, 'PROVIDER_RECHECK_UNAVAILABLE', 'Status pembayaran belum dapat diverifikasi ke penyedia; coba lagi');
     }
+    if (p.status !== 'SECURED') {
+      deps.logger.error('ALERT payment.webhook_not_confirmed_by_provider', { paymentId: payment.id, providerStatus: p.status });
+      throw new AppError(409, 'PAYMENT_NOT_CONFIRMED_BY_PROVIDER', 'Penyedia pembayaran belum mengonfirmasi pembayaran ini', { providerStatus: p.status });
+    }
+    if (providerAmount === undefined) providerAmount = p.amountIdr;
+    if (p.amountIdr !== payment.amountIdr) providerAmount = p.amountIdr;
+    providerCurrency = e.currency ?? p.currency;
   }
   const amountMatches = providerAmount === payment.amountIdr;
   const currencyMatches = (providerCurrency ?? 'IDR').toUpperCase() === 'IDR';

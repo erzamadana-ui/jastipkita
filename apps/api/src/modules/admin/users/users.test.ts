@@ -1,3 +1,4 @@
+import { issueSession } from '../../../services/session';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestContext, type TestContext, type TestUser } from '../../../../test/helpers';
 import { type Admin, as, auditRows, createAdmin } from '../test-support';
@@ -109,6 +110,12 @@ describe('RBAC & privileged role maker-checker', () => {
     const res = await as(t, superA, 'POST', `/v1/admin/users/${u.id}/roles`, { roleCode: 'SUPPORT', reason: 'Bergabung dengan tim CS' });
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.status).toBe('GRANTED');
+    // SEC-01: the new role only works from an MFA-verified session
+    const noMfaSession = await t.request('GET', '/v1/admin/support/tickets', { token: u.accessToken });
+    expect(noMfaSession.status).toBe(403);
+    expect(noMfaSession.body.error.code).toBe('MFA_REQUIRED');
+    const mfaSession = await issueSession(t.deps, t.sql, u.id, { mfaAt: Math.floor(t.clock.now().getTime() / 1000) });
+    u.accessToken = mfaSession.accessToken;
     const tickets = await t.request('GET', '/v1/admin/support/tickets', { token: u.accessToken });
     expect(tickets.status).toBe(200);
     const dup = await as(t, superA, 'POST', `/v1/admin/users/${u.id}/roles`, { roleCode: 'SUPPORT', reason: 'Bergabung dengan tim CS' });

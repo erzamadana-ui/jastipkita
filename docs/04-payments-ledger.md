@@ -89,8 +89,12 @@ with `reverse_journal()` (compensating entries). No UPDATE/DELETE on ledger tabl
   in constant time (length is not leaked) and fails closed when either is missing. Unverified requests → `401`, **not stored**
   (an attacker must not pre-occupy an event id) and change nothing. The MOCK provider uses the shared `mock.ts`
   comparison (not constant-time; test only).
-* **Re-verification:** before securing funds the processor also asks the provider (`GET /sessions/{id}`); the amount
-  must equal `payments.amount_idr` in both the callback and the provider view, and the currency must be IDR.
+* **Re-verification (fail closed, security review SEC-03):** before securing funds the processor asks the provider
+  (`GET /sessions/{id}`). If the provider does not report the session as paid, or the GET fails, nothing changes and the webhook
+  answers 5xx (`PAYMENT_NOT_CONFIRMED_BY_PROVIDER` / `PROVIDER_RECHECK_UNAVAILABLE` in `payment_webhook_events.processing_error`,
+  `ALERT payment.webhook_not_confirmed_by_provider` log) — the provider retries and `money.reconcile_pending_payments` settles it. The callback
+  token alone never secures funds. The amount must equal `payments.amount_idr` in both the callback and the provider view, and the currency
+  must be IDR.
   A mismatch never transitions: risk assessment `HOLD` + open risk review + `payment.amount_mismatch` outbox event +
   `ALERT` log line + payout hold flag.
 * **Dedup:** `payment_webhook_events` unique `(provider, event_id)`; event id = `webhook-id` header or a stable id derived
