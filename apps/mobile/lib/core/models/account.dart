@@ -502,4 +502,8 @@ class PayoutAccount {
   final bool isDefault;
 
   bool get isVerified => verificationStatus == 'VERIFIED';
+
+  /// Holder name ≠ verified identity (identity.md §3.1): stored for admin review, never default,
+  /// no payouts until an admin approves it.
+  bool get isUnderReview => verificationStatus == 'NAME_MISMATCH';
 }

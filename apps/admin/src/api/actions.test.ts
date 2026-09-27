@@ -77,7 +77,10 @@ describe('Idempotency-Key reuse (runAction)', () => {
     const seen: string[] = [];
     await expect(runAction(keys, 'payout.release:p1', async (k) => (seen.push(k), Promise.reject(new ApiError(0, 'NETWORK_ERROR', 'offline'))))).rejects.toBeTruthy();
     await expect(runAction(keys, 'payout.release:p1', async (k) => (seen.push(k), Promise.reject(new ApiError(503, 'UNAVAILABLE', 'x'))))).rejects.toBeTruthy();
+    // 429 is answered before the idempotency claim and never stored (BUG-QA-05) → same key after Retry-After
+    await expect(runAction(keys, 'payout.release:p1', async (k) => (seen.push(k), Promise.reject(new ApiError(429, 'RATE_LIMITED', 'x'))))).rejects.toBeTruthy();
     await runAction(keys, 'payout.release:p1', async (k) => (seen.push(k), 'ok'));
+    expect(seen).toHaveLength(4);
     expect(new Set(seen).size).toBe(1);
   });
 

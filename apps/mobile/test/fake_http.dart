@@ -52,6 +52,17 @@ Map<String, dynamic> errorBody(String code, [String message = '']) => <String, d
       'error': <String, dynamic>{'code': code, 'message': message, 'details': <String, dynamic>{}, 'requestId': 'req_test'},
     };
 
+/// Error envelope with `details` (e.g. `403 STEP_UP_REQUIRED {purpose, action, targetId}`).
+Map<String, dynamic> errorBodyWith(String code, Map<String, dynamic> details, [String message = '']) => <String, dynamic>{
+      'error': <String, dynamic>{'code': code, 'message': message, 'details': details, 'requestId': 'req_test'},
+    };
+
+/// The JSON body a request was sent with (empty when there was none).
+Map<String, dynamic> sentBody(RequestOptions request) {
+  final data = request.data;
+  return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+}
+
 Dio fakeDio(FakeAdapter adapter) {
   final dio = Dio(BaseOptions(baseUrl: 'https://api.test/v1', responseType: ResponseType.json));
   dio.httpClientAdapter = adapter;

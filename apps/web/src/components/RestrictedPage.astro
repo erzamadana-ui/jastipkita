@@ -34,7 +34,7 @@ function ruleTitle(r: RestrictedRule): string {
 <section class="page-hero">
   <div class="container">
     <Breadcrumbs items={crumbs} lang={lang} />
-    <span class="eyebrow" style="margin-top:18px"><Icon name="search" size={16} />{t('Alat gratis', 'Free tool')}</span>
+    <span class="eyebrow mt-18"><Icon name="search" size={16} />{t('Alat gratis', 'Free tool')}</span>
     <h1>{t('Cek barang terlarang & terbatas untuk jastip', 'Restricted & prohibited items checker')}</h1>
     <p class="lead">{t(
       'Barang titipan bukan barang pribadi traveler, sehingga tetap tunduk pada aturan larangan & pembatasan impor (lartas). Cek dulu sebelum menitip — hasilnya sama dengan yang dipakai aplikasi saat checkout.',
@@ -43,12 +43,12 @@ function ruleTitle(r: RestrictedRule): string {
   </div>
 </section>
 
-<section class="section-tight" style="padding-top:0">
+<section class="section-tight pt-0">
   <div class="container">
     <div class="tool-grid">
-      <form class="card" id="rc-form" novalidate style="padding:24px">
+      <form class="card p-24" id="rc-form" novalidate>
         <h2 class="h-card">{t('Barang yang ingin dititip', 'Item you want to order')}</h2>
-        <div class="form-grid" style="margin-top:18px">
+        <div class="form-grid mt-18">
           <div class="field">
             <label for="rc-name">{t('Nama barang', 'Product name')}</label>
             <input class="input" id="rc-name" name="productName" required minlength="2" maxlength="300" autocomplete="off" placeholder={t('mis. Power bank 20000mAh, vitamin D3, pisau santoku', 'e.g. 20000mAh power bank, vitamin D3, santoku knife')} />
@@ -76,7 +76,7 @@ function ruleTitle(r: RestrictedRule): string {
         </div>
       </form>
       <section class="sticky" aria-live="polite" aria-labelledby="rc-result-title">
-        <div class="card" style="padding:22px;min-height:260px">
+        <div class="card p-22 minh-260">
           <div class="breakdown-head">
             <h2 id="rc-result-title" class="h-card">{t('Hasil pemeriksaan', 'Result')}</h2>
             <span class="status-pill" id="rc-status" data-state="idle"><span class="dot" aria-hidden="true"></span><span class="lbl">{t('Belum diperiksa', 'Not checked')}</span></span>
@@ -85,7 +85,7 @@ function ruleTitle(r: RestrictedRule): string {
             <div class="result-empty"><Icon name="shield-alert" /><p class="small">{t('Masukkan nama barang untuk melihat klasifikasinya.', 'Enter a product name to see its classification.')}</p></div>
           </div>
         </div>
-        <p class="xsmall muted" style="margin-top:12px">{t(
+        <p class="xsmall muted mt-12">{t(
           `Daftar aturan per ${restrictedData.lastVerifiedAt}, disusun dari riset regulasi (UU Narkotika, Per BPOM 28/2023, PMK 34/2025, Permendag, ketentuan karantina & IATA). Belum ditinjau konsultan hukum/kepabeanan. Keputusan akhir ada pada Bea Cukai dan instansi terkait.`,
           `Rules as of ${restrictedData.lastVerifiedAt}, compiled from regulatory research (narcotics law, BPOM 28/2023, PMK 34/2025, trade ministry, quarantine & IATA rules). Not yet reviewed by legal/customs counsel. Customs and the relevant agencies have the final say.`,
         )} <a href={url('/legal/prohibited-items-policy/')}>{t('Kebijakan barang terlarang', 'Prohibited items policy (ID)')}</a>.</p>
@@ -101,11 +101,11 @@ function ruleTitle(r: RestrictedRule): string {
       <h2 id="rc-list-title" class="h-section">{t('Aturan barang yang berlaku di JastipKita', 'Item rules enforced by JastipKita')}</h2>
       <p class="lead">{t('Klasifikasi paling berat yang menang. Barang terbatas tetap bisa dititip setelah kamu menyetujui peringatannya; barang terlarang diblokir.', 'The most severe classification wins. Restricted items can still be ordered after you acknowledge the warning; prohibited items are blocked.')}</p>
     </div>
-    <div class="stack" style="--stack:28px">
+    <div class="stack st-28">
       {groups.map(({ cls, items }) => (
         <div>
           <h3 class={`rc-group-title cls-${cls}`}><Icon name={LABEL[cls][2] as any} />{id ? LABEL[cls][0] : LABEL[cls][1]} <span class="muted">({items.length})</span></h3>
-          <div class="grid grid-2" style="--gap:12px;margin-top:12px">
+          <div class="grid grid-2 g-12 mt-12">
             {items.map((r) => (
               <details class="rc-rule">
                 <summary><span>{ruleTitle(r)}{r.keywords.length > 5 ? '…' : ''}</span><Icon name="chevron-down" /></summary>
@@ -121,7 +121,7 @@ function ruleTitle(r: RestrictedRule): string {
       ))}
       <div>
         <h3 class="rc-group-title"><Icon name="clock" />{t('Dalam kajian (belum berlaku otomatis)', 'Under review (not enforced automatically)')} <span class="muted">({drafts.length})</span></h3>
-        <div class="grid grid-2" style="--gap:12px;margin-top:12px">
+        <div class="grid grid-2 g-12 mt-12">
           {drafts.map((r) => (
             <details class="rc-rule">
               <summary><span>{ruleTitle(r) || (r.originCountry ? `${t('Rute', 'Route')} ${r.originCountry}` : r.code)}</span><Icon name="chevron-down" /></summary>

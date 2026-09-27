@@ -16,29 +16,29 @@ const index = FAQ.map((f) => ({ slug: f.slug, q: f.question, a: stripMarkup(f.an
 ---
 <Base title={title} description={description} path="/bantuan/" nav="bantuan" jsonLd={[webPageLd({ name: title, description, path: '/bantuan/' }), breadcrumbLd(crumbs), faqLd(FAQ.slice(0, 10).map((f) => ({ q: f.question, a: f.answer })))]}>
   <section class="page-hero help-hero">
-    <div class="container container-narrow" style="text-align:center">
+    <div class="container container-narrow text-center">
       <Breadcrumbs items={crumbs} />
       <h1>Ada yang bisa kami bantu?</h1>
-      <p class="lead" style="margin-inline:auto">Cari jawaban, atau jelajahi per topik.</p>
+      <p class="lead mx-auto">Cari jawaban, atau jelajahi per topik.</p>
       <form class="help-search" role="search" id="help-search" action="#hasil">
         <label for="help-q" class="sr-only">Cari di pusat bantuan</label>
         <Icon name="search" />
         <input class="input" id="help-q" name="q" type="search" placeholder="mis. refund, bea cukai, PIN serah terima" autocomplete="off" minlength="2" maxlength="100" />
       </form>
-      <p class="xsmall muted" id="help-source" style="margin-top:10px">Konten statis per 27 Sep 2026. Hasil dari server akan ditambahkan saat layanan aktif.</p>
+      <p class="xsmall muted mt-10" id="help-source">Konten statis per 27 Sep 2026. Hasil dari server akan ditambahkan saat layanan aktif.</p>
     </div>
   </section>
 
-  <section class="section-tight" style="padding-top:8px">
+  <section class="section-tight pt-8">
     <div class="container">
       <div id="hasil" class="help-results" hidden aria-live="polite"></div>
       <div id="help-browse">
-        <div class="grid grid-3" style="--gap:16px">
+        <div class="grid grid-3 g-16">
           {cats.map((c) => {
             const items = FAQ.filter((f) => f.category === c);
             return (
               <section class="card help-cat" aria-labelledby={`cat-${c}`}>
-                <div style="display:flex;gap:12px;align-items:center"><span class="icon-tile"><Icon name={FAQ_CATEGORIES[c].icon as any} /></span><h2 id={`cat-${c}`} class="h-card">{FAQ_CATEGORIES[c].id}</h2></div>
+                <div class="flex gap-12 items-center"><span class="icon-tile"><Icon name={FAQ_CATEGORIES[c].icon as any} /></span><h2 id={`cat-${c}`} class="h-card">{FAQ_CATEGORIES[c].id}</h2></div>
                 <ul role="list">
                   {items.map((f) => <li><a href={url(`/bantuan/${f.slug}/`)}>{f.question}</a></li>)}
                 </ul>
@@ -52,7 +52,7 @@ const index = FAQ.map((f) => ({ slug: f.slug, q: f.question, a: stripMarkup(f.an
         <div>
           <h2 class="h-card">Masih butuh bantuan?</h2>
           <p class="small muted">Untuk transaksi, buka tiket dari halaman transaksi di aplikasi (nomor TKT-…) agar riwayatnya tercatat. Jangan pernah membagikan PIN serah terima, kode OTP, atau kata sandi kepada siapa pun, termasuk yang mengaku CS.</p>
-          <p class="small" style="margin-top:8px">
+          <p class="small mt-8">
             {wa ? <a href={wa} rel="noopener">WhatsApp {formatWhatsapp(CONFIG.supportWhatsapp)}</a> : 'Kanal WhatsApp CS segera diumumkan'}
             {' · '}
             {CONFIG.supportEmail ? <a href={`mailto:${CONFIG.supportEmail}`}>{CONFIG.supportEmail}</a> : 'e-mail CS segera diumumkan'}

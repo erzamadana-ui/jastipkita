@@ -126,6 +126,14 @@ export class MockPaymentProvider implements PaymentProvider {
     });
   }
 
+  /** Records the cancellation; the session reports EXPIRED unless a payment already arrived. */
+  readonly cancelledCheckouts: string[] = [];
+  async cancelCheckout(providerRef: string): Promise<void> {
+    this.cancelledCheckouts.push(providerRef);
+    const s = this.sessions.get(providerRef);
+    if (s && s.status === 'PENDING') s.status = 'EXPIRED';
+  }
+
   async simulatePayment(providerRef: string, channel = 'QRIS'): Promise<void> {
     this.buildPaymentWebhook(providerRef, 'SUCCEEDED', { channel });
   }

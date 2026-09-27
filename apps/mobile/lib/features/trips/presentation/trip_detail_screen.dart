@@ -9,6 +9,7 @@ import '../../../core/format/dates.dart';
 import '../../../core/l10n/l10n.dart';
 import '../../../core/l10n/labels.dart';
 import '../../../core/models/marketplace.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/router/deep_links.dart';
 import '../../../widgets/cards.dart';
 import '../../../widgets/common.dart';
@@ -55,11 +56,39 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
       if (!mounted) return;
       showJkSnack(context, success);
       _reload();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.code != 'TRIP_HAS_PURCHASED_TRANSACTIONS') {
+        showJkSnack(context, errorMessage(context.l10n, e), error: true);
+        return;
+      }
+      await _showPurchasedBlock(e);
     } on Object catch (e) {
       if (!mounted) return;
       showJkSnack(context, errorMessage(context.l10n, e), error: true);
     } finally {
       if (mounted) setState(() => _busy = null);
+    }
+  }
+
+  /// `409 TRIP_HAS_PURCHASED_TRANSACTIONS {transactionIds}`: goods were already bought on this trip,
+  /// so it can no longer be cancelled — the traveler must deliver them (or contact support).
+  Future<void> _showPurchasedBlock(ApiException e) async {
+    final l10n = context.l10n;
+    final raw = e.details['transactionIds'];
+    final ids = raw is List ? raw.map((Object? id) => '$id').where((String id) => id.isNotEmpty).toList() : const <String>[];
+    final open = await showJkConfirm(
+      context,
+      title: l10n.tripHasPurchasedTitle,
+      message: errorMessage(l10n, e),
+      confirmLabel: l10n.tripHasPurchasedAction,
+      cancelLabel: l10n.actionClose,
+    );
+    if (!open || !mounted) return;
+    if (ids.length == 1) {
+      context.push(Routes.transaction(ids.first));
+    } else {
+      context.go(Routes.orders);
     }
   }
 

@@ -82,6 +82,10 @@ login page itself away from scanners.
   A refresh drops the MFA freshness claim (API rule), so the next sensitive action asks for TOTP again.
 - **MFA step-up.** Sensitive actions carry a lock icon. On `403 MFA_REQUIRED` the app opens the TOTP/recovery-code dialog
   (`POST /v1/auth/mfa/verify`) and retries the same request once. The top bar shows the remaining MFA window (15 min).
+- **Session MFA (SEC-01).** Every `/v1/admin/*` call — reads included — needs a session that passed TOTP within 12 h; a query
+  failing with `MFA_REQUIRED` opens the same step-up dialog and refetches. **Enrolment (SEC-13)** is accepted only from an OTP login
+  ≤ 15 min old and confirmed from the same session; the enrol page shows the remaining window and sends the admin back to OTP when
+  refused. A confirmed authenticator is reset only via *Ajukan reset MFA* (user page) → approval by another SUPER_ADMIN (Peran & akses).
 - **Idempotency.** Every money/admin write that the API marks with `Idempotency-Key` gets one UUID per logical action; the
   key is reused on network errors, 5xx, MFA step-up and `IDEMPOTENCY_IN_PROGRESS`, and dropped after a definitive answer.
 - **Maker-checker** buttons are enabled only from the API flags (`canApprove`, `canRelease`, `allowedActions`) plus the

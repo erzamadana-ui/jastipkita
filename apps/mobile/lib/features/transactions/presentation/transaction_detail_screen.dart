@@ -193,7 +193,8 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
     final proof = d.purchaseProof;
     final autoConfirm = d.autoConfirmAt;
     final actionNeeded = d.allowedActions.any((String a) => a != 'CANCEL' && a != 'OPEN_DISPUTE');
-    final refundsNeedingDestination = d.refunds.where((RefundInfo r) => r.destinationRequired).toList();
+    final refundsNeedingDestination = d.refunds.where((RefundInfo r) => r.needsDestination).toList();
+    final refundsUnderReview = d.refunds.where((RefundInfo r) => r.destinationUnderReview).toList();
     return JkRefresh(
       onRefresh: _refresh,
       child: ListView(
@@ -219,12 +220,28 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
             const SizedBox(height: JkSpacing.s4),
           ],
           for (final refund in refundsNeedingDestination) ...<Widget>[
-            NoticeBox(tone: NoticeTone.warning, message: l10n.refundDestinationNeeded(Money.idr(refund.amountIdr, locale: locale))),
+            NoticeBox(
+              tone: NoticeTone.warning,
+              message: refund.destinationRejected
+                  ? l10n.refundDestinationRejected
+                  : l10n.refundDestinationNeeded(Money.idr(refund.amountIdr, locale: locale)),
+            ),
             const SizedBox(height: JkSpacing.s2),
             JkButton(
               label: l10n.refundDestinationTitle,
               variant: JkButtonVariant.tonal,
               onPressed: () => showRefundDestinationSheet(context, ref, d.id, refund),
+            ),
+            const SizedBox(height: JkSpacing.s4),
+          ],
+          for (final refund in refundsUnderReview) ...<Widget>[
+            NoticeBox(
+              tone: NoticeTone.info,
+              icon: Icons.hourglass_top_rounded,
+              title: <String>[l10n.statusUnderReview, '${refund.destinationBankCode ?? ''} ${refund.destinationMask ?? ''}'.trim()]
+                  .where((String part) => part.isNotEmpty)
+                  .join(' · '),
+              message: l10n.refundDestinationReview,
             ),
             const SizedBox(height: JkSpacing.s4),
           ],
@@ -363,8 +380,9 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                 Icon(Icons.flight_takeoff, size: 18, color: jk.secondary),
                 const SizedBox(width: JkSpacing.s2),
                 Expanded(
-                  child: Text(
-                    '${tripRouteText(trip)} · ${l10n.tripDates(JkDates.calendarShort(trip.departureDate, locale), JkDates.calendarShort(trip.arrivalDate, locale))}',
+                  child: RouteText.trip(
+                    trip,
+                    suffix: ' · ${l10n.tripDates(JkDates.calendarShort(trip.departureDate, locale), JkDates.calendarShort(trip.arrivalDate, locale))}',
                     style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted),
                   ),
                 ),
@@ -592,7 +610,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                 children: <Widget>[
                   StatusChip(label: l10n.modeTravelerPill, tone: JkTone(fg: jk.onPrimary, bg: jk.primary, dot: jk.onPrimary), icon: Icons.flight_takeoff),
                   if (trip != null)
-                    Text(tripRouteText(trip).toUpperCase(), style: JkTypeScale.labelM.copyWith(color: jk.onBackgroundMuted, letterSpacing: 1)),
+                    RouteText.trip(trip, upperCase: true, style: JkTypeScale.labelM.copyWith(color: jk.onBackgroundMuted, letterSpacing: 1)),
                 ],
               ),
               const SizedBox(height: JkSpacing.s3),
@@ -797,7 +815,10 @@ class OpaqueActionBar extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(JkSpacing.s5, JkSpacing.s3, JkSpacing.s5, JkSpacing.s3),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+          ),
         ),
       ),
     );

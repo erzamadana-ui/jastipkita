@@ -131,6 +131,8 @@ export async function installMockApi(page: Page) {
     if (method === 'GET' && path === '/v1/admin/transactions') return reply(route, 200, F.transactions);
     if (method === 'GET' && path === `/v1/admin/transactions/${F.TX_ID}`) return reply(route, 200, F.transactionDetail);
     if (method === 'GET' && path === '/v1/admin/refunds') return reply(route, 200, F.refunds(state.approvedRefunds));
+    if (method === 'GET' && path === '/v1/admin/refund-destinations') return reply(route, 200, F.refundDestinations);
+    if (method === 'GET' && path === '/v1/admin/payouts') return reply(route, 200, F.payouts);
     const ra = /^\/v1\/admin\/refunds\/([^/]+)\/approve$/.exec(path);
     if (method === 'POST' && ra) {
       const r = F.refunds(new Set()).data.find((x) => x.id === ra[1]);

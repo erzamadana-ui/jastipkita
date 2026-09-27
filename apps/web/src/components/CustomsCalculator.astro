@@ -15,8 +15,8 @@ const cats = [...PRODUCT_CATEGORIES].filter((c) => c.code !== 'OTHER').sort((a, 
 <div class="tool-grid">
   <form class="card calc-form" id="calc-form" novalidate aria-describedby="calc-help">
     <h2 class="h-card">{t('Detail barang titipan', 'Item details')}</h2>
-    <p id="calc-help" class="small muted" style="margin-top:4px">{t('Isi harga yang benar-benar dibayar di toko (termasuk pajak penjualan negara asal).', 'Enter the price actually paid in store (including the origin country’s sales tax).')}</p>
-    <div class="form-grid" style="margin-top:20px">
+    <p id="calc-help" class="small muted mt-4">{t('Isi harga yang benar-benar dibayar di toko (termasuk pajak penjualan negara asal).', 'Enter the price actually paid in store (including the origin country’s sales tax).')}</p>
+    <div class="form-grid mt-20">
       <div class="form-grid cols-2">
         <div class="field">
           <label for="origin">{t('Negara asal', 'Origin country')}</label>
@@ -49,7 +49,7 @@ const cats = [...PRODUCT_CATEGORIES].filter((c) => c.code !== 'OTHER').sort((a, 
       </div>
       <details class="calc-advanced">
         <summary><Icon name="filter" size={16} />{t('Pengaturan lanjutan (mode offline)', 'Advanced (offline mode)')}</summary>
-        <div class="form-grid" style="margin-top:14px">
+        <div class="form-grid mt-14">
           <div class="field">
             <label for="rate">{t('Kurs pajak (Rp per 1 unit mata uang)', 'Tax rate (IDR per 1 currency unit)')}</label>
             <input class="input tnum" id="rate" name="rate" inputmode="decimal" autocomplete="off" />
@@ -78,14 +78,14 @@ const cats = [...PRODUCT_CATEGORIES].filter((c) => c.code !== 'OTHER').sort((a, 
         </div>
       </div>
     </div>
-    <div class="note note-warning" style="margin-top:14px">
+    <div class="note note-warning mt-14">
       <Icon name="triangle-alert" />
       <p>{t(
         'Estimasi, bukan nasihat pajak. Barang titipan (jastip) adalah barang bukan pribadi menurut PMK 34/2025, sehingga tidak mendapat pembebasan USD 500. Nilai final ditetapkan pejabat Bea dan Cukai berdasarkan kurs minggu kedatangan dan pemeriksaan barang.',
         'An estimate, not tax advice. Items bought for others (jastip) are non-personal goods under PMK 34/2025 and get no USD 500 exemption. Indonesian Customs sets the final amount based on the arrival week’s rate and inspection.',
       )}</p>
     </div>
-    <p class="xsmall muted" style="margin-top:12px">
+    <p class="xsmall muted mt-12">
       {t('Aturan', 'Rule')}: {RULE_NON_PERSONAL.code} v{RULE_NON_PERSONAL.version} · {t('berlaku sejak', 'effective')} {RULE_NON_PERSONAL.effectiveFrom} · {t('terakhir diverifikasi', 'last verified')} {RULE_NON_PERSONAL.lastVerifiedAt} ({t('riset internal, belum ditinjau ahli kepabeanan', 'internal research, not yet reviewed by a customs expert')}).
       {' '}<a href={RULE_NON_PERSONAL.sourceUrl} rel="noopener">PMK 34/2025 (JDIH Kemenkeu)</a>.
       {' '}{t('Barang terlarang? ', 'Restricted item? ')}<a href={id ? url('/cek-barang-terlarang/') : url('/en/restricted-items/')}>{t('Cek di sini', 'Check here')}</a>.
@@ -94,7 +94,7 @@ const cats = [...PRODUCT_CATEGORIES].filter((c) => c.code !== 'OTHER').sort((a, 
 </div>
 
 <noscript>
-  <div class="note note-neutral" style="margin-top:20px">
+  <div class="note note-neutral mt-20">
     <p>{t('Kalkulator membutuhkan JavaScript. Rumus manual: bea masuk 10% × nilai pabean; PPN 12% × 11/12 × (nilai + bea); PPh 22 5% × (nilai + bea).', 'The calculator needs JavaScript. Manual formula: duty 10% × customs value; VAT 12% × 11/12 × (value + duty); income tax 5% × (value + duty).')}</p>
   </div>
 </noscript>

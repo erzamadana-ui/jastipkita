@@ -108,7 +108,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   const SizedBox(height: JkSpacing.s2),
                   KeyValue(
                     label: l10n.loginPhoneLabel,
-                    value: Text('${profile.phone ?? '-'}${profile.phoneVerified ? ' ✓' : ''}'),
+                    value: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Flexible(child: Text(profile.phone ?? '-')),
+                        if (profile.phoneVerified) ...<Widget>[
+                          const SizedBox(width: 4),
+                          Icon(Icons.verified, size: 16, color: jk.successText, semanticLabel: l10n.phoneVerified),
+                        ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: JkSpacing.s2),
                   Text(l10n.loginIdentityNote, style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted)),

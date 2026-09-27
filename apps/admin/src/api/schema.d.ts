@@ -32,7 +32,7 @@ export interface paths {
         put?: never;
         /**
          * Request a one-time code (SMS / WhatsApp / e-mail)
-         * @description LOGIN is public and doubles as sign-up (no account enumeration: the response is identical whether or not an account exists). VERIFY_PHONE / VERIFY_EMAIL require a bearer token. Limits: 60 s resend cooldown, 5/hour and 10/day per destination, 20/hour per IP.
+         * @description LOGIN is public and doubles as sign-up (no account enumeration: the response is identical whether or not an account exists). VERIFY_PHONE / VERIFY_EMAIL require a bearer token. SENSITIVE_ACTION (bearer; `action` + `targetId` required) is a step-up for refund destinations and payout accounts: sent only to the verified phone / e-mail, valid 10 min, single use, bound to action + target. Limits: 60 s resend cooldown, 5/hour and 10/day per destination, 20/hour per IP.
          */
         post: operations["postAuthOtpRequest"];
         delete?: never;
@@ -477,8 +477,8 @@ export interface paths {
         get: operations["getKycPayoutAccounts"];
         put?: never;
         /**
-         * Add a payout account (bank name inquiry)
-         * @description The account number is encrypted; responses only show the mask (****1234). The bank-registered holder name must match the verified identity.
+         * Add a payout account (bank name inquiry; step-up OTP)
+         * @description Requires `stepUp` (SENSITIVE_ACTION OTP, action PAYOUT_ACCOUNT_ADD, targetId = own user id) — `403 STEP_UP_REQUIRED` otherwise. The account number is encrypted; responses only show the mask (****1234). A bank holder name that differs from the verified identity is stored as `NAME_MISMATCH` (manual review, never default) instead of being accepted.
          */
         post: operations["postKycPayoutAccounts"];
         delete?: never;
@@ -513,7 +513,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Make a verified payout account the default */
+        /**
+         * Make a verified payout account the default (step-up OTP)
+         * @description Requires `stepUp` (SENSITIVE_ACTION OTP, action PAYOUT_ACCOUNT_SET_DEFAULT, targetId = account id) unless it already is the default.
+         */
         post: operations["postKycPayoutAccountsByIdDefault"];
         delete?: never;
         options?: never;
@@ -1618,7 +1621,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Buyer bank account for a refund on a channel that cannot be refunded (e.g. Virtual Account) */
+        /**
+         * Buyer bank account for a refund on a channel that cannot be refunded (e.g. Virtual Account; step-up OTP)
+         * @description Requires `stepUp` — a SENSITIVE_ACTION OTP (`POST /v1/auth/otp/request` with action REFUND_DESTINATION_SET, targetId = refund id) sent to the verified phone/e-mail, 10 min, single use; `403 STEP_UP_REQUIRED` otherwise. When the buyer has a verified identity (≥ L3) and the bank holder name differs, the destination is stored `PENDING_REVIEW` (`reviewRequired: true`) and is paid only after FINANCE approval.
+         */
         post: operations["postRefundsByIdDestination"];
         delete?: never;
         options?: never;
@@ -2429,6 +2435,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/users/{id}/mfa-reset-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an MFA (TOTP) reset for another admin → 202, applied only after another SUPER_ADMIN approves */
+        post: operations["postAdminUsersByIdMfaResetRequests"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/rbac/mfa-reset-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** MFA reset requests (maker-checker) */
+        get: operations["getAdminRbacMfaResetRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/rbac/mfa-reset-requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve an MFA reset (SUPER_ADMIN ≠ requester ≠ subject, fresh MFA): factor disabled, recovery codes deleted, sessions revoked */
+        post: operations["postAdminRbacMfaResetRequestsByIdApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/rbac/mfa-reset-requests/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject (or, by the requester, cancel) an MFA reset request */
+        post: operations["postAdminRbacMfaResetRequestsByIdReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/kyc/submissions": {
         parameters: {
             query?: never;
@@ -2899,6 +2973,40 @@ export interface paths {
         put?: never;
         /** Retry a FAILED payout (→ SCHEDULED now, system retry budget reset) */
         post: operations["postAdminPayoutsByIdRetry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/refund-destinations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Refund destinations awaiting manual review (holder name ≠ verified identity; default PENDING_REVIEW) */
+        get: operations["getAdminRefundDestinations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/refund-destinations/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve (→ VALID, refund processed) or reject (→ REJECTED, buyer asked again) a PENDING_REVIEW destination; reviewer ≠ buyer */
+        post: operations["postAdminRefundDestinationsByIdReview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4379,13 +4487,21 @@ export interface components {
              * @default LOGIN
              * @enum {string}
              */
-            purpose: "LOGIN" | "VERIFY_PHONE" | "VERIFY_EMAIL";
+            purpose: "LOGIN" | "VERIFY_PHONE" | "VERIFY_EMAIL" | "SENSITIVE_ACTION";
             /** @enum {string} */
             locale?: "id" | "en";
+            action?: components["schemas"]["SensitiveAction"];
+            /** @description SENSITIVE_ACTION only (required): refund id, own user id (PAYOUT_ACCOUNT_ADD) or payout account id */
+            targetId?: string;
         };
+        /**
+         * @description SENSITIVE_ACTION only (required)
+         * @enum {string}
+         */
+        SensitiveAction: "REFUND_DESTINATION_SET" | "PAYOUT_ACCOUNT_ADD" | "PAYOUT_ACCOUNT_SET_DEFAULT";
         OtpVerifyResult: {
             /** @enum {string} */
-            purpose: "LOGIN" | "VERIFY_PHONE" | "VERIFY_EMAIL";
+            purpose: "LOGIN" | "VERIFY_PHONE" | "VERIFY_EMAIL" | "SENSITIVE_ACTION";
             /** @enum {boolean} */
             verified: true;
             user: components["schemas"]["Profile"];
@@ -4740,6 +4856,16 @@ export interface components {
             accountNumber: string;
             holderName: string;
             makeDefault?: boolean;
+            stepUp?: components["schemas"]["StepUpProof"];
+        };
+        /** @description Required (SEC-12): SENSITIVE_ACTION OTP for action PAYOUT_ACCOUNT_ADD, targetId = own user id */
+        StepUpProof: {
+            /** Format: uuid */
+            challengeId: string;
+            code: string;
+        };
+        PayoutAccountDefaultInput: {
+            stepUp?: components["schemas"]["StepUpProof"] & unknown;
         };
         PrivacyRequest: {
             /** Format: uuid */
@@ -5642,11 +5768,13 @@ export interface components {
             quantity: number;
             /** @enum {string|null} */
             deliveryMethod: "MEETUP" | "COURIER" | "PARTNER_LOGISTICS" | null;
-            /** @description Deprecated: use purchaseCeilingIdr */
+            /** @description Deprecated: use purchaseCeilingIdr / purchaseCeilingMinor */
             purchaseCeiling: {
                 minor: number;
                 idr: number | null;
             } | null;
+            /** @description Max item spend in the merchant currency (minor units of item.currency) once PURCHASE_APPROVED */
+            purchaseCeilingMinor: number | null;
             /** @description Max the traveler may spend on the item (IDR) once PURCHASE_APPROVED */
             purchaseCeilingIdr: number | null;
             autoConfirmAt: string | null;
@@ -5706,11 +5834,13 @@ export interface components {
             quantity: number;
             /** @enum {string|null} */
             deliveryMethod: "MEETUP" | "COURIER" | "PARTNER_LOGISTICS" | null;
-            /** @description Deprecated: use purchaseCeilingIdr */
+            /** @description Deprecated: use purchaseCeilingIdr / purchaseCeilingMinor */
             purchaseCeiling: {
                 minor: number;
                 idr: number | null;
             } | null;
+            /** @description Max item spend in the merchant currency (minor units of item.currency) once PURCHASE_APPROVED */
+            purchaseCeilingMinor: number | null;
             /** @description Max the traveler may spend on the item (IDR) once PURCHASE_APPROVED */
             purchaseCeilingIdr: number | null;
             autoConfirmAt: string | null;
@@ -6298,6 +6428,7 @@ export interface components {
             /** @description Stored encrypted; only the mask ****1234 is ever returned */
             accountNumber: string;
             accountHolderName: string;
+            stepUp?: components["schemas"]["StepUpProof"] & unknown;
         };
         Payout: {
             /** Format: uuid */
@@ -7046,6 +7177,9 @@ export interface components {
             }[];
             nextCursor: string | null;
         };
+        AdminMfaResetRequest: {
+            reason: string;
+        };
         AdminKycApprove: {
             /** @description Reviewer confirms the selfie/liveness check */
             livenessPassed: boolean;
@@ -7087,6 +7221,11 @@ export interface components {
             note: string;
             /** @description Confirms a NO_REFUND/OTHER resolution on a dispute opened BEFORE delivery (releases escrow to the traveler) */
             releaseBeforeDelivery?: boolean;
+        };
+        RefundDestinationReview: {
+            /** @enum {string} */
+            decision: "APPROVE" | "REJECT";
+            note: string;
         };
         AdminConfigProposal: {
             /** @description Full value for the key (validated with @jastipkita/core validateBusinessConfig) */
@@ -9988,7 +10127,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PayoutAccountDefaultInput"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -19682,6 +19825,362 @@ export interface operations {
             };
         };
     };
+    postAdminUsersByIdMfaResetRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminMfaResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Pending approval */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminResult"];
+                };
+            };
+            /** @description Validation error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Business rule violation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminRbacMfaResetRequests: {
+        parameters: {
+            query?: {
+                status?: "PENDING" | "APPLIED" | "REJECTED" | "EXPIRED" | "CANCELLED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPage"];
+                };
+            };
+            /** @description Validation error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Business rule violation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminRbacMfaResetRequestsByIdApprove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminResult"];
+                };
+            };
+            /** @description Validation error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Business rule violation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminRbacMfaResetRequestsByIdReject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminResult"];
+                };
+            };
+            /** @description Validation error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Business rule violation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getAdminKycSubmissions: {
         parameters: {
             query?: {
@@ -22133,6 +22632,184 @@ export interface operations {
                 "application/json": {
                     note: string;
                 };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminResult"];
+                };
+            };
+            /** @description Validation error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Business rule violation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminRefundDestinations: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated statuses */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPage"];
+                };
+            };
+            /** @description Validation error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Business rule violation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminRefundDestinationsByIdReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique per logical operation (UUID). Replays return the original response. */
+                "idempotency-key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundDestinationReview"];
             };
         };
         responses: {

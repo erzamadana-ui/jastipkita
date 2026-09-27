@@ -23,7 +23,7 @@ session never passed MFA or it is older than 12 h; no scope → step-up older th
 
 ---
 
-## 1. Endpoint catalogue (141 operations)
+## 1. Endpoint catalogue (147 operations)
 
 Legend: **M** = fresh MFA (≤ 15 min) required · **I** = `Idempotency-Key` header required (declared as the `idempotency-key` header parameter in
 OpenAPI for every such operation) · **MC** = maker-checker. Every operation has a stable `operationId` (see `docs/api/CHANGELOG.md`).
@@ -50,6 +50,9 @@ OpenAPI for every such operation) · **MC** = maker-checker. Every operation has
 | `DELETE /v1/admin/users/{id}/roles/{roleCode}` | rbac.manage **M** | `{reason}`; never your own SUPER_ADMIN, never the last SUPER_ADMIN |
 | `GET /v1/admin/rbac/role-requests?status` | rbac.manage | |
 | `POST /v1/admin/rbac/role-requests/{id}/approve` · `/reject` | rbac.manage **M** | approver must be an active SUPER_ADMIN ≠ requester ≠ subject (API + DB trigger); requester rejecting = `CANCELLED` |
+| `POST /v1/admin/users/{id}/mfa-reset-requests` | rbac.manage **M MC** | SEC-13: `{reason ≥ 10}` → `202 PENDING` (72 h); not for yourself; the subject must have a confirmed TOTP factor; one pending request per user (`409 MFA_RESET_PENDING`) |
+| `GET /v1/admin/rbac/mfa-reset-requests?status` | rbac.manage | |
+| `POST /v1/admin/rbac/mfa-reset-requests/{id}/approve` · `/reject` | rbac.manage **M MC** | approver = active SUPER_ADMIN ≠ requester ≠ subject (API + DB trigger `trg_admin_mfa_reset_guard`); apply → factor disabled, recovery codes deleted, all sessions revoked, `MFA_RESET` (HIGH); requester rejecting = `CANCELLED` |
 
 ### KYC & payout accounts — `kyc.review`
 | Method & path | Notes |
@@ -93,7 +96,9 @@ event `trip.verified {tripId, travelerId, verifiedBy:'ADMIN'}` → identity job 
 | `POST /v1/admin/refunds/{id}/approve` · `/reject` | refunds.approve **M I MC** | approve → money `approveRefund` + processor; reject `{reason}` reverses the allocation, `transactionFollowUp: REVIEW_REQUIRED` when nothing else is open |
 | `GET /v1/admin/payouts?status&travelerId` | payouts.manage | masked destination, `canRelease` |
 | `POST /v1/admin/payouts/{id}/hold` | payouts.manage **M I** | `{reason}` → ON_HOLD, `held_by`; event `payout.on_hold` |
-| `POST /v1/admin/payouts/{id}/release` | payouts.manage **M I MC** | releaser ≠ holder (API + DB CHECK `payouts_hold_release_maker_checker`); 422 `RISK_REVIEW_OPEN` while a review on the transaction is open; clears `transactions.payout_hold_reason`; warning `DISPUTE_NOT_CLOSED`; event `payout.scheduled` |
+| `POST /v1/admin/payouts/{id}/release` | payouts.manage **M I MC** | releaser ≠ holder (API + DB CHECK `payouts_hold_release_maker_checker`); 422 `RISK_REVIEW_OPEN` while a review on the transaction is open; clears `transactions.payout_hold_reason`; warning `DISPUTE_NOT_CLOSED`; event `payout.scheduled`. SYSTEM `DISPUTE_OPEN` holds are released automatically once the dispute is CLOSED and no risk review is open (money.md §5.2) — this route is for the rest |
+| `GET /v1/admin/refund-destinations?status` | refunds.approve | SEC-12 review queue (default `PENDING_REVIEW`): masked account, `nameMatch`, amount, `canReview` |
+| `POST /v1/admin/refund-destinations/{id}/review` | refunds.approve **M I MC** | `{decision: APPROVE\|REJECT, note}`; reviewer ≠ buyer; APPROVE → VALID + refund processed; REJECT → REJECTED, buyer asked again (`refund.destination_required`); audit `refund.destination_reviewed` |
 | `POST /v1/admin/payouts/{id}/retry` | payouts.manage **M I** | FAILED → SCHEDULED now, attempts reset |
 
 ### Business config — maker-checker
@@ -223,7 +228,8 @@ The payout processor treats a RESOLVED-but-not-CLOSED dispute as open (money des
 ## 5. Events emitted (outbox)
 
 `trip.verified`, `kyc.approved`, `kyc.rejected`, `payout_account.verified`, `dispute.resolved`, `payout.on_hold`, `payout.scheduled`
-(`kind: HOLD_RELEASED`), `referral.rewarded`, `risk.review_resolved`, `support.ticket_updated` (actorType AGENT). Money/FSM events
+(`kind: HOLD_RELEASED`; the payout job emits `HOLD_AUTO_RELEASED`), `refund.destination_set` / `refund.destination_required` (refund
+destination review), `referral.rewarded`, `risk.review_resolved`, `support.ticket_updated` (actorType AGENT). Money/FSM events
 (`transaction.status_changed`, `refund.*`, `dispute.status_changed`, `kyc.level_changed`, …) come from the reused wave-A services / DB functions.
 
 ---

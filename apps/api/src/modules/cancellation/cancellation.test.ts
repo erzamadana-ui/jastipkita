@@ -1,6 +1,7 @@
 import { DEFAULT_BUSINESS_CONFIG } from '@jastipkita/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestContext, type TestContext } from '../../../test/helpers';
+import { sensitiveStepUp } from '../auth/test-support';
 import { processPayouts, scheduleOwedPayouts } from '../payouts/service';
 import { approveRefund, processRefunds, requestRefund } from '../refunds/service';
 import {
@@ -164,8 +165,14 @@ describe('refunds', () => {
     expect(bad.status).toBe(400);
     const notMine = await call(t, p.traveler, 'POST', `/v1/refunds/${refundId}/destination`, { bankCode: 'BCA', accountNumber: '9876543210', accountHolderName: 'Bukan Saya' });
     expect(notMine.status).toBe(404);
-    const dest = await call(t, p.buyer, 'POST', `/v1/refunds/${refundId}/destination`, { bankCode: 'BCA', accountNumber: '9876543210', accountHolderName: 'Penitip Uji' });
+    // SEC-12: a bearer token alone is not enough — fresh single-use OTP bound to this refund
+    const noStepUp = await call(t, p.buyer, 'POST', `/v1/refunds/${refundId}/destination`, { bankCode: 'BCA', accountNumber: '9876543210', accountHolderName: 'Penitip Uji' });
+    expect(noStepUp.status).toBe(403);
+    expect(noStepUp.body.error).toMatchObject({ code: 'STEP_UP_REQUIRED', details: { purpose: 'SENSITIVE_ACTION', action: 'REFUND_DESTINATION_SET', targetId: refundId } });
+    const stepUp = await sensitiveStepUp(t, p.buyer, 'REFUND_DESTINATION_SET', refundId);
+    const dest = await call(t, p.buyer, 'POST', `/v1/refunds/${refundId}/destination`, { bankCode: 'BCA', accountNumber: '9876543210', accountHolderName: 'Penitip Uji', stepUp });
     expect(dest.status, JSON.stringify(dest.body)).toBe(200);
+    expect(dest.body).toMatchObject({ validationStatus: 'VALID', reviewRequired: false });
     expect(dest.body.accountMask).toBe('****3210');
     expect(JSON.stringify(dest.body)).not.toContain('9876543210');
     const [row] = await t.adminSql<{ account_number_enc: Buffer }[]>`SELECT account_number_enc FROM refund_destinations WHERE refund_id = ${refundId}`;

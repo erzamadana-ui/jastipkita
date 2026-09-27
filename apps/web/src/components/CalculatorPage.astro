@@ -19,7 +19,7 @@ const rows = COUNTRY_PAGES.map((c) => ({ c, ex: customsExample(c.currency, c.exa
 <section class="page-hero">
   <div class="container">
     <Breadcrumbs items={crumbs} lang={lang} />
-    <span class="eyebrow" style="margin-top:18px"><Icon name="calculator" size={16} />{t('Alat gratis', 'Free tool')}</span>
+    <span class="eyebrow mt-18"><Icon name="calculator" size={16} />{t('Alat gratis', 'Free tool')}</span>
     <h1>{t('Kalkulator bea masuk & pajak impor barang jastip', 'Import duty & tax calculator for jastip items')}</h1>
     <p class="lead">{t(
       'Hitung estimasi bea masuk, PPN, dan PPh 22 untuk barang titipan dari luar negeri berdasarkan PMK 34/2025 — aturan yang berlaku untuk barang bawaan penumpang yang bukan barang pribadi.',
@@ -28,7 +28,7 @@ const rows = COUNTRY_PAGES.map((c) => ({ c, ex: customsExample(c.currency, c.exa
   </div>
 </section>
 
-<section class="section-tight" style="padding-top:0">
+<section class="section-tight pt-0">
   <div class="container">
     <CustomsCalculator lang={lang} />
   </div>
@@ -36,10 +36,10 @@ const rows = COUNTRY_PAGES.map((c) => ({ c, ex: customsExample(c.currency, c.exa
 
 <section class="section-tight" aria-labelledby="formula-title">
   <div class="container">
-    <div class="grid grid-2" style="--gap:24px;align-items:start">
+    <div class="grid grid-2 g-24 items-start">
       <div>
         <span class="eyebrow">{t('Cara menghitung', 'How it is calculated')}</span>
-        <h2 id="formula-title" class="h-section" style="margin-top:10px">{t('Rumus PMK 34/2025 untuk barang titipan', 'The PMK 34/2025 formula for non-personal goods')}</h2>
+        <h2 id="formula-title" class="h-section mt-10">{t('Rumus PMK 34/2025 untuk barang titipan', 'The PMK 34/2025 formula for non-personal goods')}</h2>
         <ol class="formula" role="list">
           <li><span><strong>{t('Nilai pabean', 'Customs value')}</strong> = {t('harga dibayar × jumlah × kurs pajak', 'price paid × quantity × tax exchange rate')}</span></li>
           <li><span><strong>{t('Bea masuk', 'Import duty')}</strong> = 10% × {t('nilai pabean (tanpa pembebasan USD 500)', 'customs value (no USD 500 exemption)')}</span></li>
@@ -47,7 +47,7 @@ const rows = COUNTRY_PAGES.map((c) => ({ c, ex: customsExample(c.currency, c.exa
           <li><span><strong>PPN</strong> = 12% × 11/12 × {t('nilai impor (efektif 11%)', 'import value (effectively 11%)')}</span></li>
           <li><span><strong>PPh 22</strong> = 5% × {t('nilai impor', 'import value')}</span></li>
         </ol>
-        <p class="small muted" style="margin-top:14px">{t(
+        <p class="small muted mt-14">{t(
           'Perkiraan cepat: 10% + 1,1 × (11% + 5%) ≈ 27,6% dari nilai barang. Engine JastipKita membulatkan setiap komponen ke atas ke ribuan rupiah (konservatif, maks. +Rp999 per komponen). PPnBM tidak berlaku untuk tas, jam, perhiasan, atau parfum branded.',
           'Quick check: 10% + 1.1 × (11% + 5%) ≈ 27.6% of the item value. The JastipKita engine rounds every component up to the next IDR 1,000 (conservative, at most +IDR 999 each). Luxury-goods tax (PPnBM) does not apply to branded bags, watches, jewellery or perfume.',
         )}</p>
@@ -55,7 +55,7 @@ const rows = COUNTRY_PAGES.map((c) => ({ c, ex: customsExample(c.currency, c.exa
       <div class="card">
         <h3 class="h-card">{t('Contoh per negara', 'Examples by country')}</h3>
         <p class="xsmall muted">{t(`Kurs ${KMK_RATES.reference} (23–29 Sep 2026)`, `Rates ${KMK_RATES.reference} (23–29 Sep 2026)`)}</p>
-        <div class="table-wrap" style="margin-top:12px;border:0">
+        <div class="table-wrap mt-12 border-0">
           <table class="table">
             <thead><tr><th scope="col">{t('Barang', 'Item')}</th><th scope="col" class="num">{t('Nilai', 'Value')}</th><th scope="col" class="num">{t('Bea & pajak', 'Duty & tax')}</th></tr></thead>
             <tbody>
@@ -76,7 +76,7 @@ const rows = COUNTRY_PAGES.map((c) => ({ c, ex: customsExample(c.currency, c.exa
 
 <section class="section-tight" aria-labelledby="calc-faq">
   <div class="container container-narrow">
-    <h2 id="calc-faq" class="h-section" style="margin-bottom:24px">{t('Pertanyaan tentang bea & pajak jastip', 'Questions about duties on jastip items')}</h2>
+    <h2 id="calc-faq" class="h-section mb-24">{t('Pertanyaan tentang bea & pajak jastip', 'Questions about duties on jastip items')}</h2>
     <Faq items={faq} />
   </div>
 </section>

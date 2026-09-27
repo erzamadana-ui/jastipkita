@@ -7,6 +7,10 @@ import {
   type RiskRule,
   type RiskSignals,
   assessReceipt,
+  merchantBrandTokens,
+  merchantsMatch,
+  receiptHoldRequired,
+  SOFT_RECEIPT_SIGNALS,
   assessRisk,
   createRiskRuleRegistry,
   decisionForScore,
@@ -199,3 +203,49 @@ describe('assessReceipt', () => {
     expect(tol.priceWithinApproved).toBe(true);
   });
 });
+
+describe('merchant matching (brand vs domain) & soft receipt signals', () => {
+  it('matches a URL-derived domain merchant with the brand\'s store; different brands do not match', () => {
+    expect(merchantsMatch('Pokemon Center Tokyo DX', 'pokemoncenter-online.com')).toBe(true);
+    expect(merchantsMatch('UNIQLO Ginza', 'https://www.uniqlo.com/jp/ja/products/E477133')).toBe(true);
+    expect(merchantsMatch('Amazon Japan', 'www.amazon.co.jp')).toBe(true);
+    expect(merchantsMatch('Yodobashi Camera Akiba', 'Yodobashi Camera')).toBe(true);
+    expect(merchantsMatch('UNIQLO Official Store', 'Uniqlo')).toBe(true);
+    expect(merchantsMatch('Bic Camera', 'Yodobashi')).toBe(false);
+    expect(merchantsMatch('Don Quijote', 'uniqlo.com')).toBe(false);
+    expect(merchantsMatch('Shop', 'Store')).toBe(false); // generic words alone never match
+    expect(merchantBrandTokens('https://www.pokemoncenter-online.com/?p_cd=1')).toEqual(['pokemoncenter']);
+  });
+
+  it('MERCHANT_MISMATCH alone is a low-weight REVIEW signal that does not require a payout hold', () => {
+    const base: ReceiptProofInput = {
+      transactionId: 'tx1',
+      imageHash: 'h-abc',
+      merchantName: 'Bic Camera',
+      purchasedAt: new Date('2026-09-27T05:00:00Z'),
+      amountMinor: 50_000,
+      currency: 'JPY',
+      serialNumber: 'SN123',
+      hasVideo: true,
+      expected: {
+        paymentSecuredAt: new Date('2026-09-27T03:00:00Z'),
+        purchaseApprovedAt: new Date('2026-09-27T04:00:00Z'),
+        approvedAmountMinor: 50_000,
+        approvedCurrency: 'JPY',
+        merchantName: 'Yodobashi',
+        requiresSerial: true,
+        requiresVideo: true,
+      },
+      now: new Date('2026-09-27T06:00:00Z'),
+    };
+    const a = assessReceipt(base, { imageHashes: [] });
+    expect(a.reasons.map((x) => x.code)).toEqual(['MERCHANT_MISMATCH']);
+    expect(a.decision).toBe('REVIEW');
+    expect(a.score).toBeLessThanOrEqual(10);
+    expect(receiptHoldRequired(a.reasons)).toBe(false);
+    const hard = assessReceipt({ ...base, merchantName: 'Bic Camera', amountMinor: 51_000 }, { imageHashes: [] });
+    expect(receiptHoldRequired(hard.reasons)).toBe(true);
+    expect(SOFT_RECEIPT_SIGNALS.has('MERCHANT_MISMATCH')).toBe(true);
+  });
+});
+

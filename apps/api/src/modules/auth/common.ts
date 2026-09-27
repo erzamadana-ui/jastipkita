@@ -11,6 +11,12 @@ import { Errors } from '../../lib/errors';
 /** Security constants (not business config: changing them is a security review, not an Admin toggle). */
 export const SECURITY = {
   OTP_TTL_SEC: 300,
+  /** SEC-12: step-up OTP for money-routing changes (refund destination, payout accounts) */
+  SENSITIVE_OTP_TTL_SEC: 600,
+  /** SEC-13: TOTP (re-)enrollment only from a session created by an OTP login within this window */
+  MFA_ENROLL_FRESH_SESSION_SEC: 900,
+  /** SEC-13: an unconfirmed factor older than this may be replaced by another (fresh) session */
+  MFA_PENDING_ENROLLMENT_TTL_SEC: 900,
   OTP_MAX_ATTEMPTS: 5,
   OTP_RESEND_COOLDOWN_SEC: 60,
   OTP_MAX_PER_DESTINATION_HOUR: 5,

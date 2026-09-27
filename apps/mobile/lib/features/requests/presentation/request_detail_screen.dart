@@ -474,7 +474,7 @@ class _OfferFormState extends ConsumerState<_OfferForm> {
                 for (final t in list)
                   PickerOption<String>(
                     t.id,
-                    '${t.originCity} → ${t.destinationCity}',
+                    routeLabel(t.originCity, t.destinationCity),
                     subtitle: JkDates.calendar(t.arrivalDate, locale),
                   ),
               ],

@@ -703,13 +703,18 @@ export interface PayoutGuardContext {
   readonly bankAccountVerified?: boolean;
   readonly holdReleasedBy?: string | null;
   readonly reason?: string | null;
+  /**
+   * SYSTEM auto-release only: the hold was placed by the SYSTEM because of a dispute (`DISPUTE_OPEN`), that dispute
+   * is CLOSED, no risk review on the transaction is open and the transaction carries no payout hold flag.
+   */
+  readonly autoReleaseEligible?: boolean;
 }
 
 export const PAYOUT_TRANSITIONS: readonly TransitionDef<PayoutStatus>[] = [
   edge('SCHEDULED', 'PROCESSING', [S, A], 'PAYOUT_CLEAR', 'Risk ALLOW/REVIEW, no open dispute, verified account'),
   edge('SCHEDULED', 'ON_HOLD', [S, A], 'REASON_REQUIRED', 'Hold (reason required)'),
   edge('SCHEDULED', 'CANCELLED', [A], null, 'Cancelled'),
-  edge('ON_HOLD', 'SCHEDULED', [A], 'HOLD_RELEASE', 'Hold released (approver recorded)'),
+  edge('ON_HOLD', 'SCHEDULED', [A, S], 'HOLD_RELEASE', 'Hold released (ADMIN: approver recorded; SYSTEM: automatic dispute hold cleared)'),
   edge('ON_HOLD', 'CANCELLED', [A], null, 'Cancelled'),
   edge('PROCESSING', 'PAID', [S], null, 'Disbursement success'),
   edge('PROCESSING', 'FAILED', [S], null, 'Disbursement failure'),
@@ -733,10 +738,14 @@ export const payoutFsm: Fsm<PayoutStatus, PayoutGuardContext> = createFsm<Payout
         c.disputeOpen === false ? null : { code: 'DISPUTE_OPEN', message: 'Open dispute (or unknown)' },
         requireTrue(c.bankAccountVerified, 'BANK_ACCOUNT_UNVERIFIED', 'Payout account not verified'),
       ),
-    HOLD_RELEASE: (c) =>
-      typeof c.holdReleasedBy === 'string' && c.holdReleasedBy !== ''
-        ? null
-        : { code: 'RELEASE_APPROVER_MISSING', message: 'Hold release requires an approver' },
+    HOLD_RELEASE: (c, actor) =>
+      actor === 'SYSTEM'
+        ? c.autoReleaseEligible === true
+          ? null
+          : { code: 'AUTO_RELEASE_NOT_ELIGIBLE', message: 'Only a SYSTEM dispute hold whose dispute is CLOSED (no open risk review) is released automatically' }
+        : typeof c.holdReleasedBy === 'string' && c.holdReleasedBy !== ''
+          ? null
+          : { code: 'RELEASE_APPROVER_MISSING', message: 'Hold release requires an approver' },
     REASON_REQUIRED: reasonRequired,
   },
 });

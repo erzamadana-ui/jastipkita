@@ -22,8 +22,8 @@ function render(items: Array<{ slug: string; q: string; a: string }>, q: string)
   if (!box || !browse) return;
   box.hidden = false; browse.hidden = true;
   box.innerHTML = items.length
-    ? `<p class="small muted" style="margin-bottom:12px">${items.length} hasil untuk “${escapeHtml(q)}”</p><div class="grid" style="--gap:10px">${items
-        .map((i) => `<a class="card card-link" style="padding:16px 18px" href="${base}${encodeURIComponent(i.slug)}/"><strong>${escapeHtml(i.q)}</strong><p class="small muted" style="margin-top:4px">${escapeHtml(i.a)}…</p></a>`)
+    ? `<p class="small muted mb-12">${items.length} hasil untuk “${escapeHtml(q)}”</p><div class="grid g-10">${items
+        .map((i) => `<a class="card card-link p-16-18" href="${base}${encodeURIComponent(i.slug)}/"><strong>${escapeHtml(i.q)}</strong><p class="small muted mt-4">${escapeHtml(i.a)}…</p></a>`)
         .join('')}</div>`
     : `<div class="note note-neutral"><p>Tidak ada hasil untuk “${escapeHtml(q)}”. Coba kata lain, misalnya “refund”, “kurs”, atau “PIN”.</p></div>`;
 }

@@ -36,12 +36,59 @@ JkTone _tripTone(BuildContext context, String status) {
   }
 }
 
-String _route(String originCity, String originCountry, String destinationCity, String destinationCountry) =>
-    '$originCity ($originCountry) → $destinationCity ($destinationCountry)';
+/// Plain-text route for pickers and chips ("Tokyo – Jakarta"; Poppins has no arrow glyph).
+String routeLabel(String from, String to) => '$from \u2013 $to';
 
-/// "Tokyo (JP) → Jakarta (ID)" for a transaction's trip (`TransactionDetail.trip`).
-String tripRouteText(TripRoute trip) =>
-    _route(trip.originCity, trip.originCountry, trip.destinationCity, trip.destinationCountry);
+/// "Tokyo (JP) ➜ Jakarta (ID)" with an arrow icon (the brand font has no arrow glyph).
+class RouteText extends StatelessWidget {
+  const RouteText({super.key, required this.from, required this.to, this.suffix, this.style, this.maxLines, this.upperCase = false});
+
+  /// Route of a transaction's trip (`TransactionDetail.trip`).
+  factory RouteText.trip(TripRoute trip, {Key? key, String? suffix, TextStyle? style, bool upperCase = false}) => RouteText(
+        key: key,
+        from: '${trip.originCity} (${trip.originCountry})',
+        to: '${trip.destinationCity} (${trip.destinationCountry})',
+        suffix: suffix,
+        style: style,
+        upperCase: upperCase,
+      );
+
+  final String from;
+  final String to;
+
+  /// Appended after the destination, e.g. " · 13 Okt".
+  final String? suffix;
+  final TextStyle? style;
+  final int? maxLines;
+  final bool upperCase;
+
+  @override
+  Widget build(BuildContext context) {
+    final effective = DefaultTextStyle.of(context).style.merge(style);
+    String cased(String s) => upperCase ? s.toUpperCase() : s;
+    final tail = suffix;
+    return Text.rich(
+      TextSpan(
+        children: <InlineSpan>[
+          TextSpan(text: cased(from)),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Icon(Icons.arrow_forward_rounded, size: (effective.fontSize ?? 14) * 1.05, color: effective.color),
+            ),
+          ),
+          TextSpan(text: cased(to)),
+          if (tail != null) TextSpan(text: tail),
+        ],
+      ),
+      style: style,
+      maxLines: maxLines,
+      overflow: maxLines == null ? null : TextOverflow.ellipsis,
+      semanticsLabel: '${context.l10n.routeSemantics(from, to)}${tail ?? ''}',
+    );
+  }
+}
 
 /// Trip card (§5.11): route, dates, verified badge, remaining capacity, status, fee, CTA.
 class TripCard extends StatelessWidget {
@@ -71,8 +118,9 @@ class TripCard extends StatelessWidget {
               Icon(Icons.flight_takeoff, color: jk.secondary),
               const SizedBox(width: JkSpacing.s2),
               Expanded(
-                child: Text(
-                  _route(trip.originCity, trip.originCountry, trip.destinationCity, trip.destinationCountry),
+                child: RouteText(
+                  from: '${trip.originCity} (${trip.originCountry})',
+                  to: '${trip.destinationCity} (${trip.destinationCountry})',
                   style: JkTypeScale.titleS.copyWith(color: jk.onSurface),
                 ),
               ),
@@ -362,8 +410,10 @@ class OfferCard extends StatelessWidget {
                   children: <Widget>[
                     Text(traveler?.displayName ?? '', style: JkTypeScale.titleS.copyWith(color: jk.onSurface)),
                     if (trip != null)
-                      Text(
-                        '${trip.originCity} → ${trip.destinationCity} · ${JkDates.calendarShort(trip.arrivalDate, locale)}',
+                      RouteText(
+                        from: trip.originCity,
+                        to: trip.destinationCity,
+                        suffix: ' · ${JkDates.calendarShort(trip.arrivalDate, locale)}',
                         style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted),
                       ),
                   ],
@@ -467,10 +517,11 @@ class TravelerCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: JkTypeScale.titleS.copyWith(color: jk.onSurface),
                     ),
-                    Text(
-                      '${trip.originCity} → ${trip.destinationCity} · ${JkDates.calendarShort(trip.arrivalDate, locale)}',
+                    RouteText(
+                      from: trip.originCity,
+                      to: trip.destinationCity,
+                      suffix: ' · ${JkDates.calendarShort(trip.arrivalDate, locale)}',
                       maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                       style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted),
                     ),
                   ],

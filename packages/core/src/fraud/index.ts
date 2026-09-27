@@ -403,10 +403,61 @@ export interface ReceiptAssessment extends RiskAssessment {
   readonly priceWithinApproved: boolean;
 }
 
-function merchantsMatch(a: string, b: string): boolean {
+/**
+ * Receipt signals that never hold a payout on their own: they open a low-weight REVIEW (visible to RISK) but the
+ * purchase proof stays ACCEPTED unless another (hard) signal fires. MERCHANT_MISMATCH is soft because the request's
+ * merchant is often derived from a URL/domain while the traveler buys at the brand's physical or official store.
+ */
+export const SOFT_RECEIPT_SIGNALS: ReadonlySet<string> = new Set(['MERCHANT_MISMATCH']);
+
+/** True when any reason is a hard receipt-fraud signal (→ proof FLAGGED + payout hold); soft ones only REVIEW. */
+export function receiptHoldRequired(reasons: readonly Pick<RiskReason, 'code'>[]): boolean {
+  return reasons.some((x) => !SOFT_RECEIPT_SIGNALS.has(x.code));
+}
+
+// Words that describe the kind of shop, not the brand ("Pokemon Center Online", "UNIQLO Official Store").
+const GENERIC_MERCHANT_TOKENS = new Set([
+  'www', 'shop', 'shops', 'store', 'stores', 'online', 'official', 'officialstore', 'flagship', 'outlet', 'mall', 'the', 'inc',
+  'ltd', 'co', 'corp', 'kk', 'pte', 'sdn', 'bhd', 'toko', 'resmi', 'global', 'intl', 'international', 'direct',
+]);
+// Domain suffix labels stripped from the end of a host ("uniqlo.com", "amazon.co.jp", "musinsa.com.sg").
+const DOMAIN_SUFFIX_LABELS = new Set(['com', 'co', 'jp', 'kr', 'sg', 'my', 'au', 'id', 'net', 'org', 'shop', 'online', 'store', 'us', 'uk', 'hk', 'tw', 'cn', 'ne', 'or', 'ac']);
+
+/**
+ * Brand key of a merchant string: a URL / domain loses scheme, path, `www.` and its public-suffix labels
+ * (`https://www.pokemoncenter-online.com/x` → `pokemoncenter online`), then text is normalized (accents,
+ * punctuation) and generic shop words are dropped. Returns the remaining tokens.
+ */
+export function merchantBrandTokens(raw: string): string[] {
+  let v = raw.trim().toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '');
+  const looksLikeDomain = !/\s/.test(v) && /^[a-z0-9.-]+\.[a-z]{2,}(\/.*)?$/.test(v);
+  if (looksLikeDomain) {
+    const labels = v.split('/')[0]!.split('.').filter(Boolean);
+    if (labels[0] === 'www') labels.shift();
+    while (labels.length > 1 && DOMAIN_SUFFIX_LABELS.has(labels[labels.length - 1]!)) labels.pop();
+    v = labels.join(' ');
+  }
+  return normalizeText(v)
+    .split(' ')
+    .filter((t) => t !== '' && !GENERIC_MERCHANT_TOKENS.has(t));
+}
+
+/**
+ * Merchant equivalence for purchase proofs. Matches when the normalized names are equal or one is a word-level
+ * sub-phrase of the other ("Yodobashi Camera Akiba" ~ "Yodobashi Camera"), or when the brand keys (tokens joined
+ * without spaces, ≥ 4 chars) contain each other — so a domain merchant matches the brand's store:
+ * `pokemoncenter-online.com` ~ "Pokemon Center Tokyo DX", `uniqlo.com` ~ "UNIQLO Ginza", `www.amazon.co.jp` ~ "Amazon Japan".
+ * Different brands ("Bic Camera" vs "Yodobashi") do not match.
+ */
+export function merchantsMatch(a: string, b: string): boolean {
   const x = normalizeText(a);
   const y = normalizeText(b);
-  return x === y || ` ${x} `.includes(` ${y} `) || ` ${y} `.includes(` ${x} `);
+  if (x === '' || y === '') return false;
+  if (x === y || ` ${x} `.includes(` ${y} `) || ` ${y} `.includes(` ${x} `)) return true;
+  const ka = merchantBrandTokens(a).join('');
+  const kb = merchantBrandTokens(b).join('');
+  if (ka.length < 4 || kb.length < 4) return false;
+  return ka === kb || ka.includes(kb) || kb.includes(ka);
 }
 
 export function assessReceipt(
@@ -459,7 +510,8 @@ export function assessReceipt(
     }
   }
   if (e.merchantName && !merchantsMatch(proof.merchantName, e.merchantName)) {
-    reasons.push(r('MERCHANT_MISMATCH', 'RECEIPT_FRAUD', 15, `Merchant "${proof.merchantName}" ≠ "${e.merchantName}"`));
+    // Soft signal (SOFT_RECEIPT_SIGNALS): low weight, REVIEW floor — never a payout hold by itself.
+    reasons.push(r('MERCHANT_MISMATCH', 'RECEIPT_FRAUD', 10, `Merchant "${proof.merchantName}" ≠ "${e.merchantName}"`, 'REVIEW'));
   }
   const missingSerial = e.requiresSerial && !proof.serialNumber;
   const missingVideo = e.requiresVideo && !proof.hasVideo;

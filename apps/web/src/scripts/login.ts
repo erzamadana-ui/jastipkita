@@ -11,7 +11,7 @@ import { applyAllowedVersions, loadSignupRequirements, readFallback, toConsentIn
 import type { LegalType } from '../lib/legal-catalog.ts';
 
 interface Challenge { challengeId: string; expiresAt: string; resendAvailableAt: string }
-interface LoginResult { tokens?: { accessToken: string; accessTokenExpiresAt: string }; isNewUser?: boolean }
+interface LoginResult { tokens?: { accessToken: string; accessTokenExpiresAt: string; refreshToken: string }; isNewUser?: boolean }
 
 const $ = <E extends HTMLElement>(s: string) => document.querySelector<E>(s);
 const req = $<HTMLFormElement>('#otp-request');

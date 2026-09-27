@@ -479,6 +479,16 @@ export async function cancelTrip(deps: Deps, auth: AuthContext, id: string, reas
     const trip = await loadOwned(t, id, auth);
     const check = tripFsm.canTransition(trip.status, 'CANCELLED', 'TRAVELER', {});
     if (!check.ok) throw guardFailure(check.code, check.message);
+    // Items already bought (or in dispute) cannot be unwound by a trip cancellation: the money group's trip.cancelled
+    // consumer only handles pre-purchase transactions (BUG-QA-01). Those go through the Dispute Center / support.
+    const purchased = await t<{ id: string; status: string }[]>`
+      SELECT id, status FROM transactions WHERE trip_id = ${trip.id}
+         AND status IN ('PURCHASED','TRAVELING','ARRIVED','CUSTOMS_PROCESS','READY_FOR_HANDOVER','OUT_FOR_DELIVERY','DELIVERED','BUYER_CONFIRMED','DISPUTED')`;
+    if (purchased.length) {
+      throw Errors.conflict('TRIP_HAS_PURCHASED_TRANSACTIONS', 'Ada titipan yang sudah dibeli; trip tidak bisa dibatalkan. Hubungi Pusat Bantuan.', {
+        transactionIds: purchased.map((r) => r.id),
+      });
+    }
     const open = await repo.openTransactionIds(t, trip.id);
     await repo.transitionTrip(t, trip, 'CANCELLED', 'TRAVELER', auth.userId, reason, { openTransactionIds: open });
     await closePendingOffers(t, { tripId: trip.id }, 'WITHDRAWN', 'TRIP_CANCELLED', deps.clock.now());

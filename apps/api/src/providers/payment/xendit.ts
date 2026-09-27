@@ -196,6 +196,15 @@ export class XenditPaymentProvider implements PaymentProvider {
     };
   }
 
+  /**
+   * Cancels an ACTIVE Payment Session so it can no longer be paid (research 02 §1: Payment Sessions support "cancel
+   * session"). Path `POST /sessions/{id}/cancel` is NEEDS_VERIFICATION against the live API reference; callers treat any
+   * failure as best effort (late funds are captured and refunded automatically).
+   */
+  async cancelCheckout(providerRef: string): Promise<void> {
+    await this.call('POST', `/sessions/${encodeURIComponent(providerRef)}/cancel`);
+  }
+
   async getPayment(providerRef: string): Promise<ProviderPayment> {
     const s = await this.call<{
       payment_session_id: string;

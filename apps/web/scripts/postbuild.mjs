@@ -3,13 +3,18 @@
 // 1. Legal docs cross-link each other as "privacy-policy.md" (so links also work when browsing docs/legal on
 //    GitHub). Rewrite those hrefs to the site's /jastipkita/legal/<slug>/ URLs.
 // 2. Sanity check: every HTML file must reference the /jastipkita base (fails the build otherwise).
+// 3. CSP gate (SEC-14): every page has the CSP + referrer <meta> before any script/stylesheet, every inline
+//    executable <script> matches a sha256 in script-src, and there are no inline styles or event handlers.
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cspProblems } from './csp-check.mjs';
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
 const BASE = '/jastipkita';
 let rewritten = 0;
+let checked = 0;
+
 function walk(dir) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
@@ -20,8 +25,11 @@ function walk(dir) {
       html = html.replace(/href="([a-z0-9-]+)\.md(#[^"]*)?"/g, (_m, slug, hash = '') => `href="${BASE}/legal/${slug}/${hash}"`);
       if (html !== before) { writeFileSync(p, html); rewritten++; }
       if (!html.includes(`${BASE}/`)) throw new Error(`${p} has no ${BASE}/ reference — base path misconfigured?`);
+      const problems = cspProblems(html);
+      if (problems.length) throw new Error(`CSP check failed for ${p}:\n  - ${problems.join('\n  - ')}`);
+      checked++;
     }
   }
 }
 walk(dist);
-console.log(`[postbuild] legal .md links rewritten in ${rewritten} file(s)`);
+console.log(`[postbuild] legal .md links rewritten in ${rewritten} file(s); CSP verified on ${checked} page(s)`);

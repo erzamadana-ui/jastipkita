@@ -99,9 +99,37 @@ The API only accepts consent versions that match a published legal document (`42
 
 Code: `src/lib/consents.ts`, `src/scripts/login.ts`; covered by `tests/api-contract.spec.ts` (mocked API). When Compliance publishes a new legal version, bump the `version` front-matter in `docs/legal/*.md` together with the published text.
 
-## Privacy & storage
+## Security (SEC-14 — shared origin) & storage
 
-Only strictly-necessary storage, written after an explicit action: `jk-consent` (banner choice), `jk-theme` (theme toggle), `jk-session` + `jk-device` in **sessionStorage** after login (access token only; refresh tokens are never stored in the browser). No analytics or third-party trackers are installed; if analytics are added later they must be gated on `jk-consent === 'analytics'` and the cookie policy updated first.
+**Risk:** the site is served from `https://antarkitaindonesia.com/jastipkita/`, i.e. the **same origin** as every other AntarKita page on that domain. Any XSS on another page of `antarkitaindonesia.com` (outside this repo) runs with JastipKita's origin: it can read `sessionStorage`/`localStorage` of that tab and call the API as the signed-in user. The controls below reduce the blast radius but cannot remove it. **Recommendation before public launch: move the web to its own subdomain** (e.g. `jastip.antarkitaindonesia.com` or `jastipkita.antarkitaindonesia.com`), then set the API's `WEB_BASE_URL`/`CORS_ORIGINS`, App Links (`assetlinks.json`/AASA) and `site`/`base` in `astro.config.mjs` accordingly, and serve real security headers from the host/CDN.
+
+**Content-Security-Policy** — GitHub Pages can't set headers, so every page carries `<meta http-equiv="Content-Security-Policy">` as the first element after charset/viewport (built by `src/lib/csp.ts`):
+
+```
+default-src 'self'; script-src 'self' 'sha256-<theme bootstrap>'; style-src 'self'; img-src 'self' data: https:;
+font-src 'self'; connect-src 'self' <origin of PUBLIC_API_BASE_URL>; frame-src 'none'; manifest-src 'self';
+worker-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
+```
+
+- No inline code: scripts are external modules (`vite.build.assetsInlineLimit: 0`), stylesheets are external (`build.inlineStylesheets: 'never'`, fonts via `public/fonts/poppins.css`), former `style=""` attributes are utility classes (`src/styles/utilities.css`), no inline event handlers. The only inline `<script>` (theme bootstrap, must run before first paint) is allowed by its SHA-256 hash. JSON/JSON-LD data blocks are not executable and need no hash.
+- With `PUBLIC_ENABLE_GOOGLE_LOGIN=true` the policy adds `https://accounts.google.com/gsi/*` to script/style/connect/frame-src.
+- `scripts/postbuild.mjs` (via `scripts/csp-check.mjs`) **fails the build** if any page lacks the CSP/referrer meta, has an inline script without a matching hash, an inline style or an event handler, or a policy with `unsafe-inline`/`unsafe-eval`. Playwright re-checks every page statically and at runtime (no `securitypolicyviolation` events).
+- **Not possible with a meta tag:** `frame-ancestors` (clickjacking), `report-uri`/`report-to`, `X-Frame-Options`, `X-Content-Type-Options`, HSTS. Set them as response headers once the site sits behind a host that supports headers (Cloudflare in front of Pages, or the dedicated subdomain): `Content-Security-Policy: … ; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`.
+- `<meta name="referrer" content="strict-origin-when-cross-origin">` on every page.
+
+**Storage** — every key is prefixed `jk:`; nothing is written before an explicit user action:
+
+| Key | Store | Content | Cleared |
+|---|---|---|---|
+| — | memory | **access token** (never persisted) | page unload, logout |
+| `jk:refresh` | sessionStorage (this tab) | refresh token; rotated on every page load via `POST /v1/auth/refresh` | tab close, logout, refresh failure |
+| `jk:device` | sessionStorage | random per-tab device id (API stores only its HMAC) | tab close, logout |
+| `jk:consent` | localStorage | banner choice (`necessary`/`analytics`) | logout |
+| `jk:theme` | localStorage | theme picked with the toggle | logout |
+
+Logout (`session.clear()` in `src/lib/api.ts`) calls `POST /v1/auth/logout` and removes the in-memory token and **every `jk:` key** from both storages. No analytics or third-party trackers are installed; if analytics are added later they must be gated on `jk:consent === 'analytics'` and allowed explicitly in the CSP.
+
+> ⚠️ `docs/legal/cookie-policy.md` (published as version `0.1-template`, immutable) still lists the pre-SEC-14 key names (`jk-consent`, `jk-theme`, `jk-session`, `jk-device`) and says the access token is in sessionStorage. Update it in the **next legal version** (new version + re-seed), not by editing the published text.
 
 ## Honesty rules baked into the site
 
@@ -117,4 +145,6 @@ Only strictly-necessary storage, written after an explicit action: `jk-consent` 
 3. Deploy the API, allow CORS for `https://antarkitaindonesia.com`, set `PUBLIC_API_BASE_URL`.
 4. Replace placeholders in `well-known/` (Play App Signing SHA-256, Apple Team ID) and paste the 404 snippet into the landing repo.
 5. Update `src/data/kmk-rates.ts` weekly (or wire the Kemenkeu kurs API) — Customs uses the arrival-week KMK rate.
-6. Brand risk: "JastipKita" name/trademark conflicts are documented in `docs/research/04-market-and-naming.md` — clear with a KI consultant before paid campaigns.
+6. **Move the web to its own subdomain before public launch (SEC-14)** and add real security headers there (see *Security*).
+7. Publish a new cookie-policy version with the `jk:` key names.
+8. Brand risk: "JastipKita" name/trademark conflicts are documented in `docs/research/04-market-and-naming.md` — clear with a KI consultant before paid campaigns.

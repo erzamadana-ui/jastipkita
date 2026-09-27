@@ -6,6 +6,7 @@ import '../../../core/models/account.dart';
 import '../../../core/models/json.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/network/step_up.dart';
 import '../../../core/storage/settings.dart';
 import '../../../core/storage/token_storage.dart';
 
@@ -61,6 +62,30 @@ class AuthRepository {
     final json = await _api.post(
       '/auth/otp/request',
       body: <String, dynamic>{'channel': channel, 'destination': destination, 'purpose': purpose, 'locale': locale},
+    );
+    return OtpChallenge.fromJson(json);
+  }
+
+  /// SEC-12 step-up code for [request] (`purpose: SENSITIVE_ACTION`, bearer). [destination] must be
+  /// the user's verified phone (SMS / WhatsApp) or verified e-mail, else
+  /// `422 STEP_UP_DESTINATION_NOT_VERIFIED`. The code is not verified here: it goes into the
+  /// protected request as `stepUp` (see core/network/step_up.dart).
+  Future<OtpChallenge> requestStepUpOtp({
+    required StepUpRequest request,
+    required String channel,
+    required String destination,
+    String locale = 'id',
+  }) async {
+    final json = await _api.post(
+      '/auth/otp/request',
+      body: <String, dynamic>{
+        'channel': channel,
+        'destination': destination,
+        'purpose': SensitiveAction.purpose,
+        'action': request.action,
+        'targetId': request.targetId,
+        'locale': locale,
+      },
     );
     return OtpChallenge.fromJson(json);
   }

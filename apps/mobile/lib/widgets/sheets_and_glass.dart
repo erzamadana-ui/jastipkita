@@ -84,6 +84,8 @@ class GlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final jk = context.jk;
+    // Ink (tab items, buttons) must paint above the tint, not on the Material underneath it.
+    final content = Material(type: MaterialType.transparency, child: child);
     if (MediaQuery.highContrastOf(context)) {
       return DecoratedBox(
         decoration: BoxDecoration(
@@ -92,7 +94,7 @@ class GlassSurface extends StatelessWidget {
           border: Border.all(color: jk.outline),
           boxShadow: context.elevation(3),
         ),
-        child: child,
+        child: content,
       );
     }
     return DecoratedBox(
@@ -110,7 +112,7 @@ class GlassSurface extends StatelessWidget {
               borderRadius: borderRadius,
               border: Border.all(color: jk.glassBorder, width: JkGlass.borderWidth),
             ),
-            child: child,
+            child: content,
           ),
         ),
       ),

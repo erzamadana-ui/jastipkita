@@ -31,6 +31,7 @@ const GrantBody = z.object({ roleCode: z.string().regex(/^[A-Z][A-Z_]*$/), reaso
 const RoleParam = IdParam.extend({ roleCode: z.string().regex(/^[A-Z][A-Z_]*$/).openapi({ param: { name: 'roleCode', in: 'path' } }) });
 const NoteBody = z.object({ note: z.string().trim().max(1000).optional() });
 const RejectBody = z.object({ note: z.string().trim().min(5).max(1000) });
+const MfaResetBody = z.object({ reason: z.string().trim().min(10).max(1000) }).openapi('AdminMfaResetRequest');
 
 export function registerAdminUsers(app: App) {
   const r = createRouter();
@@ -162,6 +163,48 @@ export function registerAdminUsers(app: App) {
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.rejectRoleRequest(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').note), 200),
+  );
+
+  // SEC-13: a confirmed authenticator is reset only by maker-checker (another SUPER_ADMIN approves).
+  r.openapi(
+    createRoute({
+      method: 'post', path: '/v1/admin/users/{id}/mfa-reset-requests', tags: rbacTags, security: bearer,
+      summary: 'Request an MFA (TOTP) reset for another admin → 202, applied only after another SUPER_ADMIN approves',
+      middleware: adminGuard(['rbac.manage'], { mfa: true }),
+      request: { params: IdParam, ...jsonBody(MfaResetBody) },
+      responses: { 202: jsonContent(AdminLoose, 'Pending approval'), ...errorResponses },
+    }),
+    async (c) => c.json(await svc.requestMfaReset(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').reason), 202),
+  );
+  r.openapi(
+    createRoute({
+      method: 'get', path: '/v1/admin/rbac/mfa-reset-requests', tags: rbacTags, security: bearer,
+      summary: 'MFA reset requests (maker-checker)',
+      middleware: adminGuard(['rbac.manage']),
+      request: { query: z.object({ status: z.enum(['PENDING', 'APPLIED', 'REJECTED', 'EXPIRED', 'CANCELLED']).optional() }) },
+      responses: { 200: jsonContent(AdminPage), ...errorResponses },
+    }),
+    async (c) => c.json(await svc.listMfaResetRequests(await adminCtx(c), c.req.valid('query').status), 200),
+  );
+  r.openapi(
+    createRoute({
+      method: 'post', path: '/v1/admin/rbac/mfa-reset-requests/{id}/approve', tags: rbacTags, security: bearer,
+      summary: 'Approve an MFA reset (SUPER_ADMIN ≠ requester ≠ subject, fresh MFA): factor disabled, recovery codes deleted, sessions revoked',
+      middleware: adminGuard(['rbac.manage'], { mfa: true }),
+      request: { params: IdParam, ...jsonBody(NoteBody) },
+      responses: { 200: jsonContent(AdminLoose), ...errorResponses },
+    }),
+    async (c) => c.json(await svc.approveMfaReset(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').note), 200),
+  );
+  r.openapi(
+    createRoute({
+      method: 'post', path: '/v1/admin/rbac/mfa-reset-requests/{id}/reject', tags: rbacTags, security: bearer,
+      summary: 'Reject (or, by the requester, cancel) an MFA reset request',
+      middleware: adminGuard(['rbac.manage'], { mfa: true }),
+      request: { params: IdParam, ...jsonBody(RejectBody) },
+      responses: { 200: jsonContent(AdminLoose), ...errorResponses },
+    }),
+    async (c) => c.json(await svc.rejectMfaReset(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').note), 200),
   );
 
   app.route('/', r);

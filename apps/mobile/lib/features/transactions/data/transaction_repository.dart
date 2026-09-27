@@ -5,6 +5,7 @@ import '../../../core/models/json.dart';
 import '../../../core/models/transaction.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/idempotency.dart';
+import '../../../core/network/step_up.dart';
 
 /// Money API — docs/api/money.md. Every money mutation goes through [FinancialCaller] so a retry
 /// (automatic or "Coba lagi") reuses the same Idempotency-Key.
@@ -238,17 +239,31 @@ class TransactionRepository {
   Future<List<RefundInfo>> refunds(String id) async =>
       readList(await _api.get('/transactions/$id/refunds'), 'data').map(RefundInfo.fromJson).toList();
 
-  Future<MoneyActionResult> setRefundDestination(
+  /// Bank account for a refund that cannot go back to the payment channel. Needs a step-up OTP
+  /// (`REFUND_DESTINATION_SET`, target = refund id) — [stepUp] shows the sheet on
+  /// `403 STEP_UP_REQUIRED`. A holder name that differs from the verified identity is stored
+  /// `PENDING_REVIEW` ([RefundDestinationResult.reviewRequired]) and paid after FINANCE approval.
+  Future<RefundDestinationResult> setRefundDestination(
     String refundId, {
     required String bankCode,
     required String accountNumber,
     required String accountHolderName,
-  }) async =>
-      MoneyActionResult(
-        await _api.post(
-          '/refunds/$refundId/destination',
-          body: <String, dynamic>{'bankCode': bankCode, 'accountNumber': accountNumber, 'accountHolderName': accountHolderName},
+    required StepUpPrompt stepUp,
+  }) =>
+      withStepUp<RefundDestinationResult>(
+        (StepUpProof? proof) async => RefundDestinationResult.fromJson(
+          await _api.post(
+            '/refunds/$refundId/destination',
+            body: <String, dynamic>{
+              'bankCode': bankCode,
+              'accountNumber': accountNumber,
+              'accountHolderName': accountHolderName,
+              if (proof != null) 'stepUp': proof.take(),
+            },
+          ),
         ),
+        prompt: stepUp,
+        expected: StepUpRequest(action: SensitiveAction.refundDestinationSet, targetId: refundId),
       );
 
   Future<void> rate(String id, {required int overall, int? communication, int? accuracy, int? timeliness, String? comment}) async {

@@ -25,7 +25,7 @@ dates (`YYYY-MM-DD`: trip dates, `neededBy`, rule dates) are **WIB (Asia/Jakarta
 | `GET /v1/trips/{id}` | optional | owner → `view: OWNER`; others → `view: PUBLIC` for ACTIVE/FULL/TRAVELING/COMPLETED, else 404 |
 | `POST /v1/trips/{id}/verification` | 🔒 | TRIP_DOC file (owned, scan CLEAN) → `trip_verifications` PENDING; DRAFT → VERIFICATION_PENDING |
 | `POST /v1/trips/{id}/publish` | 🔒 K3 | VERIFIED → ACTIVE; DRAFT/VERIFICATION_PENDING → ACTIVE only if `trips.allowUnverifiedActive` |
-| `POST /v1/trips/{id}/depart\|complete\|cancel` | 🔒 | via `transition_trip`; cancel → `trip.cancelled` event |
+| `POST /v1/trips/{id}/depart\|complete\|cancel` | 🔒 | via `transition_trip`; cancel → `trip.cancelled` event (money settles every open transaction, money.md §5.1); `409 TRIP_HAS_PURCHASED_TRANSACTIONS {transactionIds}` when goods were already bought |
 | `GET /v1/trips/{id}/recommended-requests` | 🔒 owner | matching |
 | `POST /v1/requests/extract` {url\|fileId\|query} | 🔒 | heuristic extraction (20/min/user) |
 | `POST /v1/requests` · `GET /v1/requests/mine` · `PATCH /v1/requests/{id}` | 🔒 | CRUD (DRAFT or OPEN with `publish: true`) |
@@ -55,7 +55,7 @@ Error codes are UPPER_SNAKE with Indonesian messages; the most important: `FX_RA
 POST /trips (DRAFT) ──verification──▶ VERIFICATION_PENDING ──admin approves──▶ VERIFIED ──publish (K3)──▶ ACTIVE ⇄ FULL
         │                                   │ (allowUnverifiedActive=true: publish directly)          │
         └───────────────────────────────────┴──────────────────────────────── depart / job ──▶ TRAVELING ──▶ COMPLETED
-any non-terminal ──cancel──▶ CANCELLED   (pending offers WITHDRAWN; open transactions → `trip.cancelled` event)
+any non-terminal ──cancel──▶ CANCELLED   (pending offers WITHDRAWN; open transactions → `trip.cancelled` event → money consumer; refused once a transaction is PURCHASED or later)
 ```
 - Every status change: core `tripFsm.canTransition` (guards `UNVERIFIED_ACTIVE`, `HAS_CAPACITY`, `MARK_FULL`) → `transition_trip()`
   (writes `trip_events`, `trip.status_changed`, audit).
@@ -212,7 +212,7 @@ inject a heuristic instance with a fake `fetch`/`resolve`).
 | `offer.created` | offerId, requestId, tripId, buyerId, travelerId, initiatedBy, travelerFeeIdr |
 | `offer.accepted` | … + transactionId, transactionNumber, acceptedBy, travelerFeeIdr |
 | `offer.declined` · `offer.withdrawn` · `offer.expired` | … + status, reason |
-| `trip.cancelled` | tripId, travelerId, actorType, reason, openTransactionIds[] (money group applies the cancellation matrix) |
+| `trip.cancelled` | tripId, travelerId, actorType, reason, openTransactionIds[] (money group applies the cancellation matrix as the TRAVELER — `cancellation/trip-cancelled.ts`) |
 | (DB) `trip.status_changed`, `transaction.status_changed` | from `transition_trip` / `transition_transaction` |
 
 ---

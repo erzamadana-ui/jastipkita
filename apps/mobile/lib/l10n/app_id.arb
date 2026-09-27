@@ -87,7 +87,7 @@
   "payoutAccountVerified": "Terverifikasi",
   "payoutAccountPending": "Sedang dicek",
   "payoutAccountFailed": "Gagal diverifikasi",
-  "payoutAccountNameMismatch": "Nama tidak sesuai",
+  "payoutAccountNameMismatch": "Sedang ditinjau",
   "payoutAccountUnverified": "Belum diverifikasi",
   "restrictionRestrictedTitle": "Barang dibatasi",
   "restrictionDeclarationTitle": "Wajib dideklarasikan",
@@ -397,7 +397,7 @@
   "kycNationality": "Kewarganegaraan",
   "kycReviewTitle": "Periksa sebelum mengirim",
   "payoutAccountAdd": "Tambah rekening",
-  "payoutAccountIntro": "Nama pemilik rekening harus sama dengan nama di identitas terverifikasi.",
+  "payoutAccountIntro": "Nama pemilik rekening harus sama dengan nama di identitas terverifikasi. Jika berbeda, rekening ditinjau dulu oleh tim JastipKita.",
   "payoutAccountRemoveTitle": "Hapus rekening?",
   "payoutAccountsNeedKyc": "Verifikasi identitas dulu",
   "payoutAccountsNeedKycBody": "Rekening pencairan bisa ditambahkan setelah identitasmu terverifikasi (level 3).",
@@ -969,6 +969,36 @@
   "legalTemplateNotice": "Teks ini masih TEMPLATE dan belum final dari tim hukum. Versi yang kamu setujui tercatat dan akan diberitahukan bila berubah.",
   "legalOpenWeb": "Buka versi web",
   "legalReadDocument": "Baca dokumen",
+  "stepUpTitle": "Konfirmasi dengan kode",
+  "stepUpIntroRefund": "Demi keamanan, rekening refund hanya bisa diisi atau diganti dengan kode sekali pakai yang dikirim ke nomor HP atau e-mail terverifikasimu.",
+  "stepUpIntroPayoutAdd": "Demi keamanan, menambah rekening pencairan perlu kode sekali pakai yang dikirim ke nomor HP atau e-mail terverifikasimu.",
+  "stepUpIntroPayoutDefault": "Demi keamanan, mengganti rekening utama perlu kode sekali pakai yang dikirim ke nomor HP atau e-mail terverifikasimu.",
+  "stepUpIntroGeneric": "Perubahan ini perlu kode sekali pakai yang dikirim ke nomor HP atau e-mail terverifikasimu.",
+  "stepUpChooseDestination": "Kirim kode ke",
+  "stepUpChannelEmail": "E-mail",
+  "stepUpNoVerifiedContact": "Kode keamanan hanya dikirim ke nomor HP atau e-mail yang sudah terverifikasi. Verifikasi nomor HP-mu dulu.",
+  "stepUpChangeDestination": "Ganti tujuan",
+  "stepUpExpiryNote": "Kode berlaku 10 menit dan hanya bisa dipakai sekali.",
+  "stepUpConfirm": "Konfirmasi",
+  "stepUpMismatch": "Kode ini untuk perubahan lain. Minta kode baru.",
+  "stepUpDestinationNotVerified": "Kode hanya bisa dikirim ke nomor HP atau e-mail terverifikasi milikmu.",
+  "stepUpCodeUsed": "Kode ini sudah dicoba. Masukkan kode lain atau minta kode baru.",
+  "stepUpCancelled": "Verifikasi dibatalkan. Belum ada yang diubah.",
+  "stepUpRequired": "Perubahan ini perlu verifikasi dengan kode. Coba lagi.",
+  "statusUnderReview": "Sedang ditinjau",
+  "payoutAccountReviewBody": "Nama pemilik rekening berbeda dengan nama di identitas terverifikasi, jadi tim JastipKita meninjaunya dulu. Sampai disetujui, rekening ini tidak dipakai untuk pencairan dan tidak bisa dijadikan utama.",
+  "payoutAccountAdded": "Rekening pencairan ditambahkan.",
+  "payoutAccountAddedReview": "Rekening disimpan dan sedang ditinjau karena nama pemilik berbeda dengan identitas terverifikasi.",
+  "payoutAccountDefaultChanged": "Rekening utama diganti.",
+  "refundDestinationSaved": "Rekening refund disimpan. Refund dikirim ke rekening ini.",
+  "refundDestinationReview": "Rekening refund sedang ditinjau tim keuangan karena nama pemilik berbeda dengan identitas terverifikasi. Refund dikirim setelah disetujui.",
+  "refundDestinationRejected": "Rekening refund sebelumnya tidak disetujui tim keuangan. Masukkan rekening atas namamu sendiri.",
+  "tripHasPurchasedTitle": "Trip tidak bisa dibatalkan",
+  "tripHasPurchasedAction": "Lihat pesanan",
+  "tripNotAvailableTitle": "Trip tidak tersedia lagi",
+  "tripNotAvailableCancelled": "Traveler membatalkan trip ini, jadi pesanan ini tidak bisa dibayar. Cari traveler lain untuk barang ini.",
+  "tripNotAvailableCompleted": "Trip ini sudah selesai, jadi pesanan ini tidak bisa dibayar. Cari traveler lain untuk barang ini.",
+  "findAnotherTraveler": "Cari traveler lain",
   "countdownSemantics": "{label} sisa {minutes} menit {seconds} detik",
   "@countdownSemantics": {
     "description": "Screen-reader text of a countdown chip.",
@@ -1392,8 +1422,9 @@
       }
     }
   },
-  "ratingShort": "★ {rating} ({count})",
+  "ratingShort": "{rating} ({count})",
   "@ratingShort": {
+    "description": "Shown next to a star icon.",
     "placeholders": {
       "rating": {
         "type": "String",
@@ -1468,7 +1499,7 @@
       }
     }
   },
-  "refundDestinationIntro": "Masukkan rekening untuk menerima refund {amount}. Nama pemilik harus sama dengan nama akunmu.",
+  "refundDestinationIntro": "Masukkan rekening atas namamu untuk menerima refund {amount}. Jika nama pemilik berbeda dengan identitas terverifikasi, rekening ditinjau tim keuangan dulu.",
   "@refundDestinationIntro": {
     "placeholders": {
       "amount": {
@@ -1791,12 +1822,56 @@
       }
     }
   },
+  "routeSemantics": "{origin} ke {destination}",
+  "@routeSemantics": {
+    "placeholders": {
+      "origin": {
+        "type": "String",
+        "example": "Tokyo (JP)"
+      },
+      "destination": {
+        "type": "String",
+        "example": "Jakarta (ID)"
+      }
+    }
+  },
   "legalEffective": "berlaku {date}",
   "@legalEffective": {
     "placeholders": {
       "date": {
         "type": "String",
         "example": "27 Sep 2026"
+      }
+    }
+  },
+  "stepUpDestinationOption": "{channel} ke {destination}",
+  "@stepUpDestinationOption": {
+    "placeholders": {
+      "channel": {
+        "type": "String",
+        "example": "WhatsApp"
+      },
+      "destination": {
+        "type": "String",
+        "example": "+62812••••7890"
+      }
+    }
+  },
+  "stepUpAttemptsLeft": "Kode salah. Sisa percobaan: {count}",
+  "@stepUpAttemptsLeft": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "tripHasPurchasedBody": "Barang untuk {count} pesanan di trip ini sudah kamu beli. Selesaikan pengantarannya ke penitip; jika ada kendala, hubungi CS JastipKita.",
+  "@tripHasPurchasedBody": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
       }
     }
   }

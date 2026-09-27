@@ -5,6 +5,7 @@
  */
 import type { AppDeps } from '../../context';
 import type { OutboxEvent } from '../../jobs/types';
+import { moderateText } from '../chat/moderation';
 import { dispatchNotifications, type NotificationIntent } from './dispatcher';
 import { publicName, truncate } from './templates/format';
 import { pid, pnum, pstr, type EventPart } from './util';
@@ -81,8 +82,12 @@ const transactionStatusChanged: Builder = async (deps, ev) => {
       return from === 'DISPUTED' ? [] : t('transaction.buyer_confirmed');
     case 'COMPLETED':
       return [b('transaction.completed'), ...t('transaction.completed')];
-    case 'CANCELLED':
+    case 'CANCELLED': {
+      // A trip cancelled by the traveler notifies through the dedicated `transaction.trip_cancelled` event.
+      const meta = (p.meta ?? {}) as Record<string, unknown>;
+      if (meta.cause === 'TRIP_CANCELLED') return [];
       return [b('transaction.cancelled'), ...t('transaction.cancelled')];
+    }
     default: {
       const tpl = STATUS_TEMPLATES[to];
       return tpl ? [b(tpl)] : [];
@@ -124,13 +129,58 @@ const refundEvent =
     const buyer = await buyerOf(deps, p, txId);
     let refundNumber: string | null = null;
     let amountIdr = pnum(p, 'amountIdr') ?? null;
+    let method: string | null = null;
     if (refundId) {
-      const [r] = await deps.sql<{ number: string; amount_idr: number }[]>`SELECT number, amount_idr FROM refunds WHERE id = ${refundId}`;
+      const [r] = await deps.sql<{ number: string; amount_idr: number; method: string | null }[]>`SELECT number, amount_idr, breakdown->>'method' AS method FROM refunds WHERE id = ${refundId}`;
       refundNumber = r?.number ?? null;
       amountIdr = amountIdr ?? (r ? Number(r.amount_idr) : null);
+      method = r?.method ?? null;
     }
-    return buyer ? [{ userId: buyer, template, role: 'BUYER', transactionId: txId, vars: { refundNumber, amountIdr } }] : [];
+    const extra: Record<string, unknown> = {};
+    if (template === 'refund.destination_updated' && refundId) {
+      const [d] = await deps.sql<{ bank_code: string; account_mask: string; validation_status: string }[]>`
+        SELECT bank_code, account_mask, validation_status FROM refund_destinations WHERE refund_id = ${refundId}`;
+      if (!d) return [];
+      Object.assign(extra, { bankCode: d.bank_code, accountMask: d.account_mask, validationStatus: d.validation_status });
+    }
+    return buyer ? [{ userId: buyer, template, role: 'BUYER', transactionId: txId, vars: { refundNumber, amountIdr, method, ...extra } }] : [];
   };
+
+const priceClarificationRequested: Builder = async (deps, ev) => {
+  const p = ev.payload;
+  const txId = pid(p, 'transactionId');
+  const pcId = pid(p, 'priceConfirmationId');
+  if (!txId) return [];
+  const traveler = await travelerOf(deps, p, txId);
+  if (!traveler) return [];
+  let note: string | null = null;
+  if (pcId) {
+    const [pc] = await deps.sql<{ response_note: string | null }[]>`SELECT response_note FROM price_confirmations WHERE id = ${pcId}`;
+    // Free text from the buyer: masked like chat (no contact details / off-platform payment) and truncated.
+    if (pc?.response_note) note = truncate(moderateText(pc.response_note).masked, 300);
+  }
+  return [
+    {
+      userId: traveler,
+      template: 'price.clarification_requested',
+      role: 'TRAVELER',
+      transactionId: txId,
+      vars: { originalIdr: pnum(p, 'originalIdr') ?? null, actualIdr: pnum(p, 'actualIdr') ?? null, expiresAt: pstr(p, 'expiresAt') ?? null, note },
+    },
+  ];
+};
+
+const tripCancelledTransaction: Builder = async (deps, ev) => {
+  const p = ev.payload;
+  const txId = pid(p, 'transactionId');
+  if (!txId) return [];
+  const ps = await parties(deps, txId);
+  if (!ps) return [];
+  const vars = { refundIdr: pnum(p, 'refundIdr') ?? 0, trustPenalty: pnum(p, 'trustPenalty') ?? 0, outcome: pstr(p, 'outcome') ?? null };
+  const out: NotificationIntent[] = [{ userId: ps.buyerId, template: 'transaction.trip_cancelled', role: 'BUYER', transactionId: txId, vars }];
+  if (ps.travelerId) out.push({ userId: ps.travelerId, template: 'transaction.trip_cancelled', role: 'TRAVELER', transactionId: txId, vars });
+  return out;
+};
 
 const payoutEvent =
   (template: string): Builder =>
@@ -333,11 +383,15 @@ export const NOTIFICATION_BUILDERS: Record<string, Builder> = {
     expiresAt: pstr(p, 'expiresAt') ?? null,
   })),
   'price_confirmation.resolved': priceConfirmationResolved,
+  'price_confirmation.clarification_requested': priceClarificationRequested,
+  'transaction.trip_cancelled': tripCancelledTransaction,
   'purchase.proof_submitted': async (deps, ev) => (ev.payload.flagged === true ? [] : buyerTemplate('purchase.receipt_available')(deps, ev)),
   'delivery.pin_ready': buyerTemplate('delivery.pin_ready'),
   'refund.requested': refundEvent('refund.requested'),
   'refund.succeeded': refundEvent('refund.succeeded'),
   'refund.failed': refundEvent('refund.failed'),
+  'refund.destination_required': refundEvent('refund.destination_required'),
+  'refund.destination_set': refundEvent('refund.destination_updated'),
   'payout.scheduled': payoutEvent('payout.scheduled'),
   'payout.paid': payoutEvent('payout.paid'),
   'payout.failed': payoutEvent('payout.failed'),

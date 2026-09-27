@@ -251,13 +251,16 @@ class _ModeSwitchState extends ConsumerState<ModeSwitch> {
 
     return DecoratedBox(
       decoration: BoxDecoration(color: jk.surface, borderRadius: JkRadii.pillAll, border: Border.all(color: jk.border)),
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Row(
-          children: <Widget>[
-            segment(UserMode.buyer, l10n.modeBuyer, Icons.shopping_bag_outlined),
-            segment(UserMode.traveler, l10n.modeTraveler, Icons.flight_takeoff),
-          ],
+      child: Material(
+        type: MaterialType.transparency,
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Row(
+            children: <Widget>[
+              segment(UserMode.buyer, l10n.modeBuyer, Icons.shopping_bag_outlined),
+              segment(UserMode.traveler, l10n.modeTraveler, Icons.flight_takeoff),
+            ],
+          ),
         ),
       ),
     );

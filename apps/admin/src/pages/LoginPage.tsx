@@ -10,6 +10,8 @@ import { newIdempotencyKey } from '../api/idempotency';
 import { session } from '../api/session';
 import type { Schemas } from '../api/types';
 import { useAuth } from '../auth/AuthProvider';
+import { clearOtpLogin, enrollmentIssue, enrollSecondsLeft, markOtpLogin, type EnrollmentIssue } from '../auth/enrollment';
+import { useNow } from '../hooks/misc';
 import { Icon } from '../components/Icon';
 import { QrCode } from '../components/QrCode';
 import { Button, Callout, Checkbox, Field } from '../components/ui';
@@ -108,6 +110,7 @@ export function LoginPage() {
     try {
       const r = await Auth.verifyOtp(challenge.challengeId, code, deviceFingerprint());
       if (!r.tokens) throw new Error('Respons login tidak berisi token.');
+      markOtpLogin();
       session.setTokens(r.tokens);
     } catch (e) {
       setErr(describeError(e).title);
@@ -183,14 +186,32 @@ export function MfaEnrollPage() {
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [issue, setIssue] = useState<EnrollmentIssue | null>(null);
+  const now = useNow(1000);
+  const left = enrollSecondsLeft(now);
+
+  const fail = (e: unknown) => {
+    const i = enrollmentIssue(e);
+    if (i) {
+      setIssue(i);
+      setErr(null);
+      if (i.action === 'reload') void reloadMe();
+    } else setErr(describeError(e).title);
+  };
+
+  const relogin = () => {
+    clearOtpLogin();
+    void logout();
+  };
 
   const start = async () => {
     setBusy(true);
     setErr(null);
+    setIssue(null);
     try {
       setEnrollment(await Auth.enrollTotp());
     } catch (e) {
-      setErr(describeError(e).title);
+      fail(e);
     } finally {
       setBusy(false);
     }
@@ -206,9 +227,10 @@ export function MfaEnrollPage() {
     try {
       const r = await Auth.confirmTotp(code);
       session.setAccessToken(r.accessToken, r.accessTokenExpiresAt, r.mfaAt);
+      clearOtpLogin();
       setCodes(r.recoveryCodes);
     } catch (e) {
-      setErr(describeError(e).title);
+      fail(e);
     } finally {
       setBusy(false);
     }
@@ -239,6 +261,35 @@ export function MfaEnrollPage() {
 
   return (
     <Frame title="Aktifkan MFA (TOTP)" subtitle={`Wajib untuk semua admin. Akun: ${me?.email ?? '—'}`}>
+      {issue ? (
+        <Callout tone={issue.action === 'wait' ? 'warning' : 'danger'} title={issue.title}>
+          <span data-testid="enroll-issue">{issue.detail}</span>
+          {issue.action === 'relogin' ? (
+            <div style={{ marginTop: 10 }}>
+              <Button size="sm" variant="primary" icon="refresh" onClick={relogin} data-testid="enroll-relogin">
+                Masuk ulang dengan OTP
+              </Button>
+            </div>
+          ) : null}
+        </Callout>
+      ) : left !== null ? (
+        left > 0 ? (
+          <Callout tone="info" icon="clock">
+            Selesaikan aktivasi dalam <strong data-testid="enroll-window">{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</strong> — aktivasi hanya diterima dari sesi login OTP yang berumur ≤ 15 menit.
+          </Callout>
+        ) : (
+          <Callout tone="warning" title="Jendela aktivasi 15 menit sudah lewat">
+            Masuk ulang dengan OTP lalu langsung aktivasi.
+            <div style={{ marginTop: 10 }}>
+              <Button size="sm" variant="primary" icon="refresh" onClick={relogin}>
+                Masuk ulang dengan OTP
+              </Button>
+            </div>
+          </Callout>
+        )
+      ) : (
+        <Callout tone="info" icon="clock">Aktivasi hanya diterima dari sesi login OTP yang berumur ≤ 15 menit. Jika ditolak, masuk ulang dengan OTP.</Callout>
+      )}
       {!enrollment ? (
         <div className="stack">
           <Callout tone="info">Pindai QR dengan aplikasi authenticator (Google Authenticator, 1Password, Authy, …). QR dibuat di browser ini; secret tidak dikirim ke layanan lain.</Callout>
@@ -326,6 +377,10 @@ export function MfaVerifyPage() {
         <Button variant="primary" type="submit" loading={busy} icon="shield" data-testid="login-totp-submit">
           Verifikasi
         </Button>
+        <p className="small muted" style={{ margin: 0 }} data-testid="mfa-lost-help">
+          Kehilangan authenticator? Pakai kode pemulihan. Jika tidak punya, minta admin pemegang <code>rbac.manage</code> mengajukan <strong>reset MFA</strong> —
+          berlaku setelah disetujui SUPER_ADMIN lain; setelah itu masuk dengan OTP dan daftarkan authenticator baru dalam 15 menit.
+        </p>
         <div className="row row--between">
           <Button variant="ghost" size="sm" onClick={() => setRecovery((r) => !r)}>
             {recovery ? 'Pakai kode TOTP' : 'Pakai kode pemulihan'}

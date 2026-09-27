@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { Users } from '../../api/admin';
+import { MfaResets, Users } from '../../api/admin';
 import type { RevealedContact } from '../../api/types';
 import { useAuth, useCan } from '../../auth/AuthProvider';
 import { ADMIN_ROLES, CAP } from '../../auth/permissions';
@@ -14,7 +14,7 @@ import { useAdminAction } from '../../hooks/useAdminAction';
 import { formatNumber, humanize } from '../../lib/format';
 import { KycBadge, TrustBadge } from './UsersPage';
 
-type Dlg = null | 'reveal' | 'suspend' | 'reactivate' | 'logout' | 'grant' | { revoke: string };
+type Dlg = null | 'reveal' | 'suspend' | 'reactivate' | 'logout' | 'grant' | 'mfa-reset' | { revoke: string };
 
 export default function UserDetailPage() {
   const { id = '' } = useParams();
@@ -33,6 +33,13 @@ export default function UserDetailPage() {
   const logout = useAdminAction({ run: (reason: string) => Users.forceLogout(id, reason), invalidate: inv, toastErrors: false, success: (r) => `${r.sessionsRevoked} sesi dicabut` });
   const grant = useAdminAction({ run: (v: { role: string; reason: string }) => Users.grantRole(id, v.role, v.reason), invalidate: inv, toastErrors: false, success: (r) => r.message });
   const revoke = useAdminAction({ run: (v: { role: string; reason: string }) => Users.revokeRole(id, v.role, v.reason), invalidate: inv, toastErrors: false, success: 'Peran dicabut' });
+  const canMfaReset = useCan(CAP.mfaResetRequest);
+  const mfaReset = useAdminAction({
+    run: (reason: string) => MfaResets.request(id, reason),
+    invalidate: [['rbac']],
+    toastErrors: false,
+    success: 'Permintaan reset MFA dibuat · menunggu persetujuan SUPER_ADMIN lain',
+  });
 
   useEffect(() => {
     if (!revealed) return;
@@ -182,6 +189,14 @@ export default function UserDetailPage() {
             ) : (
               <p className="muted small">Bukan admin.</p>
             )}
+            {u.roleGrants.length ? (
+              <div className="row row--between" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--jk-color-divider)' }}>
+                <span className="small muted">Kehilangan authenticator? Reset TOTP = maker-checker (72 jam).</span>
+                <Button size="sm" variant="danger-outline" icon="key" mfa onClick={() => setDlg('mfa-reset')} disabledReason={canMfaReset.reason ?? (self ? 'Tidak dapat mereset MFA milik sendiri — minta admin lain' : null)} data-testid="request-mfa-reset">
+                  Ajukan reset MFA
+                </Button>
+              </div>
+            ) : null}
           </Card>
           <Card title="Trust Score" actions={<Link to={`/trust?userId=${u.id}`}>Ajukan override →</Link>}>
             <div className="stack stack--sm">
@@ -225,6 +240,17 @@ export default function UserDetailPage() {
         mfa
         reason={{ minLength: 5, placeholder: 'mis. Verifikasi manual tiket TKT-…' }}
         onConfirm={(reason) => reveal.mutateAsync(reason)}
+      />
+      <ActionDialog
+        open={dlg === 'mfa-reset'}
+        onClose={() => setDlg(null)}
+        title="Ajukan reset MFA"
+        description="Setelah disetujui SUPER_ADMIN lain (bukan Anda dan bukan pemilik akun), authenticator & kode pemulihan admin ini dinonaktifkan dan semua sesinya dicabut. Ia lalu masuk dengan OTP dan mendaftar ulang dalam 15 menit."
+        confirmLabel="Ajukan reset"
+        tone="danger"
+        mfa
+        reason={{ label: 'Alasan (min. 10 karakter, tercatat di audit)', minLength: 10, placeholder: 'mis. ponsel hilang, identitas dikonfirmasi lewat panggilan video' }}
+        onConfirm={(r) => mfaReset.mutateAsync(r)}
       />
       <ActionDialog open={dlg === 'suspend'} onClose={() => setDlg(null)} title="Tangguhkan akun" description="Semua sesi dicabut. Transaksi terbuka tetap harus ditangani lewat menu Transaksi/Dispute." confirmLabel="Tangguhkan akun" tone="danger" mfa onConfirm={(r) => suspend.mutateAsync(r)} />
       <ActionDialog open={dlg === 'reactivate'} onClose={() => setDlg(null)} title="Aktifkan kembali akun" confirmLabel="Aktifkan kembali" tone="success" mfa onConfirm={(r) => reactivate.mutateAsync(r)} />

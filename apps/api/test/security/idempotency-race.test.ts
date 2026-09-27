@@ -84,3 +84,58 @@ describe('SEC-04 idempotency retry claim is atomic', () => {
     expect(mine.status).toBe(201);
   });
 });
+
+describe('BUG-QA-05 transient responses are never replayed', () => {
+  function transientApp(first: 429 | 503) {
+    let calls = 0;
+    const app = new Hono<AppEnv>();
+    app.use('*', requestContext(t.deps));
+    app.onError((err, c) => errorResponse(c, err));
+    app.post('/v1/sec/transient', requireAuth, requireIdempotency, async (c) => {
+      calls++;
+      if (calls === 1) return c.json({ error: { code: first === 429 ? 'RATE_LIMITED' : 'PROVIDER_UNAVAILABLE' } }, first);
+      return c.json({ charged: calls }, 201);
+    });
+    return { app, calls: () => calls };
+  }
+
+  for (const first of [429, 503] as const) {
+    it(`a ${first} marks the key FAILED; the retry with the same key runs the handler and its 201 is what gets replayed`, async () => {
+      const u = await t.createUser();
+      const { app, calls } = transientApp(first);
+      const key = crypto.randomUUID();
+      const send = () =>
+        app.request('/v1/sec/transient', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${u.accessToken}`, 'content-type': 'application/json', 'idempotency-key': key },
+          body: JSON.stringify({ amountIdr: 5000 }),
+        });
+      expect((await send()).status).toBe(first);
+      const [row] = await t.adminSql<{ status: string; response_status: number | null }[]>`SELECT status, response_status FROM idempotency_keys WHERE user_id = ${u.id} AND key = ${key}`;
+      expect(row).toMatchObject({ status: 'FAILED', response_status: null });
+      const retry = await send();
+      expect(retry.status).toBe(201);
+      expect(retry.headers.get('idempotent-replayed')).toBeNull();
+      const replay = await send();
+      expect(replay.status).toBe(201);
+      expect(replay.headers.get('idempotent-replayed')).toBe('true');
+      expect(await replay.json()).toEqual({ charged: 2 });
+      expect(calls()).toBe(2);
+    });
+  }
+
+  it('money routes rate-limit BEFORE the idempotency claim: a throttled checkout leaves no key behind', async () => {
+    const u = await t.createUser({ kycLevel: 2 });
+    const fake = '00000000-0000-4000-8000-000000000000';
+    let last: { status: number } = { status: 0 };
+    const keys: string[] = [];
+    for (let i = 0; i < 11; i++) {
+      const key = crypto.randomUUID();
+      keys.push(key);
+      last = await t.request('POST', `/v1/transactions/${fake}/checkout`, { token: u.accessToken, body: { quoteId: fake }, headers: { 'idempotency-key': key } });
+    }
+    expect(last.status).toBe(429);
+    const [row] = await t.adminSql`SELECT 1 FROM idempotency_keys WHERE user_id = ${u.id} AND key = ${keys.at(-1)!}`;
+    expect(row).toBeUndefined();
+  });
+});

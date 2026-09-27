@@ -63,7 +63,7 @@ export function registerCheckoutRoutes(app: App) {
       tags: ['Checkout'],
       summary: 'Start SafePay checkout for the active quote (Idempotency-Key required, KYC ≥ 2)',
       security: bearer,
-      middleware: [requireAuth, requireKycLevel(2), requireIdempotency, rateLimit({ name: 'money.checkout', limit: 10, windowSec: 60, key: 'user' })] as const,
+      middleware: [requireAuth, requireKycLevel(2), rateLimit({ name: 'money.checkout', limit: 10, windowSec: 60, key: 'user' }), requireIdempotency] as const,
       request: { params: TxIdParam, headers: IdempotencyHeader, ...jsonBody(CheckoutBody) },
       responses: { 201: jsonContent(CheckoutResult, 'Payment created'), ...errorResponses },
     }),

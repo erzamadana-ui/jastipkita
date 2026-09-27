@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestContext, type TestContext } from '../../../../test/helpers';
 import { recordRiskAssessment } from '../../../services/risk';
+import { releaseClearedDisputeHolds } from '../../payouts/service';
 import { txStatus } from '../../transactions/test-fixtures';
 import { type Admin, as, auditRows, createAdmin, idem, ledgerCheck, purchasedTx } from '../test-support';
 
@@ -121,6 +122,46 @@ describe('payout hold / release (holder ≠ releaser)', () => {
     const res = await as(t, financeB, 'POST', `/v1/admin/payouts/${po!.id}/release`, { note: 'lepas' }, idem());
     expect(res.status).toBe(422);
     expect(res.body.error.code).toBe('RISK_REVIEW_OPEN');
+  });
+});
+
+describe('payout dispute hold auto-release (SYSTEM)', () => {
+  async function systemDisputeHold(): Promise<{ id: string; transaction_id: string }> {
+    // a small admin refund (auto-approved) with the remainder to the traveler completes the deal → payout SCHEDULED
+    const { tx } = await purchasedTx(t);
+    const r = await as(t, superA, 'POST', `/v1/admin/transactions/${tx.id}/refund`, { amountIdr: 50_000, reason: 'Kompensasi kecil', remainderTo: 'TRAVELER' }, idem());
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const [found] = await t.adminSql<{ id: string; transaction_id: string }[]>`SELECT id, transaction_id FROM payouts WHERE transaction_id = ${tx.id} AND status = 'SCHEDULED'`;
+    expect(found).toBeDefined();
+    const payout = found!;
+    await t.adminSql.begin(async (db) => {
+      await db`SELECT set_config('jk.actor_type', 'SYSTEM', true)`;
+      await db`UPDATE payouts SET status = 'ON_HOLD', hold_reason = 'DISPUTE_OPEN', held_by = NULL WHERE id = ${payout.id}`;
+    });
+    return payout;
+  }
+
+  it('released automatically once no dispute and no risk review is open; an open risk review keeps it for FINANCE', async () => {
+    const a = await systemDisputeHold();
+    await recordRiskAssessment(t.adminSql, 'TRANSACTION', a.transaction_id, { score: 60, decision: 'REVIEW', reasons: [{ code: 'VELOCITY' }] }, {});
+    expect(await releaseClearedDisputeHolds(t.deps, { transactionId: a.transaction_id })).toBe(0);
+    const [still] = await t.adminSql<{ status: string }[]>`SELECT status FROM payouts WHERE id = ${a.id}`;
+    expect(still!.status).toBe('ON_HOLD');
+    // the review is closed → the next payout run releases it (SYSTEM, audited)
+    await t.adminSql`UPDATE risk_reviews SET status = 'CLEARED', resolved_at = now(), resolved_by = ${financeA.id} WHERE subject_type = 'TRANSACTION' AND subject_id = ${a.transaction_id}`;
+    expect(await releaseClearedDisputeHolds(t.deps, { transactionId: a.transaction_id })).toBe(1);
+    const [row] = await t.adminSql<{ status: string; hold_reason: string | null; released_by: string | null }[]>`SELECT status, hold_reason, released_by FROM payouts WHERE id = ${a.id}`;
+    expect(row).toMatchObject({ status: 'SCHEDULED', hold_reason: null, released_by: null });
+    const [au] = await t.adminSql<{ actor_type: string }[]>`SELECT actor_type FROM audit_logs WHERE action = 'payout.auto_released' AND entity_id = ${a.id}`;
+    expect(au!.actor_type).toBe('SYSTEM');
+  });
+
+  it('an ADMIN hold (held_by set) is never auto-released', async () => {
+    const po = await systemDisputeHold();
+    await t.adminSql`UPDATE payouts SET held_by = ${financeA.id} WHERE id = ${po.id}`; // an admin put/kept it on hold
+    expect(await releaseClearedDisputeHolds(t.deps, { transactionId: po.transaction_id })).toBe(0);
+    const [row] = await t.adminSql<{ status: string }[]>`SELECT status FROM payouts WHERE id = ${po.id}`;
+    expect(row!.status).toBe('ON_HOLD');
   });
 });
 

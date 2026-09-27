@@ -205,6 +205,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         _ => Icons.account_balance_outlined,
       };
 
+  static bool _isTripUnavailable(Object error) => error is ApiException && error.code == 'TRIP_NOT_AVAILABLE';
+
   Future<void> _pay(Quote quote) async {
     final l10n = context.l10n;
     setState(() => _paying = true);
@@ -224,6 +226,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       context.pushReplacement(Routes.payment(widget.transactionId));
     } on Object catch (e) {
       if (!mounted) return;
+      if (_isTripUnavailable(e)) {
+        // 422 TRIP_NOT_AVAILABLE: the trip was cancelled or ended after the quote — nothing to pay.
+        ref.invalidate(transactionDetailProvider(widget.transactionId));
+        setState(() {
+          _quote = null;
+          _quoteError = e;
+        });
+        return;
+      }
       showJkSnack(context, errorMessage(l10n, e), error: true);
       final stale = e is ApiException && (e.code.startsWith('QUOTE_') || e.code.startsWith('FX_'));
       if (stale) await _requote();
@@ -282,7 +293,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ),
       ),
       body: quoteError != null && quote == null
-          ? ListView(children: <Widget>[ErrorView(error: quoteError, onRetry: _requote)])
+          ? ListView(
+              children: <Widget>[
+                if (_isTripUnavailable(quoteError))
+                  EmptyState(
+                    icon: Icons.event_busy_outlined,
+                    title: l10n.tripNotAvailableTitle,
+                    message: errorMessage(l10n, quoteError),
+                    actionLabel: l10n.findAnotherTraveler,
+                    onAction: () => context.go(Routes.travelers),
+                  )
+                else
+                  ErrorView(error: quoteError, onRetry: _requote),
+              ],
+            )
           : ListView(
               padding: const EdgeInsets.fromLTRB(JkSpacing.s5, JkSpacing.s4, JkSpacing.s5, JkSpacing.s8),
               children: <Widget>[

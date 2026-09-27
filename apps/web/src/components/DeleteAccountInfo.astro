@@ -23,21 +23,21 @@ const retention: Array<[string, string, string, string]> = [
 <section class="page-hero">
   <div class="container container-narrow">
     <Breadcrumbs items={crumbs} lang={lang} />
-    <span class="eyebrow" style="margin-top:18px"><Icon name="trash-2" size={16} />{t('Privasi', 'Privacy')}</span>
+    <span class="eyebrow mt-18"><Icon name="trash-2" size={16} />{t('Privasi', 'Privacy')}</span>
     <h1>{t('Cara menghapus akun & data JastipKita', 'How to delete your JastipKita account & data')}</h1>
     <p class="lead">{t(
       'Kamu bisa menghapus akun kapan saja, dari aplikasi maupun dari situs ini. Halaman ini menjelaskan langkahnya, data apa yang dihapus, dan data apa yang wajib kami simpan lebih lama.',
       'You can delete your account at any time, in the app or on this website. This page explains the steps, what is deleted and what we must keep for longer.',
     )}</p>
-    <p class="small muted" style="margin-top:10px">{t('Aplikasi', 'App')}: JastipKita ({CONFIG.androidPackage}) · {t('Pengembang', 'Developer')}: JastipKita — {SITE.companyName}</p>
+    <p class="small muted mt-10">{t('Aplikasi', 'App')}: JastipKita ({CONFIG.androidPackage}) · {t('Pengembang', 'Developer')}: JastipKita — {SITE.companyName}</p>
   </div>
 </section>
-<section class="section-tight" style="padding-top:0">
-  <div class="container container-narrow stack" style="--stack:20px">
-    <div class="grid grid-2" style="--gap:16px">
+<section class="section-tight pt-0">
+  <div class="container container-narrow stack st-20">
+    <div class="grid grid-2 g-16">
       <div class="card">
         <span class="icon-tile"><Icon name="smartphone" /></span>
-        <h2 class="h-card" style="margin-top:12px">{t('Di aplikasi', 'In the app')}</h2>
+        <h2 class="h-card mt-12">{t('Di aplikasi', 'In the app')}</h2>
         <ol class="small del-steps">
           <li>{t('Buka tab Profil.', 'Open the Profile tab.')}</li>
           <li>{t('Pilih Keamanan & privasi → Hapus akun.', 'Choose Security & privacy → Delete account.')}</li>
@@ -46,7 +46,7 @@ const retention: Array<[string, string, string, string]> = [
       </div>
       <div class="card">
         <span class="icon-tile"><Icon name="monitor" /></span>
-        <h2 class="h-card" style="margin-top:12px">{t('Di situs web', 'On the website')}</h2>
+        <h2 class="h-card mt-12">{t('Di situs web', 'On the website')}</h2>
         <ol class="small del-steps">
           <li><a href={url('/masuk/?next=/jastipkita/akun/')}>{t('Masuk', 'Sign in')}</a> {t('dengan kode OTP e-mail/HP.', 'with an e-mail/phone OTP.')}</li>
           <li>{t('Buka halaman', 'Open')} <a href={url('/akun/#hapus')}>{t('Akun → Hapus akun', 'Account → Delete account')}</a>.</li>
@@ -56,7 +56,7 @@ const retention: Array<[string, string, string, string]> = [
     </div>
     <div class="card">
       <h2 class="h-card">{t('Yang terjadi setelah kamu mengajukan', 'What happens next')}</h2>
-      <ul class="list-check" role="list" style="margin-top:14px">
+      <ul class="list-check mt-14" role="list">
         <li><Icon name="clock" /><span>{t('Penghapusan dijadwalkan 14 hari. Semua sesi dikeluarkan; kamu bisa masuk lagi untuk membatalkan selama masa tenggang.', 'Deletion is scheduled for 14 days later. All sessions are signed out; you can sign in again to cancel during the grace period.')}</span></li>
         <li><Icon name="ban" /><span>{t('Permintaan ditolak sementara bila masih ada transaksi berjalan, dispute terbuka, refund, atau payout yang belum selesai — selesaikan dulu agar uang siapa pun tidak tertahan.', 'Requests are refused while transactions, disputes, refunds or payouts are still open — so nobody’s money gets stuck.')}</span></li>
         <li><Icon name="user-check" /><span>{t('Pada hari ke-14 profil dianonimkan: nama, e-mail, nomor HP, foto, perangkat, dan token notifikasi dihapus. E-mail disimpan dalam bentuk hash untuk mencegah penyalahgunaan pendaftaran ulang.', 'On day 14 your profile is anonymised: name, e-mail, phone, photo, devices and push tokens are removed. The e-mail is kept only as a hash to prevent sign-up abuse.')}</span></li>
@@ -65,13 +65,13 @@ const retention: Array<[string, string, string, string]> = [
     </div>
     <div>
       <h2 class="h-card">{t('Data yang wajib disimpan lebih lama', 'Data we must keep for longer')}</h2>
-      <div class="table-wrap" style="margin-top:12px">
+      <div class="table-wrap mt-12">
         <table class="table">
           <thead><tr><th scope="col">{t('Data', 'Data')}</th><th scope="col">{t('Lama simpan', 'Retention')}</th><th scope="col">{t('Alasan', 'Reason')}</th><th scope="col">{t('Tindakan', 'Action')}</th></tr></thead>
           <tbody>{retention.map(([a, b, c, d]) => <tr><td>{a}</td><td>{b}</td><td>{c}</td><td>{d}</td></tr>)}</tbody>
         </table>
       </div>
-      <p class="xsmall muted" style="margin-top:8px">{t('Durasi retensi adalah asumsi internal yang sedang ditinjau konsultan hukum; versi final akan tercantum di Kebijakan Privasi.', 'Retention periods are internal assumptions under legal review; the final version will be in the Privacy Policy.')} <a href={url('/legal/privacy-policy/')}>{t('Kebijakan Privasi', 'Privacy Policy (ID)')}</a></p>
+      <p class="xsmall muted mt-8">{t('Durasi retensi adalah asumsi internal yang sedang ditinjau konsultan hukum; versi final akan tercantum di Kebijakan Privasi.', 'Retention periods are internal assumptions under legal review; the final version will be in the Privacy Policy.')} <a href={url('/legal/privacy-policy/')}>{t('Kebijakan Privasi', 'Privacy Policy (ID)')}</a></p>
     </div>
     <div class="note note-neutral">
       <Icon name="mail" />

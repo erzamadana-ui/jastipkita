@@ -75,7 +75,7 @@ const kmkRate = KMK_RATES.rates[c.currency]!;
       <Breadcrumbs items={crumbs} />
       <div class="country-hero">
         <div>
-          <span class="eyebrow" style="margin-top:18px"><Icon name="route" size={16} />{c.cities.slice(0, 3).join(' · ')} → Indonesia</span>
+          <span class="eyebrow mt-18"><Icon name="route" size={16} />{c.cities.slice(0, 3).join(' · ')} → Indonesia</span>
           <h1>{c.h1}</h1>
           <p class="lead">{c.lead}</p>
           <div class="kicker-row">
@@ -83,7 +83,7 @@ const kmkRate = KMK_RATES.rates[c.currency]!;
             <span class="chip chip-info"><Icon name="plane" />Soft launch</span>
             <span class="chip"><Icon name="landmark" />Kurs pajak Rp {formatDecimalString(kmkRate)} / {c.currency}</span>
           </div>
-          <div class="hero-ctas" style="margin-top:24px">
+          <div class="hero-ctas mt-24">
             <a class="btn btn-primary" href={url(`/kalkulator-bea-cukai/?origin=${c.code}`)}><Icon name="calculator" />Hitung bea & pajak</a>
             <a class="btn" href={url(`/cek-barang-terlarang/?origin=${c.code}`)}><Icon name="search" />Cek barang terlarang</a>
             <a class="btn btn-ghost" href={url(`/trip/?origin=${c.code}`)}><Icon name="plane-takeoff" />Cari trip dari {c.nameId}</a>
@@ -95,7 +95,7 @@ const kmkRate = KMK_RATES.rates[c.currency]!;
             <span class="badge-est">Estimasi</span>
           </div>
           <p class="small muted">{c.example.product} · {categoryName(c.example.categoryCode)} · {c.example.quantity} × <span class="tnum">{priceLabel}</span></p>
-          <table class="table ex-table" style="margin-top:14px">
+          <table class="table ex-table mt-14">
             <caption class="sr-only">Perhitungan estimasi bea masuk dan pajak impor untuk {c.example.product}</caption>
             <tbody>
               <tr><th scope="row">Nilai pabean <small>{priceLabel} × Rp {formatDecimalString(kmkRate)}</small></th><td class="num">{formatIdr(ex.customsValueIdr)}</td></tr>
@@ -105,7 +105,7 @@ const kmkRate = KMK_RATES.rates[c.currency]!;
               <tr class="total"><th scope="row">Total bea & pajak <small>≈ {ex.pct}% dari nilai barang</small></th><td class="num">{formatIdr(ex.totalIdr)}</td></tr>
             </tbody>
           </table>
-          <p class="xsmall muted" style="margin-top:12px">
+          <p class="xsmall muted mt-12">
             {c.example.note} Barang titipan = barang bukan pribadi (tanpa pembebasan USD 500). Dasar: {RULE_NON_PERSONAL.sourceReference}. Kurs {KMK_RATES.reference} (berlaku 23–29 Sep 2026); Bea Cukai memakai kurs minggu kedatangan. Aturan diverifikasi {RULE_NON_PERSONAL.lastVerifiedAt} oleh tim riset (belum ditinjau ahli kepabeanan). <strong>Estimasi, bukan nasihat pajak.</strong>
           </p>
         </aside>
@@ -119,11 +119,11 @@ const kmkRate = KMK_RATES.rates[c.currency]!;
         <div class="prose-lite">
           {c.intro.map((p) => <p>{p}</p>)}
         </div>
-        <div class="grid" style="--gap:14px">
+        <div class="grid g-14">
           {c.highlights.map((h) => (
             <div class="card highlight">
               <span class="icon-tile"><Icon name={h.icon} /></span>
-              <div><h2 class="h-card" style="font-size:1rem">{h.title}</h2><p class="small muted">{fill(h.text, vars)}</p></div>
+              <div><h2 class="h-card fs-16">{h.title}</h2><p class="small muted">{fill(h.text, vars)}</p></div>
             </div>
           ))}
         </div>
@@ -164,24 +164,24 @@ const kmkRate = KMK_RATES.rates[c.currency]!;
   <section class="section-tight" aria-labelledby="restricted-title">
     <div class="container">
       <div class="section-head">
-        <span class="eyebrow" style="color:var(--jk-color-warning-text)">Perlu perhatian</span>
+        <span class="eyebrow text-warning">Perlu perhatian</span>
         <h2 id="restricted-title" class="h-section">Barang dari {c.nameId} yang sering bermasalah</h2>
       </div>
-      <div class="grid grid-2" style="--gap:14px">
+      <div class="grid grid-2 g-14">
         {restricted.map(({ title, context, rule }) => (
           <article class="card restricted-item">
             <div class="ri-head">
-              <h3 class="h-card" style="font-size:1rem">{title}</h3>
+              <h3 class="h-card fs-16">{title}</h3>
               <span class={`chip ${rule.status === 'ACTIVE' ? CLASS_CHIP[rule.classification] : ''}`}>{rule.status === 'ACTIVE' ? CLASS_LABEL[rule.classification] : 'Dalam kajian'}</span>
             </div>
             <p class="xsmall muted">{context}</p>
-            <p class="small" style="margin-top:8px">{rule.messageId}</p>
-            {rule.status !== 'ACTIVE' && <p class="xsmall muted" style="margin-top:6px">Aturan ini masih draf (belum berlaku otomatis di checkout) sampai diverifikasi.</p>}
-            {rule.permitAuthority && <p class="xsmall muted" style="margin-top:6px">Instansi: {rule.permitAuthority}</p>}
+            <p class="small mt-8">{rule.messageId}</p>
+            {rule.status !== 'ACTIVE' && <p class="xsmall muted mt-6">Aturan ini masih draf (belum berlaku otomatis di checkout) sampai diverifikasi.</p>}
+            {rule.permitAuthority && <p class="xsmall muted mt-6">Instansi: {rule.permitAuthority}</p>}
           </article>
         ))}
       </div>
-      <p style="margin-top:20px"><a class="link-arrow" href={url(`/cek-barang-terlarang/?origin=${c.code}`)}>Cek barang lain dari {c.nameId}<Icon name="arrow-right" /></a></p>
+      <p class="mt-20"><a class="link-arrow" href={url(`/cek-barang-terlarang/?origin=${c.code}`)}>Cek barang lain dari {c.nameId}<Icon name="arrow-right" /></a></p>
     </div>
   </section>
 
@@ -190,18 +190,18 @@ const kmkRate = KMK_RATES.rates[c.currency]!;
       <div class="shop-grid">
         <div>
           <span class="eyebrow">Tempat belanja</span>
-          <h2 id="shop-title" class="h-section" style="margin-top:10px">Di mana traveler biasa berbelanja</h2>
+          <h2 id="shop-title" class="h-section mt-10">Di mana traveler biasa berbelanja</h2>
           <ul class="merchant-list" role="list">
             {c.merchants.map((m) => <li><Icon name="store" /><div><strong>{m.name}</strong><span>{m.kind}</span></div></li>)}
           </ul>
-          <p class="xsmall muted" style="margin-top:12px">Nama toko disebut sebagai contoh tempat belanja umum, bukan mitra atau afiliasi JastipKita.</p>
+          <p class="xsmall muted mt-12">Nama toko disebut sebagai contoh tempat belanja umum, bukan mitra atau afiliasi JastipKita.</p>
         </div>
         <div>
           <span class="eyebrow">Tips</span>
-          <h2 class="h-section" style="margin-top:10px">Supaya titipanmu mulus</h2>
-          <div class="grid" style="--gap:12px;margin-top:20px">
+          <h2 class="h-section mt-10">Supaya titipanmu mulus</h2>
+          <div class="grid g-12 mt-20">
             {c.tips.map((tip) => (
-              <div class="card card-muted" style="padding:18px 20px"><h3 class="h-card" style="font-size:1rem">{tip.title}</h3><p class="small muted" style="margin-top:4px">{fill(tip.text, vars)}</p></div>
+              <div class="card card-muted p-18-20"><h3 class="h-card fs-16">{tip.title}</h3><p class="small muted mt-4">{fill(tip.text, vars)}</p></div>
             ))}
           </div>
         </div>
@@ -225,14 +225,14 @@ const kmkRate = KMK_RATES.rates[c.currency]!;
 
   <section class="section-tight" aria-labelledby="faq-title">
     <div class="container container-narrow">
-      <h2 id="faq-title" class="h-section" style="margin-bottom:24px">Tanya jawab jastip {c.nameId}</h2>
+      <h2 id="faq-title" class="h-section mb-24">Tanya jawab jastip {c.nameId}</h2>
       <Faq items={faq} openFirst />
     </div>
   </section>
 
   <section class="section-tight" aria-labelledby="other-title">
     <div class="container">
-      <h2 id="other-title" class="h-card" style="margin-bottom:14px">Negara lain</h2>
+      <h2 id="other-title" class="h-card mb-14">Negara lain</h2>
       <div class="other-countries">
         {others.map((o) => <a class="chip other-chip" href={url(`/${o.slug}/`)}><strong>{o.code}</strong> Jastip {o.nameId}</a>)}
       </div>

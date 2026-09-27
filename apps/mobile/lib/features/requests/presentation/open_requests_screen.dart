@@ -47,7 +47,7 @@ class _OpenRequestsScreenState extends ConsumerState<OpenRequestsScreen> {
                   ),
                   for (final t in trips)
                     ChoiceChip(
-                      label: Text('${t.originCity} → ${t.destinationCity}'),
+                      label: Text(routeLabel(t.originCity, t.destinationCity)),
                       selected: _tripId == t.id,
                       onSelected: (bool v) => setState(() => _tripId = v ? t.id : null),
                     ),

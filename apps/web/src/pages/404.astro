@@ -5,27 +5,19 @@ import { url } from '../lib/paths.ts';
 ---
 <Base title="Halaman tidak ditemukan" description="Halaman yang kamu cari tidak ada di JastipKita." path="/404/" noindex>
   <section class="section">
-    <div class="container container-narrow" style="text-align:center">
-      <span class="icon-tile" style="margin-inline:auto;width:64px;height:64px"><Icon name="map-pin" size={30} /></span>
-      <p class="eyebrow" style="margin-top:20px;justify-content:center">404</p>
-      <h1 class="h-section" style="margin-top:8px">Halaman ini tidak ditemukan</h1>
-      <p class="lead" style="margin:14px auto 0;max-width:520px">Mungkin tautannya salah ketik atau halamannya sudah dipindah. Coba mulai dari salah satu halaman berikut.</p>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:28px">
+    <div class="container container-narrow text-center">
+      <span class="icon-tile mx-auto w-64 h-64"><Icon name="map-pin" size={30} /></span>
+      <p class="eyebrow mt-20 justify-center">404</p>
+      <h1 class="h-section mt-8">Halaman ini tidak ditemukan</h1>
+      <p class="lead m-14-auto-0 maxw-520">Mungkin tautannya salah ketik atau halamannya sudah dipindah. Coba mulai dari salah satu halaman berikut.</p>
+      <div class="flex flex-wrap gap-10 justify-center mt-28">
         <a class="btn btn-primary" href={url('/')}><Icon name="home" />Beranda</a>
         <a class="btn" href={url('/kalkulator-bea-cukai/')}><Icon name="calculator" />Kalkulator bea</a>
         <a class="btn" href={url('/bantuan/')}><Icon name="circle-help" />Bantuan</a>
       </div>
     </div>
   </section>
-  <script is:inline>
-    // Static hosts cannot serve /jastipkita/app/transactions/<id> or /jastipkita/r/<code>; forward them to the
-    // static fallback pages with the value in the query string (validated again on the target page).
-    (function () {
-      var p = location.pathname;
-      var m = /^\/jastipkita\/app\/transactions\/([^/?#]+)\/?$/.exec(p);
-      if (m) return location.replace('/jastipkita/app/transactions/?id=' + encodeURIComponent(decodeURIComponent(m[1])));
-      var r = /^\/jastipkita\/r\/([^/?#]+)\/?$/.exec(p);
-      if (r) return location.replace('/jastipkita/r/?code=' + encodeURIComponent(decodeURIComponent(r[1])));
-    })();
+  <script>
+    import '../scripts/not-found.ts';
   </script>
 </Base>

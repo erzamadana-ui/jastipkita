@@ -1,3 +1,4 @@
+import { StepUpProof } from '../auth/schemas';
 import { z } from '@hono/zod-openapi';
 
 export const KycSubmissionSchema = z
@@ -77,5 +78,10 @@ export const PayoutAccountBody = z
     accountNumber: z.string().trim().regex(/^\d{6,20}$/),
     holderName: z.string().trim().min(2).max(120),
     makeDefault: z.boolean().optional(),
+    stepUp: StepUpProof.optional().openapi({ description: 'Required (SEC-12): SENSITIVE_ACTION OTP for action PAYOUT_ACCOUNT_ADD, targetId = own user id' }),
   })
   .openapi('PayoutAccountInput');
+
+export const PayoutDefaultBody = z
+  .object({ stepUp: StepUpProof.optional().openapi({ description: 'Required unless already default: SENSITIVE_ACTION OTP for PAYOUT_ACCOUNT_SET_DEFAULT, targetId = account id' }) })
+  .openapi('PayoutAccountDefaultInput');

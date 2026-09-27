@@ -124,6 +124,29 @@ describe('purchase proof (golden rule)', () => {
     expect(hold).toBeTruthy();
   });
 
+  it('merchant: brand store vs URL domain is a match; a different merchant is only a low-weight REVIEW signal (payout not held)', async () => {
+    // request created from a URL (merchant = domain) → proof names the official brand store → no signal at all
+    const txA = await approvedTx({ merchantName: 'pokemoncenter-online.com' });
+    const a = await call(t, p.traveler, 'POST', `/v1/transactions/${txA.id}/purchase-proof`, await proofBody('brand-store-receipt', { merchantName: 'Pokemon Center Tokyo DX' }));
+    expect(a.status, JSON.stringify(a.body)).toBe(201);
+    expect(a.body).toMatchObject({ status: 'ACCEPTED', flagged: false });
+    // a genuinely different shop → soft MERCHANT_MISMATCH: accepted, REVIEW risk assessment, no payout hold
+    const txB = await approvedTx({ merchantName: 'uniqlo.com' });
+    const b = await call(t, p.traveler, 'POST', `/v1/transactions/${txB.id}/purchase-proof`, await proofBody('other-shop-receipt', { merchantName: 'Don Quijote Shibuya' }));
+    expect(b.body).toMatchObject({ status: 'ACCEPTED', flagged: false });
+    const [risk] = await t.adminSql<{ decision: string; reasons: { code: string; weight?: number }[] }[]>`
+      SELECT a.decision, a.reasons FROM risk_assessments a JOIN purchase_proofs pp ON pp.id = a.subject_id WHERE pp.transaction_id = ${txB.id}`;
+    expect(risk!.decision).toBe('REVIEW');
+    expect(risk!.reasons.map((r) => r.code)).toEqual(['MERCHANT_MISMATCH']);
+    const [hold] = await t.adminSql<{ payout_hold_reason: string | null }[]>`SELECT payout_hold_reason FROM transactions WHERE id = ${txB.id}`;
+    expect(hold!.payout_hold_reason).toBeNull();
+    const done = await deliverAndComplete(txB);
+    expect(done.body.transactionStatus).toBe('COMPLETED');
+    await processPayouts(t.deps, { transactionId: txB.id });
+    const [po] = await t.adminSql<{ status: string }[]>`SELECT status FROM payouts WHERE transaction_id = ${txB.id}`;
+    expect(po!.status).toBe('PAID');
+  });
+
   it('proof with purchase time before PAYMENT_SECURED is flagged', async () => {
     const tx = await approvedTx();
     const res = await call(t, p.traveler, 'POST', `/v1/transactions/${tx.id}/purchase-proof`, await proofBody(undefined, { purchasedAt: new Date(t.clock.now().getTime() - 86400_000).toISOString() }));

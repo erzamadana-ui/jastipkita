@@ -546,7 +546,7 @@ INSERT INTO status_transitions (machine, from_status, to_status, actor_types, no
   ('PAYOUT', 'SCHEDULED', 'PROCESSING', ARRAY['SYSTEM', 'ADMIN']::text[], 'PAYOUT_CLEAR: risk ALLOW/REVIEW, tidak ada dispute terbuka, rekening terverifikasi'),
   ('PAYOUT', 'SCHEDULED', 'ON_HOLD', ARRAY['SYSTEM', 'ADMIN']::text[], 'alasan hold wajib'),
   ('PAYOUT', 'SCHEDULED', 'CANCELLED', ARRAY['ADMIN']::text[], NULL),
-  ('PAYOUT', 'ON_HOLD', 'SCHEDULED', ARRAY['ADMIN']::text[], 'HOLD_RELEASE: approver tercatat'),
+  ('PAYOUT', 'ON_HOLD', 'SCHEDULED', ARRAY['ADMIN', 'SYSTEM']::text[], 'HOLD_RELEASE: ADMIN — approver tercatat; SYSTEM — hanya hold otomatis karena dispute (DISPUTE_OPEN) setelah dispute CLOSED, tanpa risk review terbuka dan tanpa flag hold payout'),
   ('PAYOUT', 'ON_HOLD', 'CANCELLED', ARRAY['ADMIN']::text[], NULL),
   ('PAYOUT', 'PROCESSING', 'PAID', ARRAY['SYSTEM']::text[], 'disbursement sukses'),
   ('PAYOUT', 'PROCESSING', 'FAILED', ARRAY['SYSTEM']::text[], 'disbursement gagal'),

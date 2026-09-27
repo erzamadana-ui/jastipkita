@@ -127,7 +127,7 @@ export async function createTestContext(opts: { now?: Date; env?: Record<string,
     for (const role of u.roles ?? []) {
       await adminSql`INSERT INTO user_roles (user_id, role_code, reason) VALUES (${id}, ${role}, 'test fixture')`;
     }
-    const session = await issueSession(deps, sql, id, { mfaAt: u.mfa ? Math.floor(clock.now().getTime() / 1000) : null });
+    const session = await issueSession(deps, sql, id, { mfaAt: u.mfa ? Math.floor(clock.now().getTime() / 1000) : null, authMethod: 'OTP' });
     return { id, email, phone, ...session };
   };
 

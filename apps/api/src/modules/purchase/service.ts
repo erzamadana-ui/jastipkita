@@ -2,7 +2,7 @@
  * Purchase proof (golden rule: only in PURCHASE_APPROVED, never above the approved ceiling), travel
  * status updates and customs declarations.
  */
-import { assessReceipt, type TransactionStatus } from '@jastipkita/core';
+import { assessReceipt, receiptHoldRequired, type TransactionStatus } from '@jastipkita/core';
 import type { AppDeps, AuthContext } from '../../context';
 import { bytesToHex } from '../../lib/crypto';
 import { AppError, Errors } from '../../lib/errors';
@@ -102,7 +102,10 @@ export async function submitPurchaseProof(deps: AppDeps, auth: AuthContext, id: 
       },
       thresholds,
     );
-    const flagged = assessment.reasons.length > 0;
+    // Soft signals (MERCHANT_MISMATCH, core SOFT_RECEIPT_SIGNALS) only open a low-weight REVIEW; they never FLAG the
+    // proof or hold the payout on their own (QA observation 2026-09-28: URL-derived merchant vs brand store).
+    const flagged = receiptHoldRequired(assessment.reasons);
+    const softOnly = !flagged && assessment.reasons.length > 0;
     const [proof] = await db<{ id: string }[]>`
       INSERT INTO purchase_proofs (transaction_id, traveler_id, receipt_file_id, product_photo_file_ids, video_file_id, serial_number,
                                    merchant_name, actual_price_minor, currency, purchased_at, fraud_score, fraud_reasons, status)
@@ -111,6 +114,16 @@ export async function submitPurchaseProof(deps: AppDeps, auth: AuthContext, id: 
               ${Math.round(assessment.score)}, ${db.json(assessment.reasons.map((r) => ({ code: r.code, weight: r.weight, message: r.message })) as never)},
               ${flagged ? 'FLAGGED' : 'ACCEPTED'})
       RETURNING id`;
+    if (softOnly) {
+      await recordRiskAssessment(
+        db,
+        'PURCHASE_PROOF',
+        proof!.id,
+        { score: assessment.score, decision: 'REVIEW', reasons: assessment.reasons.map((r) => ({ code: r.code, weight: r.weight, message: r.message })) },
+        { transactionId: tx.id, imageHash, engineVersion: assessment.engineVersion, soft: true },
+        'core-receipt-v1',
+      );
+    }
     if (flagged) {
       const decision = assessment.decision === 'ALLOW' ? 'REVIEW' : assessment.decision;
       await recordRiskAssessment(

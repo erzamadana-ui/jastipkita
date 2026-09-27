@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cspProblems } from '../scripts/csp-check.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = resolve(here, '../dist');
@@ -36,9 +37,14 @@ test('site has the expected pages', () => {
 });
 
 for (const path of PAGES) {
-  test(`page ${path}: 200, one h1, meta, canonical, JSON-LD`, async ({ page }) => {
+  test(`page ${path}: 200, one h1, meta, canonical, JSON-LD, no CSP violations`, async ({ page }) => {
     await blockApi(page);
-    const res = await page.goto(path, { waitUntil: 'domcontentloaded' });
+    await page.addInitScript(() => {
+      const w = window as unknown as { __csp: string[] };
+      w.__csp = [];
+      document.addEventListener('securitypolicyviolation', (e) => w.__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
+    });
+    const res = await page.goto(path, { waitUntil: 'load' });
     expect(res?.status()).toBe(200);
     await expect(page.locator('h1')).toHaveCount(1);
     expect((await page.title()).length).toBeGreaterThan(5);
@@ -58,6 +64,9 @@ for (const path of PAGES) {
     // images need alt text
     const imgsWithoutAlt = await page.locator('img:not([alt])').count();
     expect(imgsWithoutAlt).toBe(0);
+    // the page runs under its own CSP without violations (fonts, styles, module scripts, theme bootstrap)
+    await page.waitForTimeout(100);
+    expect(await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp)).toEqual([]);
   });
 }
 
@@ -79,6 +88,24 @@ test('no broken internal links or assets', async ({ request }) => {
   }
   expect(broken, broken.join('\n')).toEqual([]);
   expect(seen.size).toBeGreaterThan(60);
+});
+
+test('every built HTML page carries the CSP meta and no inline <script> without a matching hash (SEC-14)', () => {
+  const files: string[] = [];
+  const walk = (d: string) => {
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (n.endsWith('.html')) files.push(p);
+    }
+  };
+  walk(dist);
+  expect(files.length).toBeGreaterThanOrEqual(57);
+  const failures = files.flatMap((f) => cspProblems(readFileSync(f, 'utf8')).map((p: string) => `${relative(dist, f)}: ${p}`));
+  expect(failures, failures.join('\n')).toEqual([]);
+  // the checker itself must catch an unhashed inline script, inline styles and handlers
+  const bad = readFileSync(join(dist, 'index.html'), 'utf8').replace('</body>', '<script>alert(1)</script><div style="x" onclick="y"></div></body>');
+  expect(cspProblems(bad).join(' ')).toMatch(/without matching hash[\s\S]*style=""[\s\S]*event handler/);
 });
 
 test('sitemap lists public pages only', async ({ request }) => {
@@ -168,7 +195,8 @@ test('consent banner: shown once, strictly-necessary storage only, no third-part
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
   await page.click('[data-consent-choice="necessary"]');
   await expect(page.locator('[data-consent]')).toBeHidden();
-  expect(await page.evaluate(() => localStorage.getItem('jk-consent'))).toBe('necessary');
+  expect(await page.evaluate(() => localStorage.getItem('jk:consent'))).toBe('necessary');
+  expect(await page.evaluate(() => Object.keys(localStorage).every((k) => k.startsWith('jk:')))).toBe(true);
   await page.reload();
   await expect(page.locator('[data-consent]')).toBeHidden();
   expect(external, external.join('\n')).toEqual([]);

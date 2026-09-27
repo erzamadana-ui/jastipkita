@@ -48,13 +48,13 @@ function card(t: Trip): string {
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
       ${escapeHtml(t.destinationCity)} <span class="muted small">(${escapeHtml(t.destinationCountry)})</span></div>
     <p class="small muted">Berangkat ${escapeHtml(fmtDate(t.departureDate))} · tiba ${escapeHtml(fmtDate(t.arrivalDate))}</p>
-    <div style="display:flex;flex-wrap:wrap;gap:6px">
+    <div class="flex flex-wrap gap-6">
       ${t.verified ? '<span class="chip chip-success">Trip terverifikasi</span>' : '<span class="chip">Belum terverifikasi</span>'}
       <span class="chip">${escapeHtml(t.traveler.trustBadge.label)}${t.traveler.kycLevel ? ` · KYC ${t.traveler.kycLevel}` : ''}</span>
       ${typeof t.traveler.trustScore === 'number' ? `<span class="chip trust-chip ${TIER_CLASS[t.traveler.trustTier?.tier ?? ''] ?? ''}">Trust ${t.traveler.trustScore}${t.traveler.trustTier ? ` · ${escapeHtml(t.traveler.trustTier.label)}` : ''}</span>` : ''}
     </div>
     <p class="small"><strong>${escapeHtml(t.traveler.displayName)}</strong> · ${escapeHtml(rating)} · ${t.traveler.completedTransactions} transaksi selesai</p>
-    <div><div class="small" style="display:flex;justify-content:space-between"><span>Sisa kapasitas</span><span class="tnum">${escapeHtml(String(t.capacityRemainingKg))} kg${t.itemsRemaining !== null ? ` · ${t.itemsRemaining} item` : ''}</span></div></div>
+    <div><div class="small flex justify-between"><span>Sisa kapasitas</span><span class="tnum">${escapeHtml(String(t.capacityRemainingKg))} kg${t.itemsRemaining !== null ? ` · ${t.itemsRemaining} item` : ''}</span></div></div>
     <p class="small">Fee: <strong>${escapeHtml(fee(t.fee))}</strong></p>
     <a class="btn btn-primary btn-sm" href="../#unduh">Titip lewat aplikasi</a>
   </article>`;

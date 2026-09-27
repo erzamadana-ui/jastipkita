@@ -5,6 +5,9 @@
  *   - suspend / reactivate / force logout (sessions revoked, audited, security events)
  *   - role grants: non-privileged roles directly (rbac.manage + MFA); SUPER_ADMIN / FINANCE_SUPER_ADMIN through a
  *     maker-checker request approved by ANOTHER active SUPER_ADMIN with fresh MFA (admin_role_requests + DB guard)
+ *   - MFA reset (SEC-13): a CONFIRMED authenticator is reset only by maker-checker — requester (rbac.manage + MFA) ≠
+ *     approver (another ACTIVE SUPER_ADMIN, fresh MFA) ≠ subject (admin_mfa_reset_requests + DB guard). Applying it
+ *     disables the factor, deletes recovery codes and revokes every session; the user re-enrolls from a fresh OTP login.
  */
 import type { TxSql } from '../../../db/sql';
 import { clearPermissionCache } from '../../../middleware/auth';
@@ -149,6 +152,10 @@ export async function userDetail(ctx: AdminCtx, id: string) {
   const [disputes] = await db<{ n: number }[]>`
     SELECT count(*)::int AS n FROM disputes d JOIN transactions t ON t.id = d.transaction_id
      WHERE d.status <> 'CLOSED' AND (t.buyer_id = ${id} OR t.traveler_id = ${id})`;
+  const [mfa] = await db<{ confirmed: boolean; pending: boolean }[]>`
+    SELECT coalesce(bool_or(confirmed_at IS NOT NULL AND disabled_at IS NULL), false) AS confirmed,
+           coalesce(bool_or(confirmed_at IS NULL AND disabled_at IS NULL), false) AS pending
+      FROM mfa_factors WHERE user_id = ${id}`;
   const [sec] = await db<{ n: number; high: number }[]>`
     SELECT count(*)::int AS n, count(*) FILTER (WHERE severity IN ('HIGH','CRITICAL'))::int AS high FROM security_events
      WHERE user_id = ${id} AND created_at >= ${new Date(ctx.deps.clock.now().getTime() - 30 * 86400_000)}`;
@@ -190,6 +197,7 @@ export async function userDetail(ctx: AdminCtx, id: string) {
     sessions: sessions.map((s) => ({ sessionId: s.family_id, createdAt: iso(s.created_at)!, expiresAt: iso(s.expires_at)!, platform: s.platform, appVersion: s.app_version })),
     disputes: { open: disputes?.n ?? 0 },
     security: { events30d: sec?.n ?? 0, highOrCritical30d: sec?.high ?? 0 },
+    mfa: { enrolled: mfa?.confirmed ?? false, pendingEnrollment: mfa?.pending ?? false },
   };
 }
 
@@ -395,6 +403,116 @@ export async function rejectRoleRequest(ctx: AdminCtx, id: string, note: string)
     const self = r.requested_by === ctx.auth.userId;
     await tx`UPDATE admin_role_requests SET status = ${self ? 'CANCELLED' : 'REJECTED'}, rejected_by = ${ctx.auth.userId}, decision_note = ${note}, decided_at = ${now} WHERE id = ${id}`;
     await adminAudit(tx, ctx, { action: self ? 'rbac.role_request_cancelled' : 'rbac.role_request_rejected', entityType: 'user', entityId: r.user_id, meta: { requestId: id, roleCode: r.role_code, note } });
+    return self ? 'CANCELLED' : 'REJECTED';
+  });
+  return { id, status };
+}
+
+// ------------------------------------------------------------------ MFA reset (SEC-13, maker-checker)
+
+interface MfaResetRow {
+  id: string;
+  user_id: string;
+  factor_id: string | null;
+  reason: string;
+  requested_by: string;
+  approved_by: string | null;
+  rejected_by: string | null;
+  status: string;
+  decision_note: string | null;
+  decided_at: Date | null;
+  expires_at: Date;
+  created_at: Date;
+}
+
+function mfaResetDto(r: MfaResetRow) {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    factorId: r.factor_id,
+    reason: r.reason,
+    requestedBy: r.requested_by,
+    approvedBy: r.approved_by,
+    rejectedBy: r.rejected_by,
+    status: r.status,
+    decisionNote: r.decision_note,
+    decidedAt: iso(r.decided_at),
+    expiresAt: iso(r.expires_at)!,
+    createdAt: iso(r.created_at)!,
+  };
+}
+
+export async function requestMfaReset(ctx: AdminCtx, userId: string, reason: string) {
+  if (userId === ctx.auth.userId) throw Errors.forbidden('Tidak dapat mereset MFA milik sendiri', 'MAKER_CHECKER_VIOLATION');
+  await loadUser(ctx, userId);
+  const row = await inAdminTx(ctx, async (tx) => {
+    const [f] = await tx<{ id: string }[]>`
+      SELECT id FROM mfa_factors WHERE user_id = ${userId} AND type = 'TOTP' AND disabled_at IS NULL AND confirmed_at IS NOT NULL`;
+    if (!f) throw Errors.unprocessable('MFA_NOT_ENROLLED', 'Pengguna tidak memiliki authenticator aktif');
+    const [pending] = await tx<{ id: string }[]>`SELECT id FROM admin_mfa_reset_requests WHERE user_id = ${userId} AND status = 'PENDING'`;
+    if (pending) throw Errors.conflict('MFA_RESET_PENDING', 'Sudah ada permintaan reset MFA yang menunggu persetujuan', { requestId: pending.id });
+    const [r] = await tx<MfaResetRow[]>`
+      INSERT INTO admin_mfa_reset_requests (user_id, factor_id, reason, requested_by, requester_mfa_at, expires_at)
+      VALUES (${userId}, ${f.id}, ${reason}, ${ctx.auth.userId}, ${mfaDate(ctx.auth)}, ${new Date(ctx.deps.clock.now().getTime() + 72 * 3600_000)})
+      RETURNING *`;
+    await adminAudit(tx, ctx, { action: 'auth.mfa_reset_requested', entityType: 'user', entityId: userId, after: { status: 'PENDING' }, meta: { requestId: r!.id, factorId: f.id, reason } });
+    return r!;
+  });
+  return { ...mfaResetDto(row), message: 'Reset MFA memerlukan persetujuan SUPER_ADMIN lain (maker-checker).' };
+}
+
+export async function listMfaResetRequests(ctx: AdminCtx, status?: string) {
+  const rows = await ctx.deps.sql<MfaResetRow[]>`
+    SELECT * FROM admin_mfa_reset_requests ${status ? ctx.deps.sql`WHERE status = ${status}` : ctx.deps.sql``} ORDER BY created_at DESC LIMIT 200`;
+  return { data: rows.map(mfaResetDto), nextCursor: null };
+}
+
+export async function approveMfaReset(ctx: AdminCtx, id: string, note: string | undefined) {
+  if (!hasRole(ctx.auth, 'SUPER_ADMIN')) throw Errors.forbidden('Reset MFA hanya dapat disetujui SUPER_ADMIN', 'ROLE_REQUIRED', { required: 'SUPER_ADMIN' });
+  const now = ctx.deps.clock.now();
+  const out = await inAdminTx(ctx, async (tx) => {
+    const [r] = await tx<MfaResetRow[]>`SELECT * FROM admin_mfa_reset_requests WHERE id = ${id} FOR UPDATE`;
+    if (!r) throw Errors.notFound('Permintaan reset MFA', 'MFA_RESET_NOT_FOUND');
+    if (r.status !== 'PENDING') throw Errors.unprocessable('MFA_RESET_NOT_PENDING', 'Permintaan sudah diputuskan', { status: r.status });
+    if (r.requested_by === ctx.auth.userId || r.user_id === ctx.auth.userId) {
+      throw Errors.forbidden('Penyetuju harus berbeda dari pengaju dan pemilik authenticator', 'MAKER_CHECKER_VIOLATION');
+    }
+    if (r.expires_at <= now) throw Errors.unprocessable('MFA_RESET_EXPIRED', 'Permintaan sudah kedaluwarsa');
+    await tx`UPDATE admin_mfa_reset_requests SET status = 'APPLIED', approved_by = ${ctx.auth.userId}, approver_mfa_at = ${mfaDate(ctx.auth)},
+                    decision_note = ${note ?? null}, decided_at = ${now} WHERE id = ${id}`;
+    const factors = await tx`UPDATE mfa_factors SET disabled_at = ${now} WHERE user_id = ${r.user_id} AND disabled_at IS NULL RETURNING id`;
+    await tx`DELETE FROM mfa_recovery_codes WHERE user_id = ${r.user_id}`;
+    const sessions = await revokeAllSessions(tx, r.user_id, now);
+    await securityEventRow(tx, ctx.deps, {
+      userId: r.user_id,
+      type: 'MFA_RESET',
+      severity: 'HIGH',
+      req: ctx.req,
+      meta: { requestId: id, requestedBy: r.requested_by, approvedBy: ctx.auth.userId, factorsDisabled: factors.length, sessionsRevoked: sessions },
+    });
+    await adminAudit(tx, ctx, {
+      action: 'auth.mfa_reset_applied',
+      entityType: 'user',
+      entityId: r.user_id,
+      before: { factorId: r.factor_id },
+      after: { factorId: null, sessionsRevoked: sessions },
+      meta: { requestId: id, requestedBy: r.requested_by, note: note ?? null },
+    });
+    return { userId: r.user_id, sessions };
+  });
+  clearPermissionCache(out.userId);
+  return { id, status: 'APPLIED', userId: out.userId, sessionsRevoked: out.sessions };
+}
+
+export async function rejectMfaReset(ctx: AdminCtx, id: string, note: string) {
+  const now = ctx.deps.clock.now();
+  const status = await inAdminTx(ctx, async (tx) => {
+    const [r] = await tx<MfaResetRow[]>`SELECT * FROM admin_mfa_reset_requests WHERE id = ${id} FOR UPDATE`;
+    if (!r) throw Errors.notFound('Permintaan reset MFA', 'MFA_RESET_NOT_FOUND');
+    if (r.status !== 'PENDING') throw Errors.unprocessable('MFA_RESET_NOT_PENDING', 'Permintaan sudah diputuskan', { status: r.status });
+    const self = r.requested_by === ctx.auth.userId;
+    await tx`UPDATE admin_mfa_reset_requests SET status = ${self ? 'CANCELLED' : 'REJECTED'}, rejected_by = ${ctx.auth.userId}, decision_note = ${note}, decided_at = ${now} WHERE id = ${id}`;
+    await adminAudit(tx, ctx, { action: self ? 'auth.mfa_reset_cancelled' : 'auth.mfa_reset_rejected', entityType: 'user', entityId: r.user_id, meta: { requestId: id, note } });
     return self ? 'CANCELLED' : 'REJECTED';
   });
   return { id, status };

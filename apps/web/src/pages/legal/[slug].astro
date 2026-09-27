@@ -23,7 +23,7 @@ const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Legal', path: '/legal/'
       <Breadcrumbs items={crumbs} />
       <h1>{doc.data.title}</h1>
       <div data-legal-slug={doc.id} data-static-version={doc.data.version}>
-        <p class="small muted" style="margin-top:10px">
+        <p class="small muted mt-10">
           Versi <span data-legal-version>{doc.data.version}</span> · Berlaku sejak <span data-legal-effective>{doc.data.effectiveDate}</span>
           <span class="chip chip-success legal-live" data-legal-live hidden>terverifikasi dengan server</span>
         </p>
@@ -31,7 +31,7 @@ const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Legal', path: '/legal/'
       </div>
     </div>
   </section>
-  <section class="section-tight" style="padding-top:0">
+  <section class="section-tight pt-0">
     <div class="container">
       <div class="legal-layout">
         <aside class="toc" aria-labelledby="toc-title">
@@ -41,7 +41,7 @@ const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Legal', path: '/legal/'
               {toc.map((h: { depth: number; slug: string; text: string }) => <li class={`lvl-${h.depth}`}><a href={`#${h.slug}`}>{h.text}</a></li>)}
             </ol>
           </details>
-          <p class="xsmall muted" style="margin-top:16px"><a href={url('/legal/')}>Semua dokumen legal</a></p>
+          <p class="xsmall muted mt-16"><a href={url('/legal/')}>Semua dokumen legal</a></p>
         </aside>
         <div>
           <article class="prose legal-prose" data-legal>

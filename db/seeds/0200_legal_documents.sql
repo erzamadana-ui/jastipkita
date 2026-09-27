@@ -60,7 +60,7 @@ $jk_legal$> **TEMPLATE — wajib direview konsultan hukum sebelum production lau
 >
 > Daftar di bawah mencerminkan kode situs saat ini (`apps/web`). Setiap penambahan cookie, SDK, atau analitik **wajib** memperbarui dokumen ini dan banner persetujuan sebelum dirilis.
 
-**Versi:** 0.1 (draf) · **Berlaku sejak:** [TANGGAL BERLAKU] · **Pengendali data:** [NAMA BADAN USAHA — PT/CV, menunggu pendirian]
+**Versi:** 0.2 (draf) — memperbarui nama kunci penyimpanan & kebijakan token (keamanan origin bersama) · **Berlaku sejak:** [TANGGAL BERLAKU] · **Pengendali data:** [NAMA BADAN USAHA — PT/CV, menunggu pendirian]
 
 ## 1. Ringkasnya
 
@@ -72,12 +72,12 @@ $jk_legal$> **TEMPLATE — wajib direview konsultan hukum sebelum production lau
 
 | Nama | Jenis | Tujuan | Kapan dibuat | Masa simpan |
 |---|---|---|---|---|
-| `jk-consent` | localStorage | Mengingat pilihan Anda pada banner privasi | setelah Anda memilih | sampai dihapus dari peramban |
-| `jk-theme` | localStorage | Mengingat tema terang/gelap yang Anda pilih | hanya setelah Anda menekan tombol tema | sampai dihapus dari peramban |
-| `jk-session` | sessionStorage | Token akses setelah Anda masuk (halaman Akun) | setelah login | berakhir saat tab ditutup atau token kedaluwarsa (±15 menit) |
-| `jk-device` | sessionStorage | ID perangkat acak untuk keamanan sesi (hanya HMAC-nya yang disimpan server) | saat login | berakhir saat tab ditutup |
+| `jk:consent` | localStorage | Mengingat pilihan Anda pada banner privasi | setelah Anda memilih | sampai dihapus dari peramban atau Anda keluar (logout) |
+| `jk:theme` | localStorage | Mengingat tema terang/gelap yang Anda pilih | hanya setelah Anda menekan tombol tema | sampai dihapus dari peramban atau Anda keluar (logout) |
+| `jk:refresh` | sessionStorage | Token penyegar (*refresh token*) agar Anda tetap masuk selama tab terbuka (halaman Akun) | setelah login | berakhir saat tab ditutup, saat logout, atau saat token dirotasi |
+| `jk:device` | sessionStorage | ID perangkat acak untuk keamanan sesi (hanya HMAC-nya yang disimpan server) | saat login | berakhir saat tab ditutup atau logout |
 
-Kami tidak menyimpan token penyegar (*refresh token*) di peramban.
+Token akses (*access token*) **hanya disimpan di memori** halaman dan hilang saat halaman ditutup; tidak pernah ditulis ke penyimpanan peramban. Semua kunci memakai awalan `jk:` dan dihapus seluruhnya saat Anda keluar (logout). Karena situs ini berbagi domain `antarkitaindonesia.com` dengan layanan AntarKita lain, kami menerapkan Content-Security-Policy ketat di setiap halaman.
 
 ## 3. Pihak ketiga
 

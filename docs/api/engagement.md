@@ -91,6 +91,7 @@ Critical templates override preferences on the listed channels: payment secured,
 | `transaction.status_changed` → `PAYMENT_SECURED` | from AWAITING_PAYMENT | buyer (breakdown), traveler (DO NOT PURCHASE, item+fee only) | `transaction.payment_secured` | PAYMENT | all | EMAIL |
 | `price_confirmation.requested` | — | buyer | `price.change_requested` (original/actual/diff, deadline) | PAYMENT | all | EMAIL, PUSH |
 | `price_confirmation.resolved` | buyer always; traveler unless APPROVED | both | `price.change_result` | PAYMENT | all | (EMAIL locked) |
+| `price_confirmation.clarification_requested` (money) | — | traveler (buyer's question, contacts masked, ≤ 300 chars; answer deadline; DO NOT PURCHASE) | `price.clarification_requested` | PAYMENT | all | EMAIL, PUSH |
 | `→ PURCHASE_APPROVED` | traveler always; buyer only from PAYMENT_SECURED | both | `transaction.purchase_approved` | TRANSACTION | all | — |
 | `→ PURCHASED` | — | buyer | `transaction.purchased` | TRANSACTION | all | — |
 | `purchase.proof_submitted` | not `flagged` | buyer | `purchase.receipt_available` | TRANSACTION | all | — |
@@ -99,9 +100,12 @@ Critical templates override preferences on the listed channels: payment secured,
 | `→ DELIVERED` | — | buyer (confirm or dispute within `dispute.sla.openWindowHoursAfterDelivery`), traveler | `transaction.delivered` | TRANSACTION | all | — |
 | `→ BUYER_CONFIRMED` | not from DISPUTED | traveler | `transaction.buyer_confirmed` | TRANSACTION | all | — |
 | `→ COMPLETED` | — | both (rating prompt) | `transaction.completed` | TRANSACTION | all | — |
-| `→ CANCELLED` | — | both (traveler: DO NOT PURCHASE) | `transaction.cancelled` | TRANSACTION | all | — |
+| `→ CANCELLED` | not `meta.cause = TRIP_CANCELLED` (dedicated event below) | both (traveler: DO NOT PURCHASE) | `transaction.cancelled` | TRANSACTION | all | — |
+| `transaction.trip_cancelled` (money, `trip.cancelled` consumer) | — | buyer (refund amount or "no charge") + traveler (trust penalty) | `transaction.trip_cancelled` | TRANSACTION | all | EMAIL |
 | `→ DISPUTED / REFUND_PENDING / REFUNDED / AWAITING_PAYMENT / PRICE_CHANGE_PENDING` | covered by the dedicated events | — | — | — | — | — |
-| `refund.requested` / `refund.succeeded` / `refund.failed` (money) | — | buyer | `refund.*` (refund number) | PAYMENT | all | EMAIL |
+| `refund.requested` / `refund.succeeded` / `refund.failed` (money) | — | buyer | `refund.*` (refund number; `refund.requested` says "to your bank account" for `PAYOUT_TO_BUYER`, "to the original payment method" otherwise) | PAYMENT | all | EMAIL |
+| `refund.destination_required` (money) | refund needs a buyer bank account (VA/retail) — also after FINANCE rejects a destination | buyer (amount, "add a bank account", step-up OTP hint) | `refund.destination_required` | PAYMENT | all | EMAIL, PUSH |
+| `refund.destination_set` (money / admin review) | — | buyer (bank + mask; "under review" when `PENDING_REVIEW`) — security confirmation | `refund.destination_updated` | PAYMENT | all | EMAIL, PUSH |
 | `payout.scheduled` / `paid` / `failed` / `on_hold` (money) | — | traveler | `payout.*` (payout number, account mask) | PAYMENT | all | (EMAIL locked) |
 | `receipt.final_available` (money) | — | buyer | `receipt.final` | PAYMENT | all | EMAIL |
 | `dispute.opened` (engagement) | — | opener ("received") + counterparty (evidence deadline) | `dispute.opened` | TRANSACTION | all | EMAIL |
@@ -117,10 +121,10 @@ Critical templates override preferences on the listed channels: payment secured,
 
 ### 2.4 E-mail lifecycle coverage (brief §18)
 `notifications/lifecycle.ts` is the source of truth and `templates.test.ts` asserts every step maps, through the real outbox builders, to a template with an EMAIL channel that renders in `id` and `en`:
-account registration · KYC submitted/approved/rejected · request created · traveler matched · request accepted · payment (checkout created) · payment secured · price adjustment requested · price approval result · product purchased · receipt available · traveler departure · traveler arrival · customs · out for delivery · ready for handover · PIN/QR ready · item received · transaction completed · traveler payout (scheduled, paid) · refund (requested, succeeded, failed) · dispute opened/updated/resolved · final receipt.
+account registration · KYC submitted/approved/rejected · request created · traveler matched · request accepted · payment (checkout created) · payment secured · price adjustment requested · price clarification requested (traveler) · price approval result · trip cancelled by traveler (both) · refund destination required / updated · product purchased · receipt available · traveler departure · traveler arrival · customs · out for delivery · ready for handover · PIN/QR ready · item received · transaction completed · traveler payout (scheduled, paid) · refund (requested, succeeded, failed) · dispute opened/updated/resolved · final receipt.
 
 ### 2.5 Templates
-51 templates in `notifications/templates/catalog.ts` (key = `notifications.event_type`), Indonesian default + English by `users.locale`, "kamu" register (BRAND-GUIDE §4). Each renders in-app/push `{title, body}` and an e-mail `{subject, html, text}`:
+56 templates in `notifications/templates/catalog.ts` (key = `notifications.event_type`), Indonesian default + English by `users.locale`, "kamu" register (BRAND-GUIDE §4). Each renders in-app/push `{title, body}` and an e-mail `{subject, html, text}`:
 
 - **Content:** greeting (first name), paragraphs, optional highlight (success = emerald-700 banner "Pembayaran aman / PAYMENT SECURED"; danger = "JANGAN BELI DULU / DO NOT PURCHASE"), summary table (transaction number, product, traveler **public name** "Dimas P." / buyer public name for travelers, status), **price breakdown table** from the active/accepted quote's `quote_lines` in §10 order with "(estimasi)" markers and the customs note (travelers only see item price + traveler fee), CTA.
 - **Links:** CTA → `${WEB_BASE_URL}/app/transactions/{id}` (web fallback; a universal link opens the app), secondary `jastipkita://transactions/{id}`, receipt `${WEB_BASE_URL}/app/transactions/{id}/receipt`; disputes/chat/wallet/verification/support have their own paths.
@@ -269,7 +273,7 @@ Server events use `platform = SERVER`, `properties.source = server` and dedupe k
 ---
 
 ## 11. Events
-**Consumed:** `transaction.status_changed`, `dispute.status_changed`, `user.registered`, `user.phone_verified`, `kyc.submitted`, `kyc.approved`, `kyc.rejected`, `kyc.level_changed`, `payout_account.verified`, `trip.verified`, `request.created`, `offer.created|accepted|declined|expired`, `payment.checkout_created|expired|failed`, `price_confirmation.requested|resolved`, `purchase.proof_submitted`, `delivery.pin_ready`, `refund.requested|succeeded|failed`, `payout.scheduled|paid|failed|on_hold`, `receipt.final_available`, `dispute.opened|evidence_added|resolved|appealed`, `chat.message_created`, `referral.rewarded`, `support.ticket_updated`, `privacy.export_ready`, `account.deletion_scheduled`, `config.activated` (config cache), `rating.created`, `credit.cashback_granted`, `risk.review_resolved`.
+**Consumed:** `transaction.status_changed`, `dispute.status_changed`, `user.registered`, `user.phone_verified`, `kyc.submitted`, `kyc.approved`, `kyc.rejected`, `kyc.level_changed`, `payout_account.verified`, `trip.verified`, `request.created`, `offer.created|accepted|declined|expired`, `payment.checkout_created|expired|failed`, `price_confirmation.requested|resolved|clarification_requested`, `transaction.trip_cancelled`, `purchase.proof_submitted`, `delivery.pin_ready`, `refund.requested|succeeded|failed|destination_required|destination_set`, `payout.scheduled|paid|failed|on_hold`, `receipt.final_available`, `dispute.opened|evidence_added|resolved|appealed`, `chat.message_created`, `referral.rewarded`, `support.ticket_updated`, `privacy.export_ready`, `account.deletion_scheduled`, `config.activated` (config cache), `rating.created`, `credit.cashback_granted`, `risk.review_resolved`.
 Not consumed on purpose: `payment.secured` (the PAYMENT_SECURED status change notifies), `trip.status_changed`, `user.anonymized` (`anonymize_user()` already removes notifications/devices).
 
 **Emitted:** `dispute.opened`, `dispute.evidence_added`, `dispute.appealed`, `dispute.sla_breached` (new), `chat.message_created`, `referral.rewarded` (+ `role`, `program`, `expiresAt`), `support.ticket_updated` (+ `actorType`, `action`), `kyc.level_changed` (level 5 only), `rating.created` (new), `credit.cashback_granted` (new). DB functions emit `dispute.status_changed` / `transaction.status_changed` for our transitions.

@@ -9,11 +9,13 @@
  */
 import { assessRisk, kycSubmissionFsm } from '@jastipkita/core';
 import type { AppDeps, AuthContext } from '../../context';
+import type { Db } from '../../db/sql';
 import { Errors } from '../../lib/errors';
 import { audit } from '../../services/audit';
 import { emitEvent } from '../../services/outbox';
 import { recordRiskAssessment } from '../../services/risk';
 import { buf, securityEvent, u8, type RequestMeta } from '../auth/common';
+import { consumeSensitiveActionOtp } from '../auth/service';
 import { inTx } from '../auth/repository';
 import { hasGrantedConsent } from '../me/repository';
 import { LEVEL_CODES, loadLevelEvidence, recomputeKycLevel } from './level';
@@ -310,10 +312,18 @@ export async function listPayoutAccounts(deps: AppDeps, auth: AuthContext) {
   return (await repo.listPayoutAccounts(deps.sql, auth.userId)).map(repo.toPayoutDto);
 }
 
+/** Decrypted full name of the user's VERIFIED identity (KYC ≥ 3), or null. Server-side only — never returned. */
+export async function verifiedIdentityName(deps: AppDeps, db: Db, userId: string): Promise<string | null> {
+  const [ir] = await db<{ id: string; full_name_enc: Buffer | null }[]>`
+    SELECT id, full_name_enc FROM identity_records WHERE user_id = ${userId} AND verified_at IS NOT NULL LIMIT 1`;
+  if (!ir?.full_name_enc) return null;
+  return deps.crypto.decryptString(u8(ir.full_name_enc), `identity_records.full_name:${ir.id}`);
+}
+
 export async function addPayoutAccount(
   deps: AppDeps,
   auth: AuthContext,
-  input: { bankCode: string; accountNumber: string; holderName: string; makeDefault?: boolean | undefined },
+  input: { bankCode: string; accountNumber: string; holderName: string; makeDefault?: boolean | undefined; stepUp?: { challengeId: string; code: string } | undefined },
   req: RequestMeta,
 ) {
   const userId = auth.userId;
@@ -322,6 +332,9 @@ export async function addPayoutAccount(
   const mask = `****${input.accountNumber.slice(-4)}`;
   const [mine] = await deps.sql`SELECT 1 FROM payout_accounts WHERE user_id = ${userId} AND account_number_hash = ${buf(hash)} AND disabled_at IS NULL`;
   if (mine) throw Errors.conflict('PAYOUT_ACCOUNT_EXISTS', 'Rekening ini sudah terdaftar');
+  // SEC-12: a stolen access token alone cannot add a payout destination — fresh single-use OTP to the verified
+  // phone/e-mail (checked before any bank inquiry, so the endpoint is no name-lookup oracle either).
+  await consumeSensitiveActionOtp(deps, { userId, action: 'PAYOUT_ACCOUNT_ADD', targetId: userId, proof: input.stepUp }, req);
   const [shared] = await deps.sql<{ n: number }[]>`
     SELECT count(DISTINCT user_id)::int AS n FROM payout_accounts WHERE account_number_hash = ${buf(hash)} AND user_id <> ${userId}`;
   const signals = { sharedPaymentInstrumentAccounts: shared?.n ?? 0 };
@@ -343,17 +356,18 @@ export async function addPayoutAccount(
     throw Errors.unprocessable('BANK_ACCOUNT_INVALID', 'Nomor rekening tidak ditemukan di bank tujuan');
   }
   // the verified identity name is the reference; fall back to the name the user typed
-  const [ir] = await deps.sql<{ id: string; full_name_enc: Buffer }[]>`
-    SELECT id, full_name_enc FROM identity_records WHERE user_id = ${userId} AND verified_at IS NOT NULL`;
-  const expected = ir ? await deps.crypto.decryptString(u8(ir.full_name_enc), `identity_records.full_name:${ir.id}`) : input.holderName;
-  let status: 'VERIFIED' | 'PENDING' = 'PENDING';
+  const identityName = await verifiedIdentityName(deps, deps.sql, userId);
+  const expected = identityName ?? input.holderName;
+  let status: 'VERIFIED' | 'PENDING' | 'NAME_MISMATCH' = 'PENDING';
   const holderName = inquiry?.holderName ?? input.holderName;
   if (inquiry?.holderName) {
     if (!namesMatch(inquiry.holderName, expected)) {
       await securityEvent(deps, deps.sql, { userId, type: 'PAYOUT_ACCOUNT_NAME_MISMATCH', severity: 'MEDIUM', req, meta: { bankCode: input.bankCode, mask } });
-      throw Errors.unprocessable('BANK_ACCOUNT_NAME_MISMATCH', 'Nama pemilik rekening tidak sesuai dengan identitas terverifikasi');
-    }
-    status = 'VERIFIED';
+      // SEC-12: with a verified identity (≥ L3) a different holder name is not auto-accepted — it is stored as
+      // NAME_MISMATCH for manual review (admin payout-account queue → verification-override), never as default.
+      if (!identityName) throw Errors.unprocessable('BANK_ACCOUNT_NAME_MISMATCH', 'Nama pemilik rekening tidak sesuai dengan nama yang kamu isi');
+      status = 'NAME_MISMATCH';
+    } else status = 'VERIFIED';
   }
 
   const id = crypto.randomUUID();
@@ -404,7 +418,17 @@ export async function removePayoutAccount(deps: AppDeps, auth: AuthContext, id: 
   });
 }
 
-export async function setDefaultPayoutAccount(deps: AppDeps, auth: AuthContext, id: string) {
+export async function setDefaultPayoutAccount(
+  deps: AppDeps,
+  auth: AuthContext,
+  id: string,
+  input: { stepUp?: { challengeId: string; code: string } | undefined } = {},
+  req: RequestMeta | null = null,
+) {
+  const [owned] = await deps.sql<{ is_default: boolean }[]>`SELECT is_default FROM payout_accounts WHERE id = ${id} AND user_id = ${auth.userId} AND disabled_at IS NULL`;
+  if (!owned) throw Errors.notFound('Rekening', 'PAYOUT_ACCOUNT_NOT_FOUND');
+  // SEC-12: switching where payouts go needs the same step-up as adding an account (no-op when already default).
+  if (!owned.is_default) await consumeSensitiveActionOtp(deps, { userId: auth.userId, action: 'PAYOUT_ACCOUNT_SET_DEFAULT', targetId: id, proof: input.stepUp }, req);
   const row = await inTx(deps, async (tx) => {
     const acc = await repo.getPayoutAccount(tx, auth.userId, id, true);
     if (!acc) throw Errors.notFound('Rekening', 'PAYOUT_ACCOUNT_NOT_FOUND');

@@ -1,7 +1,7 @@
 /**
  * J4 — item damaged at hand-over → buyer opens a dispute with photo evidence → traveler answers with evidence → admin
  * (disputes.manage, TOTP step-up, Idempotency-Key) resolves REFUND_PARTIAL → partial refund to the buyer, remainder
- * released to the traveler → COMPLETED → payout once the dispute is closed.
+ * released to the traveler → COMPLETED → payout auto-released (SYSTEM) once the dispute is closed.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers';
@@ -88,16 +88,16 @@ describe('J4 dispute (DAMAGED_ITEM) → admin partial refund → COMPLETED with 
     expect(po1!.status).not.toBe('PAID');
     const close = await ok(api(t, w.admin, 'POST', `/v1/admin/disputes/${opened.id}/close`, { note: 'Refund parsial selesai' }));
     expect(close.status).toBe('CLOSED');
-    // the processor put the payout ON_HOLD while the dispute was RESOLVED-not-CLOSED (money design, admin.md §3);
-    // closing does not release it — FINANCE (payouts.manage, TOTP, Idempotency-Key) releases the hold explicitly.
+    // the processor put the payout ON_HOLD (DISPUTE_OPEN) while the dispute was RESOLVED-not-CLOSED (money design, admin.md §3);
+    // once the dispute is CLOSED and no risk review is open, the next payout run releases it automatically (SYSTEM,
+    // audited `payout.auto_released`) — FINANCE only has to release holds that still have an open risk review.
     expect(po1!.status).toBe('ON_HOLD');
     const held = await ok(api(t, finance, 'GET', `/v1/admin/payouts?status=ON_HOLD`));
-    const row = held.data.find((x: any) => x.transactionId === d.tx.id);
-    expect(row).toBeTruthy();
-    expect((await api(t, w.admin, 'POST', `/v1/admin/payouts/${row.id}/release`, { note: 'Dispute ditutup' }, idem())).status).toBe(403); // OPERATIONS lacks payouts.manage
-    const rel = await ok(api(t, finance, 'POST', `/v1/admin/payouts/${row.id}/release`, { note: 'Dispute ditutup, refund parsial selesai' }, idem()));
-    expect(rel.status).toBe('SCHEDULED');
+    expect(held.data.find((x: any) => x.transactionId === d.tx.id)).toMatchObject({ holdReason: 'DISPUTE_OPEN' });
     await tick(t, 5);
+    const [auto] = await t.adminSql<{ actor_type: string }[]>`
+      SELECT a.actor_type FROM audit_logs a JOIN payouts p ON p.id::text = a.entity_id WHERE p.transaction_id = ${d.tx.id} AND a.action = 'payout.auto_released'`;
+    expect(auto?.actor_type).toBe('SYSTEM');
     const [po] = await t.adminSql<{ status: string; amount_idr: number }[]>`SELECT status, amount_idr FROM payouts WHERE transaction_id = ${d.tx.id}`;
     expect(po!.status).toBe('PAID');
 

@@ -34,7 +34,7 @@ All endpoints are under `/v1`, JSON camelCase, IDR integers, ISO-8601 UTC. 🔒 
 | `POST /transactions/{id}/confirm-receipt` | 🔒💰 buyer | DELIVERED → BUYER_CONFIRMED → COMPLETED (release + payout); idempotent |
 | `POST /transactions/{id}/cancel` | 🔒💰 party | preview first with `GET …/cancel/preview`; `{reason, cause?}` → `{status, cancellation{stage, refundIdr, travelerCompensationIdr, …, trustPenalty}, refunds[]}`; `422 CANCELLATION_NOT_ALLOWED` (e.g. "Barang sudah dibeli; gunakan Dispute Center"), `422 ADMIN_APPROVAL_REQUIRED` |
 | `GET /transactions/{id}/refunds` | 🔒 party | method, status, `destinationRequired`, masked destination |
-| `POST /refunds/{id}/destination` | 🔒 buyer of the refund | `{bankCode, accountNumber, accountHolderName}` (provider-validated, encrypted) → `{accountMask: "****1234", validationStatus}` |
+| `POST /refunds/{id}/destination` | 🔒 buyer of the refund | `{bankCode, accountNumber, accountHolderName, stepUp{challengeId, code}}` — `stepUp` = SENSITIVE_ACTION OTP (action `REFUND_DESTINATION_SET`, targetId = refund id; identity.md §3.1), else `403 STEP_UP_REQUIRED`; provider-validated, encrypted → `{refundId, bankCode, accountMask: "****1234", validationStatus: VALID\|PENDING_REVIEW, reviewRequired, validatedAt}` (see §5.3) |
 | `GET /payouts/mine` | 🔒 traveler | `{data[], nextCursor, summary{scheduledIdr, paidIdr, heldIdr, processingIdr, failedIdr}}` — destination masked |
 
 ### 1.1 Transaction detail contract (`TransactionDetail`)
@@ -77,7 +77,9 @@ VERIFY_HANDOVER, MARK_SHIPPED, MARK_DELIVERED, CONFIRM_RECEIPT, OPEN_DISPUTE` (t
 `PURCHASE_PRICE_EXCEEDS_APPROVED`, `SERIAL_REQUIRED`, `VIDEO_REQUIRED`, `FILE_INVALID`, `FILE_NOT_SCANNED`,
 `FILE_PURPOSE_INVALID`, core guard codes (`TRIP_NOT_TRAVELING`, `CUSTOMS_PROOF_MISSING`, `DISPUTE_OPEN`, …),
 `PIN_INVALID`, `PIN_LOCKED` (423), `CANCELLATION_NOT_ALLOWED`, `ADMIN_APPROVAL_REQUIRED`, `BANK_ACCOUNT_INVALID`,
-`BANK_ACCOUNT_VALIDATION_UNAVAILABLE`, `WEBHOOK_UNAUTHORIZED` (401).
+`BANK_ACCOUNT_VALIDATION_UNAVAILABLE`, `WEBHOOK_UNAUTHORIZED` (401), `TRIP_NOT_AVAILABLE` (422, `{tripStatus}` — quote /
+checkout on a CANCELLED or COMPLETED trip), `STEP_UP_REQUIRED` / `STEP_UP_MISMATCH` (403), `OTP_INVALID` / `OTP_EXPIRED` (400),
+`RATE_LIMITED` (429, never stored under the Idempotency-Key — §5.4).
 
 ## 3. Events (outbox)
 
@@ -92,8 +94,12 @@ Additional events (proposed for the catalogue):
 |---|---|---|
 | `transaction.cancelled_with_penalty` | transactionId, userId, role, trustPenalty, stage, cause, eventAt | engagement trust job (Trust Score cancellation penalty) |
 | `payment.amount_mismatch` | paymentId, transactionId, expectedIdr, receivedIdr, currency | admin/risk alerting |
-| `refund.destination_required` | refundId, transactionId, buyerId, amountIdr | engagement (ask buyer for a bank account) |
-| `price_confirmation.clarification_requested` | same as `price_confirmation.requested` + status | engagement (notify traveler) |
+| `refund.destination_required` | refundId, transactionId, buyerId, amountIdr (+ `rejected` after a FINANCE rejection) | engagement → `refund.destination_required` (in-app + push + e-mail, critical) |
+| `refund.destination_set` | refundId, transactionId, buyerId, validationStatus | engagement → `refund.destination_updated` (security confirmation, critical) |
+| `price_confirmation.clarification_requested` | same as `price_confirmation.requested` + status | engagement → `price.clarification_requested` to the traveler (critical) |
+| `transaction.trip_cancelled` | transactionId, tripId, buyerId, travelerId, outcome, refundIdr, trustPenalty | engagement → `transaction.trip_cancelled` to both parties |
+
+Consumed: **`trip.cancelled`** (marketplace) → `cancellation/trip-cancelled.ts` (money group, §5.1).
 
 ## 4. Service functions for other groups
 
@@ -126,6 +132,63 @@ pollPendingPayments(deps) · runDailyReconciliation(deps, { start, end }?)
 
 Admin payout hold release (`ON_HOLD → SCHEDULED`, approver recorded) and refund approval UI belong to the admin group;
 they should clear `transactions.payout_hold_reason` when a risk review is CLEARED.
+
+## 5. QA follow-ups (2026-09)
+
+### 5.1 Trip cancelled by the traveler (`trip.cancelled` consumer)
+`POST /v1/trips/{id}/cancel` announces the open transactions; the money group applies the cancellation matrix to each
+one **as the TRAVELER** (cause `TRIP_CANCELLED`, generic TRAVELER rows), one DB transaction per deal, replay-safe:
+
+| Stage of the transaction | Result |
+|---|---|
+| REQUEST_CREATED / MATCHED | → CANCELLED (AFTER_MATCH, trust penalty 2); the request re-opens for other travelers |
+| AWAITING_PAYMENT (checkout) | open payment → EXPIRED (credit/promo reservations released), provider session cancelled (best effort; `payment.cancelCheckout`) → MATCHED (SYSTEM) → CANCELLED |
+| AWAITING_PAYMENT (supplemental top-up) | top-up → EXPIRED → PAYMENT_SECURED (SYSTEM) → REFUND_PENDING (below) |
+| PAYMENT_SECURED / PRICE_CHANGE_PENDING / PURCHASE_APPROVED | → REFUND_PENDING, **full refund incl. the payment fee**, trust penalty 5 (AFTER_PAYMENT) / 8 (BEFORE_PURCHASE); refunds processed right away |
+| PURCHASED and later, DISPUTED | never automatic: `POST /trips/{id}/cancel` refuses the trip (`409 TRIP_HAS_PURCHASED_TRANSACTIONS {transactionIds}`); races/admin paths → ALERT + audit `trip.cancel_manual_follow_up` |
+
+Both parties get `transaction.trip_cancelled` (the generic `transaction.cancelled` is suppressed for this cause).
+Guards: quote and checkout refuse a CANCELLED/COMPLETED trip (`422 TRIP_NOT_AVAILABLE`, checkout reads the trip
+`FOR SHARE`); a provider webhook for a checkout whose trip is CANCELLED is recorded SECURED and auto-refunded through
+the late-payment path (`LATE_PAYMENT_CAPTURED` → REFUND bucket), never PAYMENT_SECURED — the consumer then cancels
+the transaction without a second refund (it only refunds funds captured by a `PAYMENT_CAPTURED` journal).
+
+### 5.2 Payout holds after a dispute
+The payout processor holds a payout while a dispute is not CLOSED (`hold_reason = DISPUTE_OPEN`, SYSTEM, `held_by`
+NULL). Every payout run first **auto-releases** such holds (SYSTEM, `ON_HOLD → SCHEDULED`, core guard
+`HOLD_RELEASE` with `autoReleaseEligible`) when every dispute of the transaction is CLOSED, no risk review on the
+transaction / its payments / its purchase proofs is OPEN or IN_REVIEW, and `transactions.payout_hold_reason` is empty
+— event `payout.scheduled {kind: HOLD_AUTO_RELEASED}`, audit `payout.auto_released`. Holds placed by an admin
+(`held_by` set) or for any other reason keep the manual FINANCE release (`POST /v1/admin/payouts/{id}/release`).
+
+### 5.3 Refund destinations (SEC-12)
+Setting or changing the bank account of a `PAYOUT_TO_BUYER` refund needs the step-up OTP (identity.md §3.1). When the
+buyer has a verified identity (≥ L3) and the bank holder name does not match it (tolerant token match), the
+destination is stored `PENDING_REVIEW` (`name_match = MISMATCH`, security event `REFUND_DESTINATION_NAME_MISMATCH`):
+the refund processor only pays `VALID` destinations, and FINANCE decides in `GET /v1/admin/refund-destinations` →
+`POST /v1/admin/refund-destinations/{id}/review {decision: APPROVE|REJECT, note}` (refunds.approve + MFA +
+Idempotency-Key; reviewer ≠ buyer). APPROVE → VALID and the refund is processed at once; REJECT → REJECTED and the
+buyer is asked again (`refund.destination_required`). The challenge id is kept on the destination as evidence.
+
+### 5.4 Idempotency vs rate limiting
+On every money route the rate limiter runs **before** `requireIdempotency` (checkout, confirm-receipt, price-confirmation
+respond, cancel, refund destination, admin money writes), so a throttled call never claims its key. The idempotency
+middleware stores only final outcomes: 5xx, **429** and thrown errors mark the key `FAILED`, so a retry with the same
+key after `Retry-After` runs the handler and its result is what later retries replay.
+
+### 5.5 Purchase proof — merchant check heuristic
+Requests created from a URL carry the shop **domain** as merchant (`uniqlo.com`, `pokemoncenter-online.com`) while
+receipts name the **store** ("UNIQLO Ginza", "Pokémon Center Tokyo DX"). `merchantsMatch()` (core `fraud`) normalizes
+both sides — scheme/path/`www.` and public-suffix labels (`.com`, `.co.jp`, …) stripped, accents/case/punctuation
+normalized, generic words (shop, store, online, official, …) dropped — and treats them as the same merchant when the
+brand tokens are equal, one is a word-subsequence of the other, or the compact brand keys (≥ 4 chars) contain each
+other (so an official brand store matches its domain). A remaining mismatch is `MERCHANT_MISMATCH` with weight 10 and
+decision **REVIEW**: the proof is ACCEPTED, a REVIEW risk assessment is recorded, and the payout is **not** held by it
+alone (other receipt signals — duplicate receipt, price/time anomalies — still flag and hold).
+
+### 5.6 Cancel response
+`POST /transactions/{id}/cancel` re-reads `refunds[]` (status, method) after processing, so the body — and its
+idempotent replay — matches `GET /transactions/{id}/refunds` (e.g. REFUNDED + SUCCEEDED).
 
 ---
 *Catatan keterbatasan: SafePay berstatus SANDBOX (MOCK / Xendit test mode); nilai validasi rekening Xendit (Iluma) belum

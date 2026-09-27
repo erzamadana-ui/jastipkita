@@ -217,3 +217,79 @@ export async function retryPayout(ctx: AdminCtx, id: string, note: string) {
   });
   return { id, status: 'SCHEDULED' };
 }
+
+// ------------------------------------------------------------------ refund destinations (SEC-12)
+
+const DESTINATION_STATUSES = ['PENDING_REVIEW', 'VALID', 'REJECTED'] as const;
+
+/** Refund destinations whose bank holder name differs from the buyer's verified identity (default PENDING_REVIEW). */
+export async function listRefundDestinations(ctx: AdminCtx, q: { status?: string | undefined }) {
+  const statuses = parseCsv(q.status, DESTINATION_STATUSES, 'status') ?? ['PENDING_REVIEW'];
+  const rows = await ctx.deps.sql<
+    { id: string; refund_id: string; buyer_id: string; bank_code: string; account_mask: string; validation_status: string; name_match: string | null; created_at: Date; amount_idr: string; refund_number: string | null; transaction_id: string; display_name: string | null }[]
+  >`
+    SELECT d.id, d.refund_id, d.buyer_id, d.bank_code, d.account_mask, d.validation_status, d.name_match, d.created_at,
+           r.amount_idr, r.number AS refund_number, r.transaction_id, u.display_name
+      FROM refund_destinations d JOIN refunds r ON r.id = d.refund_id JOIN users u ON u.id = d.buyer_id
+     WHERE d.validation_status = ANY(${statuses as string[]}::text[])
+     ORDER BY d.created_at LIMIT 200`;
+  return {
+    data: rows.map((d) => ({
+      id: d.id,
+      refundId: d.refund_id,
+      refundNumber: d.refund_number,
+      transactionId: d.transaction_id,
+      buyerId: d.buyer_id,
+      buyerDisplayName: maskName(d.display_name),
+      bankCode: d.bank_code,
+      accountMask: d.account_mask,
+      validationStatus: d.validation_status,
+      nameMatch: d.name_match,
+      amountIdr: num(d.amount_idr),
+      createdAt: iso(d.created_at),
+      canReview: d.buyer_id !== ctx.auth.userId,
+    })),
+    nextCursor: null,
+  };
+}
+
+/**
+ * Manual review of a PENDING_REVIEW refund destination: APPROVE → VALID (refund processing resumes right away),
+ * REJECT → REJECTED (buyer is asked again; a new destination needs a new step-up OTP). Reviewer ≠ buyer.
+ */
+export async function reviewRefundDestination(ctx: AdminCtx, id: string, input: { decision: 'APPROVE' | 'REJECT'; note: string }) {
+  const now = ctx.deps.clock.now();
+  const out = await inAdminTx(ctx, async (tx) => {
+    const [d] = await tx<{ id: string; refund_id: string; buyer_id: string; validation_status: string }[]>`
+      SELECT id, refund_id, buyer_id, validation_status FROM refund_destinations WHERE id = ${id} FOR UPDATE`;
+    if (!d) throw Errors.notFound('Rekening refund', 'REFUND_DESTINATION_NOT_FOUND');
+    makerChecker(d.buyer_id, ctx.auth.userId, 'Tidak dapat meninjau rekening refund milik sendiri');
+    if (d.validation_status !== 'PENDING_REVIEW') {
+      throw Errors.conflict('REFUND_DESTINATION_NOT_PENDING', 'Rekening refund tidak sedang menunggu review', { status: d.validation_status });
+    }
+    const status = input.decision === 'APPROVE' ? 'VALID' : 'REJECTED';
+    await tx`UPDATE refund_destinations SET validation_status = ${status}, validated_at = ${status === 'VALID' ? now : null},
+                    reviewed_by = ${ctx.auth.userId}, reviewed_at = ${now}, review_note = ${input.note} WHERE id = ${d.id}`;
+    const [r] = await tx<{ transaction_id: string; status: string; amount_idr: string }[]>`
+      SELECT transaction_id, status, amount_idr FROM refunds WHERE id = ${d.refund_id}`;
+    if (status === 'VALID' && r?.status === 'FAILED') await tx`UPDATE refunds SET attempts = 0 WHERE id = ${d.refund_id}`;
+    await emitEvent(tx, 'refund', d.refund_id, status === 'VALID' ? 'refund.destination_set' : 'refund.destination_required', {
+      refundId: d.refund_id,
+      transactionId: r?.transaction_id ?? null,
+      buyerId: d.buyer_id,
+      validationStatus: status,
+      ...(status === 'REJECTED' ? { amountIdr: num(r?.amount_idr ?? 0), rejected: true } : {}),
+    });
+    await adminAudit(tx, ctx, {
+      action: 'refund.destination_reviewed',
+      entityType: 'refund',
+      entityId: d.refund_id,
+      before: { validationStatus: d.validation_status },
+      after: { validationStatus: status },
+      meta: { destinationId: d.id, note: input.note },
+    });
+    return { id: d.id, refundId: d.refund_id, transactionId: r?.transaction_id ?? null, validationStatus: status };
+  });
+  if (out.validationStatus === 'VALID' && out.transactionId) await processRefunds(ctx.deps, { transactionId: out.transactionId });
+  return { id: out.id, refundId: out.refundId, validationStatus: out.validationStatus };
+}

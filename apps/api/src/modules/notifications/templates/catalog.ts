@@ -652,6 +652,36 @@ export const TEMPLATES: readonly TemplateDef[] = [
     },
   ),
   def(
+    'price.clarification_requested',
+    { group: 'PAYMENT', category: 'PAYMENT', channels: ALL, critical: ['EMAIL', 'PUSH'], link: 'transaction' },
+    (c) => ({
+      title: 'Penitip minta klarifikasi harga',
+      body: `Jawab sebelum ${c.dt(c.v.expiresAt)} agar ${num(c)} tidak dibatalkan otomatis.`,
+      subject: `Perlu jawaban: klarifikasi harga ${num(c)}`,
+      heading: 'Penitip meminta klarifikasi perubahan harga',
+      paragraphs: [
+        `Penitip bertanya tentang harga aktual "${prod(c)}" (${c.idr(c.v.originalIdr)} → ${c.idr(c.v.actualIdr)}).`,
+        ...(c.v.note ? [`Pertanyaan: "${s(c.v.note)}"`] : []),
+        `Jawab di aplikasi sebelum ${c.dt(c.v.expiresAt)} (jendela konfirmasi direset saat kamu menjawab). Jika tidak dijawab, perubahan harga dianggap ditolak dan dana penitip dikembalikan penuh.`,
+      ],
+      highlight: { tone: 'danger', text: 'JANGAN BELI DULU / DO NOT PURCHASE' },
+      cta: 'Jawab klarifikasi',
+    }),
+    (c) => ({
+      title: 'Buyer asked about the price',
+      body: `Reply before ${c.dt(c.v.expiresAt)} so ${num(c)} is not cancelled automatically.`,
+      subject: `Reply needed: price clarification for ${num(c)}`,
+      heading: 'The buyer asked for a price clarification',
+      paragraphs: [
+        `The buyer has a question about the actual price of "${prod(c)}" (${c.idr(c.v.originalIdr)} → ${c.idr(c.v.actualIdr)}).`,
+        ...(c.v.note ? [`Question: "${s(c.v.note)}"`] : []),
+        `Reply in the app before ${c.dt(c.v.expiresAt)} (answering resets the window). Without a reply the price change counts as rejected and the buyer gets a full refund.`,
+      ],
+      highlight: { tone: 'danger', text: 'DO NOT PURCHASE' },
+      cta: 'Reply now',
+    }),
+  ),
+  def(
     'price.change_result',
     { group: 'PAYMENT', category: 'PAYMENT', channels: ALL, link: 'transaction' },
     (c) => {
@@ -1028,6 +1058,74 @@ export const TEMPLATES: readonly TemplateDef[] = [
           },
   ),
   def(
+    'transaction.trip_cancelled',
+    { group: 'TRANSACTION', category: 'TRANSACTION', channels: ALL, critical: ['EMAIL'], link: 'transaction' },
+    (c) => {
+      const refund = Number(c.v.refundIdr ?? 0);
+      return c.role === 'TRAVELER'
+        ? {
+            title: 'Trip dibatalkan — transaksi ditutup',
+            body: `${num(c)} dibatalkan karena trip-mu dibatalkan.`,
+            subject: `Transaksi ${num(c)} dibatalkan (trip dibatalkan)`,
+            heading: 'Transaksi dibatalkan karena trip dibatalkan',
+            paragraphs: [
+              `Karena trip-mu dibatalkan, transaksi "${prod(c)}" (${num(c)}) ditutup sesuai kebijakan pembatalan.`,
+              refund > 0 ? `Penitip menerima refund penuh ${c.idr(refund)}, termasuk biaya pembayaran.` : 'Penitip belum membayar, jadi tidak ada dana yang ditahan.',
+              Number(c.v.trustPenalty ?? 0) > 0 ? 'Pembatalan oleh traveler memengaruhi Trust Score kamu.' : 'Jangan membeli barang untuk transaksi ini.',
+            ],
+            highlight: { tone: 'danger', text: 'JANGAN BELI / DO NOT PURCHASE' },
+            cta: 'Lihat detail',
+          }
+        : {
+            title: 'Trip traveler dibatalkan',
+            body: refund > 0 ? `Dana ${c.idr(refund)} untuk ${num(c)} dikembalikan penuh.` : `${num(c)} dibatalkan; kamu tidak dikenai biaya.`,
+            subject: `Trip traveler untuk ${num(c)} dibatalkan`,
+            heading: 'Traveler membatalkan trip',
+            paragraphs: [
+              `${trav(c)} membatalkan trip, sehingga titipan "${prod(c)}" (${num(c)}) dibatalkan tanpa kesalahan dari kamu.`,
+              refund > 0
+                ? `Refund penuh ${c.idr(refund)} (termasuk biaya pembayaran) diproses otomatis — kamu akan menerima e-mail status refund.`
+                : 'Belum ada pembayaran yang diambil; tagihan yang masih terbuka sudah dihentikan.',
+              'Kamu bisa membuat request lagi atau mencari traveler lain di aplikasi.',
+            ],
+            highlight: { tone: refund > 0 ? ('success' as const) : ('warning' as const), text: refund > 0 ? `Refund penuh ${c.idr(refund)}` : 'Tidak ada biaya' },
+            cta: 'Cari traveler lain',
+          };
+    },
+    (c) => {
+      const refund = Number(c.v.refundIdr ?? 0);
+      return c.role === 'TRAVELER'
+        ? {
+            title: 'Trip cancelled — transaction closed',
+            body: `${num(c)} was cancelled because your trip was cancelled.`,
+            subject: `Transaction ${num(c)} cancelled (trip cancelled)`,
+            heading: 'Transaction cancelled because the trip was cancelled',
+            paragraphs: [
+              `Because your trip was cancelled, the transaction for "${prod(c)}" (${num(c)}) was closed under the cancellation policy.`,
+              refund > 0 ? `The buyer receives a full refund of ${c.idr(refund)}, including the payment fee.` : 'The buyer had not paid yet, so no money was held.',
+              Number(c.v.trustPenalty ?? 0) > 0 ? 'A cancellation by the traveler affects your Trust Score.' : 'Do not buy the item for this transaction.',
+            ],
+            highlight: { tone: 'danger', text: 'DO NOT PURCHASE' },
+            cta: 'View details',
+          }
+        : {
+            title: "Traveler's trip cancelled",
+            body: refund > 0 ? `${c.idr(refund)} for ${num(c)} is refunded in full.` : `${num(c)} was cancelled; you are not charged.`,
+            subject: `Traveler's trip for ${num(c)} cancelled`,
+            heading: 'Your traveler cancelled the trip',
+            paragraphs: [
+              `${trav(c)} cancelled the trip, so your request "${prod(c)}" (${num(c)}) was cancelled through no fault of yours.`,
+              refund > 0
+                ? `A full refund of ${c.idr(refund)} (including the payment fee) is processed automatically — you will get refund status e-mails.`
+                : 'No payment was taken; any open invoice has been stopped.',
+              'You can create a new request or find another traveler in the app.',
+            ],
+            highlight: { tone: refund > 0 ? ('success' as const) : ('warning' as const), text: refund > 0 ? `Full refund ${c.idr(refund)}` : 'No charge' },
+            cta: 'Find another traveler',
+          };
+    },
+  ),
+  def(
     'transaction.cancelled',
     { group: 'TRANSACTION', category: 'TRANSACTION', channels: ALL, link: 'transaction' },
     (c) => ({
@@ -1068,7 +1166,14 @@ export const TEMPLATES: readonly TemplateDef[] = [
       body: `${amount(c)} untuk ${num(c)} sedang dikembalikan.`,
       subject: `Refund ${s(c.v.refundNumber)} sedang diproses`.trim(),
       heading: 'Refund sedang diproses',
-      paragraphs: [`Refund ${amount(c)} untuk transaksi ${num(c)} sedang kami proses ke metode pembayaran asal.`, 'Waktu dana masuk tergantung metode pembayaran (umumnya 1–14 hari kerja).'],
+      paragraphs: [
+        c.v.method === 'PAYOUT_TO_BUYER'
+          ? `Refund ${amount(c)} untuk transaksi ${num(c)} akan ditransfer ke rekening bank atas namamu (Virtual Account/gerai tidak bisa di-refund langsung).`
+          : `Refund ${amount(c)} untuk transaksi ${num(c)} sedang kami proses ke metode pembayaran asal.`,
+        c.v.method === 'PAYOUT_TO_BUYER'
+          ? 'Jika belum, tambahkan rekening tujuan refund di aplikasi. Dana kamu tetap aman sampai dikirim.'
+          : 'Waktu dana masuk tergantung metode pembayaran (umumnya 1–14 hari kerja).',
+      ],
       details: c.v.refundNumber ? [['No. refund', s(c.v.refundNumber)]] : [],
       cta: 'Lacak refund',
     }),
@@ -1077,7 +1182,14 @@ export const TEMPLATES: readonly TemplateDef[] = [
       body: `${amount(c)} for ${num(c)} is being refunded.`,
       subject: `Refund ${s(c.v.refundNumber)} in progress`.trim(),
       heading: 'Refund in progress',
-      paragraphs: [`We are refunding ${amount(c)} for transaction ${num(c)} to your original payment method.`, 'Timing depends on the payment method (usually 1–14 business days).'],
+      paragraphs: [
+        c.v.method === 'PAYOUT_TO_BUYER'
+          ? `The ${amount(c)} refund for transaction ${num(c)} will be transferred to a bank account in your name (virtual accounts / retail outlets cannot be refunded directly).`
+          : `We are refunding ${amount(c)} for transaction ${num(c)} to your original payment method.`,
+        c.v.method === 'PAYOUT_TO_BUYER'
+          ? 'If you have not yet, add a refund destination account in the app. Your money stays safe until it is sent.'
+          : 'Timing depends on the payment method (usually 1–14 business days).',
+      ],
       details: c.v.refundNumber ? [['Refund no.', s(c.v.refundNumber)]] : [],
       cta: 'Track refund',
     }),
@@ -1126,6 +1238,68 @@ export const TEMPLATES: readonly TemplateDef[] = [
       paragraphs: [`The ${amount(c)} refund for transaction ${num(c)} could not be sent to the original payment method.`, 'Add a refund destination account in the app so we can resend it. Your money remains safe.'],
       highlight: { tone: 'warning', text: 'Action needed: add a refund destination account' },
       cta: 'Add account',
+    }),
+  ),
+  def(
+    'refund.destination_required',
+    { group: 'PAYMENT', category: 'PAYMENT', channels: ALL, critical: ['EMAIL', 'PUSH'], link: 'transaction' },
+    (c) => ({
+      title: 'Tambahkan rekening untuk refund',
+      body: `Refund ${amount(c)} untuk ${num(c)} menunggu rekening bank tujuan.`,
+      subject: `Perlu tindakan: rekening tujuan refund ${num(c)}`,
+      heading: 'Refund kamu menunggu rekening tujuan',
+      paragraphs: [
+        `Pembayaran ${num(c)} memakai Virtual Account/gerai yang tidak bisa di-refund otomatis, jadi refund ${amount(c)} akan kami transfer ke rekening bank.`,
+        'Buka aplikasi dan tambahkan rekening atas namamu sendiri (perlu kode verifikasi). Rekening dengan nama berbeda dari identitas terverifikasi akan dicek manual oleh tim kami.',
+      ],
+      details: c.v.refundNumber ? [['No. refund', s(c.v.refundNumber)]] : [],
+      highlight: { tone: 'warning', text: 'Perlu tindakan: tambahkan rekening tujuan refund' },
+      cta: 'Tambah rekening refund',
+    }),
+    (c) => ({
+      title: 'Add an account for your refund',
+      body: `The ${amount(c)} refund for ${num(c)} is waiting for a destination bank account.`,
+      subject: `Action needed: refund account for ${num(c)}`,
+      heading: 'Your refund is waiting for a bank account',
+      paragraphs: [
+        `${num(c)} was paid by virtual account / retail outlet, which cannot be refunded automatically, so we will transfer the ${amount(c)} refund to a bank account.`,
+        'Open the app and add an account in your own name (a verification code is required). Accounts whose name differs from your verified identity are reviewed manually.',
+      ],
+      details: c.v.refundNumber ? [['Refund no.', s(c.v.refundNumber)]] : [],
+      highlight: { tone: 'warning', text: 'Action needed: add a refund destination account' },
+      cta: 'Add refund account',
+    }),
+  ),
+  def(
+    'refund.destination_updated',
+    { group: 'PAYMENT', category: 'PAYMENT', channels: ALL, critical: ['EMAIL', 'PUSH'], link: 'transaction' },
+    (c) => ({
+      title: 'Rekening tujuan refund diatur',
+      body: `Refund ${num(c)} akan dikirim ke ${s(c.v.bankCode)} ${s(c.v.accountMask)}.`,
+      subject: `Rekening tujuan refund ${num(c)} diatur`,
+      heading: 'Rekening tujuan refund diatur',
+      paragraphs: [
+        `Refund ${amount(c)} untuk transaksi ${num(c)} akan dikirim ke rekening ${s(c.v.bankCode)} ${s(c.v.accountMask)}.`,
+        c.v.validationStatus === 'PENDING_REVIEW'
+          ? 'Nama pemilik rekening berbeda dengan identitas terverifikasi, jadi tim kami memeriksanya dulu sebelum dana dikirim.'
+          : 'Bukan kamu yang mengaturnya? Segera hubungi Pusat Bantuan dan keluar dari semua sesi di aplikasi.',
+      ],
+      highlight: { tone: 'warning', text: 'Bukan kamu? Hubungi Pusat Bantuan sekarang' },
+      cta: 'Lihat refund',
+    }),
+    (c) => ({
+      title: 'Refund account set',
+      body: `The refund for ${num(c)} will be sent to ${s(c.v.bankCode)} ${s(c.v.accountMask)}.`,
+      subject: `Refund account for ${num(c)} set`,
+      heading: 'Refund account set',
+      paragraphs: [
+        `The ${amount(c)} refund for transaction ${num(c)} will be sent to ${s(c.v.bankCode)} ${s(c.v.accountMask)}.`,
+        c.v.validationStatus === 'PENDING_REVIEW'
+          ? 'The account holder name differs from your verified identity, so our team reviews it before the money is sent.'
+          : 'Not you? Contact the Help Center right away and sign out of all sessions in the app.',
+      ],
+      highlight: { tone: 'warning', text: 'Not you? Contact the Help Center now' },
+      cta: 'View refund',
     }),
   ),
   def(

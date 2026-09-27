@@ -159,7 +159,8 @@
             "enum": [
               "LOGIN",
               "VERIFY_PHONE",
-              "VERIFY_EMAIL"
+              "VERIFY_EMAIL",
+              "SENSITIVE_ACTION"
             ],
             "default": "LOGIN"
           },
@@ -169,12 +170,30 @@
               "id",
               "en"
             ]
+          },
+          "action": {
+            "$ref": "#/components/schemas/SensitiveAction"
+          },
+          "targetId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "SENSITIVE_ACTION only (required): refund id, own user id (PAYOUT_ACCOUNT_ADD) or payout account id"
           }
         },
         "required": [
           "channel",
           "destination"
         ]
+      },
+      "SensitiveAction": {
+        "type": "string",
+        "enum": [
+          "REFUND_DESTINATION_SET",
+          "PAYOUT_ACCOUNT_ADD",
+          "PAYOUT_ACCOUNT_SET_DEFAULT"
+        ],
+        "description": "SENSITIVE_ACTION only (required)"
       },
       "OtpVerifyResult": {
         "type": "object",
@@ -184,7 +203,8 @@
             "enum": [
               "LOGIN",
               "VERIFY_PHONE",
-              "VERIFY_EMAIL"
+              "VERIFY_EMAIL",
+              "SENSITIVE_ACTION"
             ]
           },
           "verified": {
@@ -1537,6 +1557,9 @@
           },
           "makeDefault": {
             "type": "boolean"
+          },
+          "stepUp": {
+            "$ref": "#/components/schemas/StepUpProof"
           }
         },
         "required": [
@@ -1544,6 +1567,39 @@
           "accountNumber",
           "holderName"
         ]
+      },
+      "StepUpProof": {
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          }
+        },
+        "required": [
+          "challengeId",
+          "code"
+        ],
+        "description": "Required (SEC-12): SENSITIVE_ACTION OTP for action PAYOUT_ACCOUNT_ADD, targetId = own user id"
+      },
+      "PayoutAccountDefaultInput": {
+        "type": "object",
+        "properties": {
+          "stepUp": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StepUpProof"
+              },
+              {
+                "description": "Required unless already default: SENSITIVE_ACTION OTP for PAYOUT_ACCOUNT_SET_DEFAULT, targetId = account id"
+              }
+            ]
+          }
+        }
       },
       "PrivacyRequest": {
         "type": "object",
@@ -7850,6 +7906,16 @@
             "type": "string",
             "minLength": 2,
             "maxLength": 100
+          },
+          "stepUp": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StepUpProof"
+              },
+              {
+                "description": "Required (SEC-12): SENSITIVE_ACTION OTP for action REFUND_DESTINATION_SET, targetId = refund id"
+              }
+            ]
           }
         },
         "required": [
@@ -10988,6 +11054,19 @@
           "nextCursor"
         ]
       },
+      "AdminMfaResetRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
       "AdminKycApprove": {
         "type": "object",
         "properties": {
@@ -11130,6 +11209,27 @@
         },
         "required": [
           "resolution",
+          "note"
+        ]
+      },
+      "RefundDestinationReview": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REJECT"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "decision",
           "note"
         ]
       },
@@ -12568,7 +12668,7 @@
           "Auth"
         ],
         "summary": "Request a one-time code (SMS / WhatsApp / e-mail)",
-        "description": "LOGIN is public and doubles as sign-up (no account enumeration: the response is identical whether or not an account exists). VERIFY_PHONE / VERIFY_EMAIL require a bearer token. Limits: 60 s resend cooldown, 5/hour and 10/day per destination, 20/hour per IP.",
+        "description": "LOGIN is public and doubles as sign-up (no account enumeration: the response is identical whether or not an account exists). VERIFY_PHONE / VERIFY_EMAIL require a bearer token. SENSITIVE_ACTION (bearer; `action` + `targetId` required) is a step-up for refund destinations and payout accounts: sent only to the verified phone / e-mail, valid 10 min, single use, bound to action + target. Limits: 60 s resend cooldown, 5/hour and 10/day per destination, 20/hour per IP.",
         "operationId": "postAuthOtpRequest",
         "requestBody": {
           "required": true,
@@ -15385,8 +15485,8 @@
         "tags": [
           "KYC"
         ],
-        "summary": "Add a payout account (bank name inquiry)",
-        "description": "The account number is encrypted; responses only show the mask (****1234). The bank-registered holder name must match the verified identity.",
+        "summary": "Add a payout account (bank name inquiry; step-up OTP)",
+        "description": "Requires `stepUp` (SENSITIVE_ACTION OTP, action PAYOUT_ACCOUNT_ADD, targetId = own user id) — `403 STEP_UP_REQUIRED` otherwise. The account number is encrypted; responses only show the mask (****1234). A bank holder name that differs from the verified identity is stored as `NAME_MISMATCH` (manual review, never default) instead of being accepted.",
         "security": [
           {
             "bearerAuth": []
@@ -15599,7 +15699,8 @@
         "tags": [
           "KYC"
         ],
-        "summary": "Make a verified payout account the default",
+        "summary": "Make a verified payout account the default (step-up OTP)",
+        "description": "Requires `stepUp` (SENSITIVE_ACTION OTP, action PAYOUT_ACCOUNT_SET_DEFAULT, targetId = account id) unless it already is the default.",
         "security": [
           {
             "bearerAuth": []
@@ -15617,6 +15718,16 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutAccountDefaultInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK",
@@ -22791,7 +22902,8 @@
         "tags": [
           "Refunds"
         ],
-        "summary": "Buyer bank account for a refund on a channel that cannot be refunded (e.g. Virtual Account)",
+        "summary": "Buyer bank account for a refund on a channel that cannot be refunded (e.g. Virtual Account; step-up OTP)",
+        "description": "Requires `stepUp` — a SENSITIVE_ACTION OTP (`POST /v1/auth/otp/request` with action REFUND_DESTINATION_SET, targetId = refund id) sent to the verified phone/e-mail, 10 min, single use; `403 STEP_UP_REQUIRED` otherwise. When the buyer has a verified identity (≥ L3) and the bank holder name differs, the destination is stored `PENDING_REVIEW` (`reviewRequired: true`) and is paid only after FINANCE approval.",
         "security": [
           {
             "bearerAuth": []
@@ -28766,6 +28878,489 @@
         }
       }
     },
+    "/v1/admin/users/{id}/mfa-reset-requests": {
+      "post": {
+        "tags": [
+          "Admin · RBAC"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Request an MFA (TOTP) reset for another admin → 202, applied only after another SUPER_ADMIN approves",
+        "operationId": "postAdminUsersByIdMfaResetRequests",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0b7f6d7e-5a3b-4a51-9c61-6f2d1c0e9a11"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminMfaResetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Pending approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/rbac/mfa-reset-requests": {
+      "get": {
+        "tags": [
+          "Admin · RBAC"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "MFA reset requests (maker-checker)",
+        "operationId": "getAdminRbacMfaResetRequests",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "APPLIED",
+                "REJECTED",
+                "EXPIRED",
+                "CANCELLED"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/rbac/mfa-reset-requests/{id}/approve": {
+      "post": {
+        "tags": [
+          "Admin · RBAC"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Approve an MFA reset (SUPER_ADMIN ≠ requester ≠ subject, fresh MFA): factor disabled, recovery codes deleted, sessions revoked",
+        "operationId": "postAdminRbacMfaResetRequestsByIdApprove",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0b7f6d7e-5a3b-4a51-9c61-6f2d1c0e9a11"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/rbac/mfa-reset-requests/{id}/reject": {
+      "post": {
+        "tags": [
+          "Admin · RBAC"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Reject (or, by the requester, cancel) an MFA reset request",
+        "operationId": "postAdminRbacMfaResetRequestsByIdReject",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0b7f6d7e-5a3b-4a51-9c61-6f2d1c0e9a11"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "note"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/kyc/submissions": {
       "get": {
         "tags": [
@@ -32251,6 +32846,246 @@
                 "required": [
                   "note"
                 ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/refund-destinations": {
+      "get": {
+        "tags": [
+          "Admin · Refunds"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Refund destinations awaiting manual review (holder name ≠ verified identity; default PENDING_REVIEW)",
+        "operationId": "getAdminRefundDestinations",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 300,
+              "description": "Comma-separated statuses"
+            },
+            "required": false,
+            "description": "Comma-separated statuses",
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/refund-destinations/{id}/review": {
+      "post": {
+        "tags": [
+          "Admin · Refunds"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Approve (→ VALID, refund processed) or reject (→ REJECTED, buyer asked again) a PENDING_REVIEW destination; reviewer ≠ buyer",
+        "operationId": "postAdminRefundDestinationsByIdReview",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0b7f6d7e-5a3b-4a51-9c61-6f2d1c0e9a11"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 255,
+              "description": "Unique per logical operation (UUID). Replays return the original response.",
+              "example": "6f1f3b0e-0a0b-4c55-9d8b-2a2f7e5d1c11"
+            },
+            "required": true,
+            "description": "Unique per logical operation (UUID). Replays return the original response.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefundDestinationReview"
               }
             }
           }

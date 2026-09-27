@@ -61,20 +61,24 @@ describe('J5 traveler cancels after payment', () => {
     expect(again.status).toBe(422);
   });
 
-  // BUG (contract, low): POST /v1/transactions/{id}/cancel refreshes `status` after processRefunds() (cancellation/routes.ts
-  // `{...out, status: fresh.status}`) but returns `refunds[]` from the pre-processing snapshot — the same body says
-  // status REFUNDED and refunds[0].status APPROVED. The stale body is also what the Idempotency-Key replays for 24 h, so a
-  // client that retries shows "refund approved" for a refund that already SUCCEEDED. Expected: refunds[] re-read after
-  // processing (like the dispute resolve response does).
+  // Fixed BUG-QA-06: the cancel response re-reads refunds[] after processing, so the body (and its idempotent replay)
+  // says REFUNDED + SUCCEEDED consistently.
   let staleRes: any;
-  it('setup for the stale-refund BUG: traveler cancels a second paid deal; GET /refunds says SUCCEEDED', async () => {
+  let staleKey: Record<string, string>;
+  let staleTx: string;
+  it('traveler cancels a second paid deal; GET /refunds says SUCCEEDED', async () => {
     const d = await securedDeal(t, w);
-    staleRes = await ok(api(t, w.traveler, 'POST', `/v1/transactions/${d.tx.id}/cancel`, { reason: 'Sakit, tidak jadi berangkat' }, idem()));
+    staleKey = idem();
+    staleTx = d.tx.id;
+    staleRes = await ok(api(t, w.traveler, 'POST', `/v1/transactions/${d.tx.id}/cancel`, { reason: 'Sakit, tidak jadi berangkat' }, staleKey));
     expect(staleRes.status).toBe('REFUNDED');
     const fresh = await ok(api(t, d.buyer, 'GET', `/v1/transactions/${d.tx.id}/refunds`));
     expect(fresh.data[0].status).toBe('SUCCEEDED');
   });
-  it.fails('BUG: cancel response refunds[] status is stale (APPROVED) while status is REFUNDED', () => {
-    expect(staleRes.refunds[0].status).toBe('SUCCEEDED'); // actual: 'APPROVED'
+  it('cancel response refunds[] carries the fresh status (SUCCEEDED) — also in the idempotent replay', async () => {
+    expect(staleRes.refunds[0].status).toBe('SUCCEEDED');
+    const replay = await api(t, w.traveler, 'POST', `/v1/transactions/${staleTx}/cancel`, { reason: 'Sakit, tidak jadi berangkat' }, staleKey);
+    expect(replay.headers.get('idempotent-replayed')).toBe('true');
+    expect(replay.body.refunds[0].status).toBe('SUCCEEDED');
   });
 });

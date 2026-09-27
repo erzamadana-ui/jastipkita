@@ -8,7 +8,8 @@ import { ActionDialog } from '../../components/ActionDialog';
 import { DataTable, useCursorQuery } from '../../components/DataTable';
 import { Badge, Button, Callout, Card, DateTime, Field, IdText, Money, PageHeader, Select, StatusBadge } from '../../components/ui';
 import { useAdminAction } from '../../hooks/useAdminAction';
-import { formatIdr } from '../../lib/format';
+import { formatIdr, humanize } from '../../lib/format';
+import type { Tone } from '../../lib/status';
 
 type Kind = 'hold' | 'release' | 'retry';
 
@@ -21,10 +22,30 @@ export function payoutBlock(p: PayoutItem, kind: Kind, permReason: string | null
   return null;
 }
 
+export interface HoldSource {
+  kind: 'SYSTEM_DISPUTE' | 'SYSTEM' | 'MANUAL';
+  label: string;
+  tone: Tone;
+  note: string;
+}
+
+/**
+ * Where a hold comes from: holds placed by the payout job because a dispute is open (`hold_reason = DISPUTE_OPEN`,
+ * no `heldBy`) are released automatically once the dispute is CLOSED and no risk review is open (money.md §5.2);
+ * other system holds and manual holds need a FINANCE release (maker-checker for manual ones).
+ */
+export function holdSource(p: Pick<PayoutItem, 'status' | 'holdReason' | 'heldBy'>): HoldSource | null {
+  if (!p.holdReason && p.status !== 'ON_HOLD') return null;
+  if (p.heldBy) return { kind: 'MANUAL', label: 'Manual', tone: 'neutral', note: 'Pelepas harus admin lain (maker-checker)' };
+  if (p.holdReason === 'DISPUTE_OPEN') return { kind: 'SYSTEM_DISPUTE', label: 'Otomatis · dispute', tone: 'info', note: 'Lepas otomatis setelah dispute CLOSED & tanpa review risiko' };
+  return { kind: 'SYSTEM', label: 'Otomatis · sistem', tone: 'warning', note: 'Perlu dilepas manual oleh FINANCE' };
+}
+
 export default function PayoutsPage() {
   const [status, setStatus] = useState('ON_HOLD');
   const { query, rows, pagination } = useCursorQuery(['payouts', status], (cursor) => Payouts.list({ status: status || undefined, cursor, limit: 25 }));
   const perm = useCan(CAP.payouts);
+  const kycCap = useCan(CAP.kycReview);
   const [dlg, setDlg] = useState<{ kind: Kind; p: PayoutItem } | null>(null);
   const run = useAdminAction({
     run: (v: { kind: Kind; p: PayoutItem; text: string }, key) => (v.kind === 'hold' ? Payouts.hold(v.p.id, v.text, key) : v.kind === 'release' ? Payouts.release(v.p.id, v.text, key) : Payouts.retry(v.p.id, v.text, key)),
@@ -37,7 +58,7 @@ export default function PayoutsPage() {
 
   return (
     <div className="stack stack--lg">
-      <PageHeader title="Payout traveler" subtitle="Hold → release adalah maker-checker (pelepas ≠ penahan, juga dijaga DB). Rekening tujuan hanya mask." />
+      <PageHeader title="Payout traveler" subtitle="Hold manual → release adalah maker-checker (pelepas ≠ penahan, juga dijaga DB). Hold otomatis karena dispute dilepas sistem setelah dispute ditutup. Rekening tujuan hanya mask." />
       <Card flush>
         <div className="filterbar">
           <Field label="Status">
@@ -54,18 +75,64 @@ export default function PayoutsPage() {
           pagination={pagination}
           empty={{ title: 'Tidak ada payout pada status ini' }}
           columns={[
-            { key: 'n', header: 'Payout', render: (p) => <span className="stack" style={{ gap: 0 }}><span className="cell-primary mono">{p.number}</span>{p.transactionId ? <Link className="cell-sub mono" to={`/transactions/${p.transactionId}`}>{p.transactionNumber}</Link> : null}</span> },
+            { key: 'n', header: 'Payout', render: (p) => <span className="stack" style={{ gap: 0 }}><span className="cell-primary mono nowrap">{p.number}</span>{p.transactionId ? <Link className="cell-sub mono nowrap" to={`/transactions/${p.transactionId}`}>{p.transactionNumber}</Link> : null}</span> },
             { key: 't', header: 'Traveler', render: (p) => <Link to={`/users/${p.travelerId}`}>{p.travelerDisplayName ?? p.travelerId}</Link> },
-            { key: 'd', header: 'Tujuan', render: (p) => <span className="stack" style={{ gap: 0 }}><span className="mono">{p.destination.bankCode} {p.destination.accountMask}</span><span className="cell-sub">{p.destination.verificationStatus}</span></span> },
+            {
+              key: 'd',
+              header: 'Tujuan',
+              render: (p) => (
+                <span className="stack" style={{ gap: 2 }}>
+                  <span className="mono">
+                    {p.destination.bankCode} {p.destination.accountMask}
+                  </span>
+                  {p.destination.verificationStatus === 'NAME_MISMATCH' ? (
+                    <span className="row row--tight">
+                      <Badge tone="warning">Nama ≠ KYC</Badge>
+                      {kycCap.allowed ? <Link className="small" to="/kyc?tab=payout">Review</Link> : null}
+                    </span>
+                  ) : (
+                    <span className="cell-sub">{p.destination.verificationStatus}</span>
+                  )}
+                </span>
+              ),
+            },
             { key: 'net', header: 'Neto', align: 'right', render: (p) => <Money value={p.netIdr} emphasize />, sortValue: (p) => p.netIdr },
             { key: 's', header: 'Status', render: (p) => <span className="row row--tight"><StatusBadge status={p.status} />{p.sandbox ? <Badge tone="warning">SANDBOX</Badge> : null}</span> },
-            { key: 'h', header: 'Hold', render: (p) => (p.holdReason || p.transactionHoldReason ? <span className="stack" style={{ gap: 0 }}><span className="small">{p.holdReason ?? '—'}</span><span className="cell-sub">oleh <IdText id={p.heldBy} /> {p.transactionHoldReason ? `· tx: ${p.transactionHoldReason}` : ''}</span></span> : <span className="muted">—</span>) },
+            {
+              key: 'h',
+              header: 'Hold & sumber',
+              render: (p) => {
+                const src = holdSource(p);
+                if (!src && !p.transactionHoldReason) return <span className="muted">—</span>;
+                return (
+                  <span className="stack" style={{ gap: 2 }} data-testid={`hold-${p.id}`}>
+                    {src ? (
+                      <span className="row row--tight">
+                        <Badge tone={src.tone}>{src.label}</Badge>
+                        {p.holdReason ? <span className="small">{humanize(p.holdReason)}</span> : null}
+                      </span>
+                    ) : null}
+                    <span className="cell-sub">
+                      {src?.kind === 'MANUAL' ? (
+                        <>
+                          oleh <IdText id={p.heldBy} />
+                          {p.heldAt ? <> · <DateTime value={p.heldAt} relative /></> : null}
+                        </>
+                      ) : (
+                        src?.note
+                      )}
+                      {p.transactionHoldReason ? ` · tx: ${p.transactionHoldReason}` : ''}
+                    </span>
+                  </span>
+                );
+              },
+            },
             { key: 'sch', header: 'Jadwal', render: (p) => <DateTime value={p.scheduledFor} /> },
             {
               key: 'act',
               header: 'Aksi',
               render: (p) => (
-                <span className="btn-group">
+                <span className="btn-group" style={{ flexWrap: 'nowrap' }}>
                   {p.status === 'ON_HOLD' ? (
                     <Button size="sm" variant="success" mfa disabledReason={payoutBlock(p, 'release', perm.reason)} onClick={() => setDlg({ kind: 'release', p })}>
                       Lepas hold
@@ -105,6 +172,9 @@ export default function PayoutsPage() {
         idempotencyKey={dlg ? run.keyFor({ ...dlg, text: '' }) : null}
         onConfirm={(text) => run.mutateAsync({ ...dlg!, text })}
       >
+        {dlg?.kind === 'release' && holdSource(dlg.p)?.kind === 'SYSTEM_DISPUTE' ? (
+          <Callout tone="info">Hold ini otomatis karena dispute dan akan dilepas sistem begitu dispute CLOSED tanpa review risiko terbuka. Lepas manual hanya bila benar-benar perlu (API memperingatkan DISPUTE_NOT_CLOSED).</Callout>
+        ) : null}
         {dlg?.p.transactionHoldReason && dlg.kind === 'release' ? <Callout tone="warning">Transaksi punya payout hold: {dlg.p.transactionHoldReason}</Callout> : null}
       </ActionDialog>
     </div>

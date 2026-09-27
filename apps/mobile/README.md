@@ -4,12 +4,16 @@
 `/jastipkita/app/`). Mode **Penitip** (buyer) dan **Traveler/Mitra** dalam satu akun, dana
 ditahan **SafePay** sampai barang diterima.
 
+**CI status: green on Flutter 3.47.5** (stable) — job `mobile` di `.github/workflows/ci.yml`:
+analyze (info pun fatal), tes, APK debug, build web. APK siap pasang: lihat
+[Mengunduh APK dari CI](#mengunduh-apk-dari-ci).
+
 | | |
 |---|---|
 | Application ID / Bundle ID | `com.antarkitaindonesia.jastipkita` |
 | Nama tampilan | JastipKita |
 | Bahasa | Indonesia (default), English — `lib/l10n/app_id.arb`, `app_en.arb` |
-| Flutter | stable **≥ 3.32** (Dart ≥ 3.8; `pubspec` mengizinkan SDK ^3.5 tapi `l10n.yaml` memakai `output-dir` tanpa `synthetic-package`) |
+| Flutter | stable **≥ 3.32**, diverifikasi CI di **3.47.5** (Dart ≥ 3.8; `pubspec` mengizinkan SDK ^3.5 tapi `l10n.yaml` memakai `output-dir` tanpa `synthetic-package`) |
 | State / routing / HTTP | flutter_riverpod 2 (tanpa codegen) · go_router 14 · dio 5 |
 
 `android/`, `ios/` dan `web/` **belum di-commit**: CI membuatnya dengan `flutter create` bila
@@ -20,15 +24,34 @@ scaffold. Commit ketiganya sekaligus (lihat *Native* di bawah) sebelum rilis tok
 
 ```bash
 flutter create --platforms=android,ios,web --org com.antarkitaindonesia --project-name jastipkita .   # bila android/ belum ada
+python3 tool/configure_native.py         # deep link, izin, nama tampilan, app id (idempoten; exit 1 bila gagal)
 flutter pub get
 dart run flutter_launcher_icons          # assets/brand/app-icon-1024.png, adaptive #0B1E4A + monochrome
 dart run flutter_native_splash:create    # assets/splash/* (light/dark, Android 12)
 flutter gen-l10n                         # → lib/l10n/app_localizations*.dart (tidak di-commit)
 flutter analyze                          # info pun fatal
-flutter test
+flutter test --exclude-tags store        # screenshot toko tidak ikut menentukan hijau/merah
+flutter test --tags store --update-goldens --dart-define=STORE_SCREENSHOTS=true test/store_screenshots   # continue-on-error
 flutter build apk --debug --dart-define=API_BASE_URL=… --dart-define=APP_ENV=staging
 flutter build web --release --base-href /jastipkita/app/ --dart-define=…
 ```
+
+Artefak per run: `mobile-apk-debug` (7 hari), `mobile-web` (7 hari), `store-screenshots` (14 hari) dan —
+hanya bila CI membuat scaffold — `mobile-platform-scaffold` (14 hari).
+
+### Mengunduh APK dari CI
+
+1. GitHub → tab **Actions** → workflow **CI** → pilih run hijau terbaru (branch/PR yang diinginkan).
+2. Di halaman ringkasan run, bagian **Artifacts** paling bawah → klik **`mobile-apk-debug`** (zip; perlu login
+   dengan akses baca ke repo). Atau lewat CLI:
+   `gh run download <run-id> -n mobile-apk-debug` (daftar run: `gh run list -w CI`).
+3. Ekstrak → `app-debug.apk` → pasang: `adb install -r app-debug.apk`, atau kirim ke ponsel dan izinkan
+   *Install unknown apps*.
+
+APK ini **debug**, bertanda tangan kunci debug, dan menunjuk ke API **staging** (`CI_API_BASE_URL`, `APP_ENV=staging`,
+badge SANDBOX) — untuk QA internal saja, bukan untuk dibagikan ke pengguna. Build rilis bertanda tangan (AAB + APK)
+dibuat manual lewat workflow **Mobile release** (`mobile-release.yml`, *Run workflow*), artefak
+`android-release-<env>-<versi>-<kode>`.
 
 Tanpa SDK Flutter, pemeriksaan statis tetap bisa dijalankan:
 
@@ -72,7 +95,12 @@ host `API_BASE_URL` agar emulator bisa menjangkaunya (`AppConfig.rewriteLoopback
 
 ## Native (setelah `flutter create`)
 
-`tool/configure_native.py` menerapkan:
+`tool/configure_native.py` dijalankan otomatis oleh job CI `mobile` dan oleh `mobile-release.yml` (Android dan
+iOS) tepat setelah `flutter create`; idempoten, jadi aman juga di folder platform yang sudah di-commit.
+`python3 tool/configure_native.py --check` hanya memverifikasi (exit 1 bila ada yang belum terpasang). Format
+scaffold Flutter 3.47 didukung: `android/app/build.gradle.kts` (Kotlin DSL; Groovy tetap bisa), `namespace` +
+`applicationId`, `MainActivity` dengan nama pendek atau lengkap, `Info.plist` dengan `UIApplicationSceneManifest`
+(`SceneDelegate.swift`), bundle id di `project.pbxproj` (target `RunnerTests` tetap bersufiks). Skrip menerapkan:
 
 - **Android** — label *JastipKita*; izin `INTERNET` di manifest utama (template hanya memberi di
   debug → build release tanpa jaringan) dan `CAMERA`; intent filter `jastipkita://…` dan App Links
@@ -139,6 +167,13 @@ Aturan yang ditegakkan di kode:
 - **Persetujuan & dokumen legal** — jenis dan versi persetujuan (signup & KYC) dibaca dari
   `GET /v1/consents/requirements`, dokumen ditampilkan di app dari `GET /v1/legal/documents/{type}` (label TEMPLATE
   bila `isTemplate`). Tidak ada versi yang di-hard-code.
+- **Step-up OTP (SEC-12)** — isi/ganti rekening refund, tambah rekening pencairan dan ganti rekening utama:
+  panggilan pertama tanpa bukti → `403 STEP_UP_REQUIRED {action, targetId}` → sheet `step_up_sheet.dart` (pilih HP/e-mail
+  terverifikasi → OTP `SENSITIVE_ACTION` → kode) → panggilan diulang sekali dengan `stepUp {challengeId, code}`.
+  Bukti sekali pakai (`StepUpProof.take`); kode salah → kode lain di challenge yang sama, kedaluwarsa/terkunci → kode baru,
+  error lain → sheet tertutup dan percobaan berikutnya mulai tanpa bukti. Nama pemilik ≠ identitas → rekening
+  *Sedang ditinjau* (`NAME_MISMATCH` / `PENDING_REVIEW`). `TRIP_NOT_AVAILABLE` (checkout) dan
+  `TRIP_HAS_PURCHASED_TRANSACTIONS` (batal trip) punya pesan sendiri.
 - **URL file absolut** — dipakai apa adanya (tanpa prefiks base URL); file yang dilayani API
   (`/v1/files/{id}/content`) dimuat dengan bearer lewat `ApiImage`. Sign in with Apple mengirim `rawNonce`
   (Apple menerima SHA-256-nya); KYC mengirim `livenessFileIds` (1–5).
@@ -149,7 +184,7 @@ Aturan yang ditegakkan di kode:
 ## Tes
 
 ```bash
-flutter test
+flutter test --exclude-tags store
 ```
 
 | Berkas | Isi |
@@ -164,7 +199,26 @@ flutter test
 | `test/widgets/safepay_gate_test.dart` | JANGAN BELI di `PAYMENT_SECURED`; tombol beli aktif hanya di `PURCHASE_APPROVED` (19 status) |
 | `test/widgets/kyc_ladder_test.dart` | tangga L1–L5, status tercapai/berikutnya/terkunci, semantik |
 | `test/widgets/text_scale_test.dart` | tanpa overflow pada text scale 2.0 (id & en), 360 dp |
+| `test/core/step_up_test.dart` | step-up di repository: 403 → prompt → retry dengan `stepUp`, bukti tidak pernah dipakai ulang, `NAME_MISMATCH`/`PENDING_REVIEW`, `purchaseCeilingMinor`, pesan error trip |
+| `test/widgets/step_up_sheet_test.dart` | sheet step-up lewat fake adapter: OTP terikat action+target, kode salah, error setelah kode terpakai, batal |
+| `test/widgets/ink_surfaces_test.dart` | tile/ink di permukaan berwarna (peringatan barang terbatas, GlassSurface, OpaqueActionBar, TrustScoreBadge, ModeSwitch) berada di atas `Material` sendiri — tanpa assertion *"ListTile background color or ink splashes may be invisible"* |
 | `test/l10n_test.dart` | locale, placeholder, plural |
+
+### Screenshot toko (`test/store_screenshots/`, tag `store`)
+
+```bash
+flutter test --tags store --update-goldens --dart-define=STORE_SCREENSHOTS=true test/store_screenshots
+```
+
+Menghasilkan `build/store_screenshots/<perangkat>/NN_nama.png` untuk `android-1080x1920`,
+`android-1440x2560` dan `iphone-6.7-1290x2796`: 01 onboarding, 02 beranda penitip, 03 buat titipan +
+estimasi bea & pajak, 04 checkout SafePay + pilihan kanal & rincian 11 baris, 05 gerbang traveler
+**JANGAN BELI DULU → BOLEH DIBELI**, 06 serah terima PIN/QR, 07 beranda tema gelap. Layar asli dengan data
+API palsu, teks Indonesia, font Poppins asli (dimuat dengan `FontLoader` dari `FontManifest.json`) dan pita
+keterangan navy di dalam gambar. Tanpa `STORE_SCREENSHOTS=true` tes di-skip, dan `dart_test.yaml`
+mendaftarkan tag `store`, jadi `flutter test` biasa tidak bergantung pada font. Bendera negara memakai Noto
+Color Emoji bila terpasang (`fonts-noto-color-emoji`; CI memasangnya). Di CI hasilnya diunggah sebagai
+artefak **`store-screenshots`**.
 
 ## Catatan data
 

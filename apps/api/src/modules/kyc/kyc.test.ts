@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestContext, type TestContext } from '../../../test/helpers';
-import { JPEG, phoneLogin, scanJson, uploadFile } from '../auth/test-support';
+import { JPEG, phoneLogin, scanJson, sensitiveStepUp, uploadFile } from '../auth/test-support';
 import { computeLevel } from './level';
 import { namesMatch } from './service';
 
@@ -22,7 +22,7 @@ async function kycReadyUser() {
   expect((await t.request('POST', '/v1/me/consents', { token, body: { type: 'KYC', version: '0.1-template' } })).status).toBe(201);
   const idFront = await uploadFile(t, token, 'KYC', 'image/jpeg', JPEG(300, 3));
   const selfie = await uploadFile(t, token, 'KYC', 'image/jpeg', JPEG(300, 5));
-  return { id: u.user.id as string, token, idFront, selfie };
+  return { id: u.user.id as string, token, phone: u.phone, idFront, selfie };
 }
 
 const submission = (u: { idFront: string; selfie: string }, idNumber: string, extra: Record<string, unknown> = {}) => ({
@@ -181,15 +181,43 @@ describe('payout accounts & level 4', () => {
     const original = payment.validateBankAccount.bind(payment);
     try {
       payment.validateBankAccount = (async (i: { bankCode: string; accountNumber: string }) => ({ valid: /^\d{6,20}$/.test(i.accountNumber) && !i.accountNumber.startsWith('000'), holderName: i.accountNumber.startsWith('9') ? 'SITI RAHMA' : 'BUDI SANTOSO' })) as typeof payment.validateBankAccount;
-      const invalid = await t.request('POST', '/v1/kyc/payout-accounts', { token: u.token, body: { bankCode: 'BCA', accountNumber: '0001112223', holderName: 'Budi Santoso' } });
+      // SEC-12: step-up OTP (SENSITIVE_ACTION) to the verified phone or e-mail, bound to action + own user id
+      const email = `kyc-${u.id.slice(0, 8)}@example.com`;
+      await t.adminSql`UPDATE users SET email = ${email}, email_verified_at = now() WHERE id = ${u.id}`;
+      const who = { accessToken: u.token, email };
+      const sms = { channel: 'SMS' as const, destination: u.phone };
+      const noStepUp = await t.request('POST', '/v1/kyc/payout-accounts', { token: u.token, body: { bankCode: 'BCA', accountNumber: '1112223334', holderName: 'Budi Santoso' } });
+      expect(noStepUp.status).toBe(403);
+      expect(noStepUp.body.error).toMatchObject({ code: 'STEP_UP_REQUIRED', details: { action: 'PAYOUT_ACCOUNT_ADD', targetId: u.id } });
+      const unverifiedDest = await t.request('POST', '/v1/auth/otp/request', {
+        token: u.token,
+        body: { channel: 'EMAIL', destination: 'attacker@example.net', purpose: 'SENSITIVE_ACTION', action: 'PAYOUT_ACCOUNT_ADD', targetId: u.id },
+      });
+      expect(unverifiedDest.status).toBe(422);
+      expect(unverifiedDest.body.error.code).toBe('STEP_UP_DESTINATION_NOT_VERIFIED');
+
+      const invalid = await t.request('POST', '/v1/kyc/payout-accounts', {
+        token: u.token,
+        body: { bankCode: 'BCA', accountNumber: '0001112223', holderName: 'Budi Santoso', stepUp: await sensitiveStepUp(t, who, 'PAYOUT_ACCOUNT_ADD', u.id, sms) },
+      });
       expect(invalid.status).toBe(422);
       expect(invalid.body.error.code).toBe('BANK_ACCOUNT_INVALID');
-      const mismatch = await t.request('POST', '/v1/kyc/payout-accounts', { token: u.token, body: { bankCode: 'BCA', accountNumber: '9876543210', holderName: 'Budi Santoso' } });
-      expect(mismatch.status).toBe(422);
-      expect(mismatch.body.error.code).toBe('BANK_ACCOUNT_NAME_MISMATCH');
+      // verified identity (L3): a different bank holder name is not auto-accepted → NAME_MISMATCH (manual review, never default)
+      const mismatch = await t.request('POST', '/v1/kyc/payout-accounts', {
+        token: u.token,
+        body: { bankCode: 'BCA', accountNumber: '9876543210', holderName: 'Budi Santoso', stepUp: await sensitiveStepUp(t, who, 'PAYOUT_ACCOUNT_ADD', u.id) },
+      });
+      expect(mismatch.status, JSON.stringify(mismatch.body)).toBe(201);
+      expect(mismatch.body).toMatchObject({ verificationStatus: 'NAME_MISMATCH', isDefault: false });
+      const [mmEv] = await t.adminSql`SELECT 1 FROM security_events WHERE user_id = ${u.id} AND type = 'PAYOUT_ACCOUNT_NAME_MISMATCH'`;
+      expect(mmEv).toBeTruthy();
+      expect((await t.request('DELETE', `/v1/kyc/payout-accounts/${mismatch.body.id}`, { token: u.token })).status).toBe(200);
 
       const accountNumber = '1234560961';
-      const add = await t.request('POST', '/v1/kyc/payout-accounts', { token: u.token, body: { bankCode: 'bca', accountNumber, holderName: 'Budi Santoso' } });
+      const add = await t.request('POST', '/v1/kyc/payout-accounts', {
+        token: u.token,
+        body: { bankCode: 'bca', accountNumber, holderName: 'Budi Santoso', stepUp: await sensitiveStepUp(t, who, 'PAYOUT_ACCOUNT_ADD', u.id, sms) },
+      });
       expect(add.status).toBe(201);
       expect(add.body).toMatchObject({ bankCode: 'BCA', accountMask: '****0961', verificationStatus: 'VERIFIED', isDefault: true, holderName: 'BUDI SANTOSO' });
       expect(JSON.stringify(add.body)).not.toContain(accountNumber);
@@ -199,10 +227,26 @@ describe('payout accounts & level 4', () => {
       const dupe = await t.request('POST', '/v1/kyc/payout-accounts', { token: u.token, body: { bankCode: 'BCA', accountNumber, holderName: 'Budi Santoso' } });
       expect(dupe.body.error.code).toBe('PAYOUT_ACCOUNT_EXISTS');
 
-      const second = await t.request('POST', '/v1/kyc/payout-accounts', { token: u.token, body: { bankCode: 'MANDIRI', accountNumber: '5550001234', holderName: 'Budi Santoso' } });
+      const second = await t.request('POST', '/v1/kyc/payout-accounts', {
+        token: u.token,
+        body: { bankCode: 'MANDIRI', accountNumber: '5550001234', holderName: 'Budi Santoso', stepUp: await sensitiveStepUp(t, who, 'PAYOUT_ACCOUNT_ADD', u.id) },
+      });
       expect(second.body.isDefault).toBe(false);
-      const def = await t.request('POST', `/v1/kyc/payout-accounts/${second.body.id}/default`, { token: u.token });
+      const defNoStepUp = await t.request('POST', `/v1/kyc/payout-accounts/${second.body.id}/default`, { token: u.token });
+      expect(defNoStepUp.status).toBe(403);
+      expect(defNoStepUp.body.error.code).toBe('STEP_UP_REQUIRED');
+      // a proof for another action/target is refused (and burns an attempt), a matching one works exactly once
+      const wrong = await sensitiveStepUp(t, who, 'PAYOUT_ACCOUNT_SET_DEFAULT', add.body.id, sms);
+      const mism = await t.request('POST', `/v1/kyc/payout-accounts/${second.body.id}/default`, { token: u.token, body: { stepUp: wrong } });
+      expect(mism.status).toBe(403);
+      expect(mism.body.error.code).toBe('STEP_UP_MISMATCH');
+      const proof = await sensitiveStepUp(t, who, 'PAYOUT_ACCOUNT_SET_DEFAULT', second.body.id);
+      const def = await t.request('POST', `/v1/kyc/payout-accounts/${second.body.id}/default`, { token: u.token, body: { stepUp: proof } });
+      expect(def.status, JSON.stringify(def.body)).toBe(200);
       expect(def.body.isDefault).toBe(true);
+      const reuse = await t.request('POST', `/v1/kyc/payout-accounts/${add.body.id}/default`, { token: u.token, body: { stepUp: proof } });
+      expect(reuse.status).toBe(400);
+      expect(reuse.body.error.code).toBe('OTP_INVALID');
       const list = await t.request('GET', '/v1/kyc/payout-accounts', { token: u.token });
       expect(list.body.data.map((a: any) => [a.accountMask, a.isDefault])).toEqual([['****1234', true], ['****0961', false]]);
       expect((await t.request('DELETE', `/v1/kyc/payout-accounts/${second.body.id}`, { token: u.token })).status).toBe(200);
@@ -228,7 +272,17 @@ describe('payout accounts & level 4', () => {
       await verifiedTrip(fx.id);
       await t.drain();
       expect((await t.request('GET', '/v1/me', { token: fx.accessToken })).body.kycLevel).toBe(3);
-      const addFx = await t.request('POST', '/v1/kyc/payout-accounts', { token: fx.accessToken, body: { bankCode: 'BNI', accountNumber: '4440001111', holderName: 'Budi Santoso' } });
+      // no verified identity: the typed name is the reference and a mismatch is still refused outright
+      const fxMismatch = await t.request('POST', '/v1/kyc/payout-accounts', {
+        token: fx.accessToken,
+        body: { bankCode: 'BNI', accountNumber: '9440001111', holderName: 'Budi Santoso', stepUp: await sensitiveStepUp(t, fx, 'PAYOUT_ACCOUNT_ADD', fx.id) },
+      });
+      expect(fxMismatch.status).toBe(422);
+      expect(fxMismatch.body.error.code).toBe('BANK_ACCOUNT_NAME_MISMATCH');
+      const addFx = await t.request('POST', '/v1/kyc/payout-accounts', {
+        token: fx.accessToken,
+        body: { bankCode: 'BNI', accountNumber: '4440001111', holderName: 'Budi Santoso', stepUp: await sensitiveStepUp(t, fx, 'PAYOUT_ACCOUNT_ADD', fx.id) },
+      });
       expect(addFx.status).toBe(201);
       await t.drain();
       expect((await t.request('GET', '/v1/me', { token: fx.accessToken })).body.kycLevel).toBe(4);
@@ -247,7 +301,8 @@ describe('payout accounts & level 4', () => {
     payment.validateBankAccount = (async () => ({ valid: true, holderName: 'BUDI SANTOSO' })) as typeof payment.validateBankAccount;
     const accountNumber = '7778889990';
     try {
-      bodies.push((await t.request('POST', '/v1/kyc/payout-accounts', { token: u.token, body: { bankCode: 'BRI', accountNumber, holderName: 'Budi Santoso' } })).body);
+      const stepUp = await sensitiveStepUp(t, { accessToken: u.token }, 'PAYOUT_ACCOUNT_ADD', u.id, { channel: 'SMS', destination: u.phone });
+      bodies.push((await t.request('POST', '/v1/kyc/payout-accounts', { token: u.token, body: { bankCode: 'BRI', accountNumber, holderName: 'Budi Santoso', stepUp } })).body);
     } finally {
       payment.validateBankAccount = original;
     }

@@ -215,8 +215,13 @@ async function applySuccess(deps: AppDeps, db: TxSql, tx: TxRow, payment: Paymen
   await db`UPDATE payments SET status = 'SECURED', secured_at = ${now}, channel = ${channel}, failure_reason = NULL,
              version = version + 1 WHERE id = ${payment.id}`;
 
+  // BUG-QA-02: funds for a transaction whose trip was cancelled are never captured into escrow — they take the
+  // late-payment path (recorded SECURED, refunded automatically) even if the trip.cancelled consumer has not run yet.
+  const [tripRow] = tx.tripId ? await db<{ status: string }[]>`SELECT status FROM trips WHERE id = ${tx.tripId}` : [];
+  const tripCancelled = tripRow?.status === 'CANCELLED';
   const isCurrent =
     wasPending &&
+    !tripCancelled &&
     tx.status === 'AWAITING_PAYMENT' &&
     (payment.purpose === 'SUPPLEMENTAL' || payment.quoteId === tx.activeQuoteId);
 
@@ -228,7 +233,7 @@ async function applySuccess(deps: AppDeps, db: TxSql, tx: TxRow, payment: Paymen
       transactionId: tx.id,
       idempotencyKey: `capture:${payment.id}`,
       refs: { paymentId: payment.id },
-      meta: { txStatus: tx.status, previousPaymentStatus: payment.status },
+      meta: { txStatus: tx.status, previousPaymentStatus: payment.status, tripCancelled },
       entries: [
         { bucket: 'PROVIDER_CASH', direction: 'DEBIT', amount: payment.amountIdr },
         { bucket: 'REFUND', owner: tx.buyerId, direction: 'CREDIT', amount: payment.amountIdr, memo: 'late payment — full refund' },
@@ -238,7 +243,9 @@ async function applySuccess(deps: AppDeps, db: TxSql, tx: TxRow, payment: Paymen
     await createRefundRows(deps, db, tx, {
       allocations: [{ payment: { ...payment, status: 'SECURED' }, amountIdr: payment.amountIdr }],
       reasonCode: 'LATE_PAYMENT',
-      reasonNote: `Pembayaran diterima setelah ${payment.status === 'PENDING' ? 'transaksi berubah' : 'kedaluwarsa'}; dikembalikan otomatis`,
+      reasonNote: tripCancelled
+        ? 'Pembayaran diterima untuk trip yang sudah dibatalkan; dikembalikan otomatis'
+        : `Pembayaran diterima setelah ${payment.status === 'PENDING' ? 'transaksi berubah' : 'kedaluwarsa'}; dikembalikan otomatis`,
       requestedBy: null,
       breakdown: { source: 'LATE_PAYMENT', allocationPosted: true, txOutcome: 'NONE' },
       idempotencyPrefix: `late:${payment.id}`,

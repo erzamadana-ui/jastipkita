@@ -2,7 +2,12 @@ import { z } from '@hono/zod-openapi';
 import { ConsentInputSchema, DeviceInputSchema, ProfileSchema } from '../me/schemas';
 
 export const OtpChannel = z.enum(['SMS', 'WHATSAPP', 'EMAIL']);
-export const OtpPurpose = z.enum(['LOGIN', 'VERIFY_PHONE', 'VERIFY_EMAIL']);
+export const OtpPurpose = z.enum(['LOGIN', 'VERIFY_PHONE', 'VERIFY_EMAIL', 'SENSITIVE_ACTION']);
+
+/** SEC-12: money-routing changes that need a fresh step-up OTP bound to (action, target). */
+export const SensitiveAction = z
+  .enum(['REFUND_DESTINATION_SET', 'PAYOUT_ACCOUNT_ADD', 'PAYOUT_ACCOUNT_SET_DEFAULT'])
+  .openapi('SensitiveAction', { description: 'targetId: refund id · own user id · payout account id' });
 
 export const OtpRequestBody = z
   .object({
@@ -10,8 +15,15 @@ export const OtpRequestBody = z
     destination: z.string().min(5).max(254).openapi({ example: '+6281234567890' }),
     purpose: OtpPurpose.default('LOGIN'),
     locale: z.enum(['id', 'en']).optional(),
+    action: SensitiveAction.optional().openapi({ description: 'SENSITIVE_ACTION only (required)' }),
+    targetId: z.string().min(1).max(128).optional().openapi({ description: 'SENSITIVE_ACTION only (required): refund id, own user id (PAYOUT_ACCOUNT_ADD) or payout account id' }),
   })
   .openapi('OtpRequest');
+
+/** Proof of a SENSITIVE_ACTION step-up: the challenge from POST /auth/otp/request and the code the user received. */
+export const StepUpProof = z
+  .object({ challengeId: z.string().uuid(), code: z.string().regex(/^\d{6}$/) })
+  .openapi('StepUpProof', { description: 'SENSITIVE_ACTION OTP (10 min, single use, bound to action + target)' });
 
 export const OtpRequestResponse = z
   .object({

@@ -26,34 +26,35 @@ class TrustScoreBadge extends StatelessWidget {
     final tone = band == null ? jk.trustTone(score) : (jk.trust[band.toLowerCase()] ?? jk.trustTone(score));
     final tierLabel = Labels.trustTier(l10n, score, tier: band);
     final text = full ? l10n.trustScoreFull(score, tierLabel) : l10n.trustScoreShort(score);
-    final chip = DecoratedBox(
-      decoration: BoxDecoration(color: tone.bg, borderRadius: JkRadii.pillAll),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(Icons.verified_user_outlined, size: 16, color: tone.fg),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: JkTypeScale.labelM.copyWith(color: tone.fg, fontWeight: FontWeight.w600),
-              ),
+    final label = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(Icons.verified_user_outlined, size: 16, color: tone.fg),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: JkTypeScale.labelM.copyWith(color: tone.fg, fontWeight: FontWeight.w600),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+    // The tint is the Material's own colour so the tap ripple is drawn on top of it.
     return Semantics(
       label: l10n.trustScoreSemantics(score, tierLabel),
       button: interactive,
       excludeSemantics: true,
-      child: interactive
-          ? InkWell(borderRadius: JkRadii.pillAll, onTap: () => showTrustScoreExplainer(context), child: chip)
-          : chip,
+      child: Material(
+        color: tone.bg,
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: interactive ? InkWell(onTap: () => showTrustScoreExplainer(context), child: label) : label,
+      ),
     );
   }
 }

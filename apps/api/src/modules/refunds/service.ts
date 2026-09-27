@@ -16,6 +16,9 @@ import { AppError, Errors } from '../../lib/errors';
 import { channelSupportsProviderRefund } from '../../providers/payment/channels';
 import { audit } from '../../services/audit';
 import { emitEvent } from '../../services/outbox';
+import { type RequestMeta, securityEvent } from '../auth/common';
+import { consumeSensitiveActionOtp } from '../auth/service';
+import { namesMatch, verifiedIdentityName } from '../kyc/service';
 import { postJournal, reverseJournalByKey, transactionBuckets } from '../ledger/service';
 import { type PaymentRow, securedPaymentsForTx } from '../payments/repository';
 import {
@@ -568,9 +571,11 @@ export interface DestinationInput {
   bankCode: string;
   accountNumber: string;
   accountHolderName: string;
+  /** SEC-12: SENSITIVE_ACTION OTP bound to (REFUND_DESTINATION_SET, refund id). */
+  stepUp?: { challengeId: string; code: string } | undefined;
 }
 
-export async function setRefundDestination(deps: AppDeps, auth: AuthContext, refundId: string, input: DestinationInput) {
+export async function setRefundDestination(deps: AppDeps, auth: AuthContext, refundId: string, input: DestinationInput, req: RequestMeta | null = null) {
   const refund = await loadRefund(deps.sql, refundId);
   if (!refund) throw Errors.notFound('Refund', 'REFUND_NOT_FOUND');
   const { tx } = await requireParty(deps.sql, refund.transactionId, auth, { role: 'BUYER' }).catch(() => {
@@ -584,6 +589,9 @@ export async function setRefundDestination(deps: AppDeps, auth: AuthContext, ref
   }
   const accountNumber = input.accountNumber.replace(/[\s-]/g, '');
   if (!/^\d{6,20}$/.test(accountNumber)) throw Errors.validation({ accountNumber: 'Nomor rekening 6–20 digit' });
+  // SEC-12: a hijacked session must not be able to redirect a refund — fresh single-use OTP to the verified
+  // phone/e-mail, bound to this refund (verified + consumed in its own committed transaction).
+  const stepUp = await consumeSensitiveActionOtp(deps, { userId: auth.userId, action: 'REFUND_DESTINATION_SET', targetId: refund.id, proof: input.stepUp }, req);
   const validation = (await deps.providers.payment.validateBankAccount({ bankCode: input.bankCode, accountNumber })) as {
     valid: boolean;
     holderName?: string;
@@ -597,7 +605,14 @@ export async function setRefundDestination(deps: AppDeps, auth: AuthContext, ref
         : 'Rekening tidak valid atau tidak ditemukan',
     );
   }
+  // Holder name vs the verified KYC identity (buyer ≥ L3): a different name is never auto-accepted → PENDING_REVIEW
+  // (the processor only pays VALID destinations; FINANCE approves/rejects via /v1/admin/refund-destinations).
+  const identityName = await verifiedIdentityName(deps, deps.sql, auth.userId);
+  const bankHolder = validation.holderName ?? input.accountHolderName.trim();
+  const nameMatch: 'MATCH' | 'MISMATCH' | 'NO_IDENTITY' = identityName ? (namesMatch(bankHolder, identityName) ? 'MATCH' : 'MISMATCH') : 'NO_IDENTITY';
+  const validationStatus = nameMatch === 'MISMATCH' ? ('PENDING_REVIEW' as const) : ('VALID' as const);
   const now = deps.clock.now();
+  const validatedAt = validationStatus === 'VALID' ? now : null;
   return deps.sql.begin(async (db) => {
     const [existing] = await db<{ id: string }[]>`SELECT id FROM refund_destinations WHERE refund_id = ${refund.id} FOR UPDATE`;
     const id = existing?.id ?? crypto.randomUUID();
@@ -608,23 +623,41 @@ export async function setRefundDestination(deps: AppDeps, auth: AuthContext, ref
     if (existing) {
       await db`UPDATE refund_destinations SET bank_code = ${input.bankCode}, account_number_enc = ${Buffer.from(enc)},
                  account_number_hash = ${Buffer.from(hash)}, account_mask = ${mask}, holder_name_enc = ${Buffer.from(holderEnc)},
-                 enc_key_id = ${deps.crypto.activeKeyId}, validation_status = 'VALID', validated_at = ${now} WHERE id = ${id}`;
+                 enc_key_id = ${deps.crypto.activeKeyId}, validation_status = ${validationStatus}, validated_at = ${validatedAt},
+                 name_match = ${nameMatch}, step_up_challenge_id = ${stepUp.challengeId},
+                 reviewed_by = NULL, reviewed_at = NULL, review_note = NULL WHERE id = ${id}`;
     } else {
       await db`INSERT INTO refund_destinations (id, refund_id, buyer_id, bank_code, account_number_enc, account_number_hash, account_mask,
-                                                holder_name_enc, enc_key_id, validation_status, validated_at)
+                                                holder_name_enc, enc_key_id, validation_status, validated_at, name_match, step_up_challenge_id)
                VALUES (${id}, ${refund.id}, ${tx.buyerId}, ${input.bankCode}, ${Buffer.from(enc)}, ${Buffer.from(hash)}, ${mask},
-                       ${Buffer.from(holderEnc)}, ${deps.crypto.activeKeyId}, 'VALID', ${now})`;
+                       ${Buffer.from(holderEnc)}, ${deps.crypto.activeKeyId}, ${validationStatus}, ${validatedAt}, ${nameMatch}, ${stepUp.challengeId})`;
     }
     if (refund.status === 'FAILED') await db`UPDATE refunds SET attempts = 0 WHERE id = ${refund.id}`;
+    if (nameMatch === 'MISMATCH') {
+      await securityEvent(deps, db, { userId: auth.userId, type: 'REFUND_DESTINATION_NAME_MISMATCH', severity: 'MEDIUM', req, meta: { refundId: refund.id, bankCode: input.bankCode, accountMask: mask } });
+    }
     await audit(db, {
       actorType: 'BUYER',
       actorId: auth.userId,
       action: 'refund.destination_set',
       entityType: 'refund',
       entityId: refund.id,
-      meta: { bankCode: input.bankCode, accountMask: mask },
+      meta: { bankCode: input.bankCode, accountMask: mask, validationStatus, nameMatch, stepUpChallengeId: stepUp.challengeId },
     });
-    return { refundId: refund.id, bankCode: input.bankCode, accountMask: mask, validationStatus: 'VALID' as const, validatedAt: now.toISOString() };
+    await emitEvent(db, 'refund', refund.id, 'refund.destination_set', {
+      refundId: refund.id,
+      transactionId: refund.transactionId,
+      buyerId: tx.buyerId,
+      validationStatus,
+    });
+    return {
+      refundId: refund.id,
+      bankCode: input.bankCode,
+      accountMask: mask,
+      validationStatus,
+      reviewRequired: validationStatus === 'PENDING_REVIEW',
+      validatedAt: validatedAt?.toISOString() ?? null,
+    };
   });
 }
 
@@ -646,7 +679,11 @@ export async function refundViews(db: Db, transactionId: string) {
       type: r.type,
       status: r.status,
       method,
-      destinationRequired: method === 'PAYOUT_TO_BUYER' && !r.destStatus && !['SUCCEEDED', 'REJECTED', 'CANCELLED'].includes(r.status),
+      // A rejected/invalid destination must be replaced by the buyer (the row is updated in place on resubmission).
+      destinationRequired:
+        method === 'PAYOUT_TO_BUYER' &&
+        (!r.destStatus || r.destStatus === 'REJECTED' || r.destStatus === 'INVALID') &&
+        !['SUCCEEDED', 'REJECTED', 'CANCELLED'].includes(r.status),
       destination: r.destStatus ? { bankCode: r.destBankCode, accountMask: r.destAccountMask, validationStatus: r.destStatus } : null,
       failureReason: r.failureReason,
       processedAt: r.processedAt ? new Date(r.processedAt).toISOString() : null,

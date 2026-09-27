@@ -147,3 +147,56 @@ test('trip discovery renders trustScore / trustTier / kycLevel from PublicProfil
   await expect(card).toContainText('KYC 4');
   await expect(card).toContainText('Belum ada ulasan');
 });
+
+test('web session: access token only in memory, refresh token in sessionStorage (jk:), all jk: keys cleared on logout', async ({ page }) => {
+  await offlineByDefault(page);
+  await mockOtp(page);
+  await page.route('**/v1/auth/otp/verify', (r) =>
+    json(r, 200, { purpose: 'LOGIN', verified: true, isNewUser: false, user: {}, tokens: { tokenType: 'Bearer', accessToken: 'access-1', accessTokenExpiresAt: new Date(Date.now() + 900_000).toISOString(), refreshToken: 'refresh-token-000000000001', refreshTokenExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), sessionId: 's' } }),
+  );
+  const refreshBodies: unknown[] = [];
+  await page.route('**/v1/auth/refresh', (r) => {
+    if (r.request().method() === 'OPTIONS') return json(r, 204, null);
+    refreshBodies.push(r.request().postDataJSON());
+    return json(r, 200, { tokens: { tokenType: 'Bearer', accessToken: 'access-2', accessTokenExpiresAt: new Date(Date.now() + 900_000).toISOString(), refreshToken: 'refresh-token-000000000002', refreshTokenExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), sessionId: 's' } });
+  });
+  const authHeaders: string[] = [];
+  await page.unroute('**/v1/me');
+  await page.route('**/v1/me', (r) => {
+    if (r.request().method() === 'OPTIONS') return json(r, 204, null);
+    authHeaders.push(r.request().headers()['authorization'] ?? '');
+    return json(r, 200, { id: 'u1', email: 'baru@example.com', emailVerified: true, phone: null, phoneVerified: false, displayName: 'Rina M.', avatarFileId: null, locale: 'id', countryCode: 'ID', status: 'ACTIVE', kycLevel: 2, activeMode: 'BUYER', trustScore: 50, referralCode: 'RINA-1234', transactionEmail: null, roles: [], mfaEnabled: false, deletionScheduledFor: null, createdAt: '2026-09-28T00:00:00Z' });
+  });
+  let logoutAuth = '';
+  await page.route('**/v1/auth/logout', (r) => {
+    if (r.request().method() === 'OPTIONS') return json(r, 204, null);
+    logoutAuth = r.request().headers()['authorization'] ?? '';
+    return json(r, 200, { ok: true });
+  });
+
+  await page.goto(`${BASE}/masuk/`);
+  await page.click('[data-consent-choice="necessary"]');
+  await page.fill('#destination', 'lama@example.com');
+  await page.click('#req-btn');
+  await page.fill('#code', '123456');
+  await page.click('#ver-btn');
+  await expect(page).toHaveURL(/\/jastipkita\/akun\/$/);
+  await expect(page.locator('#acc-name')).toHaveText('Rina M.');
+
+  // new page load: the access token was NOT persisted; the tab's refresh token was rotated for a new one
+  expect(refreshBodies).toEqual([{ refreshToken: 'refresh-token-000000000001' }]);
+  expect(authHeaders).toEqual(['Bearer access-2']);
+  const storage = await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage } }));
+  expect(storage.session['jk:refresh']).toBe('refresh-token-000000000002');
+  for (const [k, v] of [...Object.entries(storage.local), ...Object.entries(storage.session)]) {
+    expect(k.startsWith('jk:'), k).toBe(true);
+    expect(String(v)).not.toContain('access-');
+  }
+  expect(Object.keys(storage.local)).not.toContain('jk:refresh');
+
+  await page.click('#acc-logout');
+  await expect(page.locator('#acc-signed-out')).toBeVisible();
+  expect(logoutAuth).toBe('Bearer access-2');
+  const after = await page.evaluate(() => [...Object.keys(localStorage), ...Object.keys(sessionStorage)].filter((k) => k.startsWith('jk:')));
+  expect(after).toEqual([]); // logout wipes every jk: key (session + preferences)
+});

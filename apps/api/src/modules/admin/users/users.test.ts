@@ -49,6 +49,7 @@ describe('user search & detail (PII masked)', () => {
     expect(res.body.sessions.length).toBeGreaterThanOrEqual(1);
     expect(res.body.transactions.asBuyer.total).toBe(0);
     expect(res.body.trust.score).toBe(50);
+      expect(res.body.mfa).toEqual({ enrolled: expect.any(Boolean), pendingEnrollment: expect.any(Boolean) });
   });
 
   it('reveal requires MFA and is audited + security event', async () => {

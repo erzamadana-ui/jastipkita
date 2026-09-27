@@ -1,11 +1,12 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../context';
+import { Errors } from '../../lib/errors';
 import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../lib/openapi';
 import { getAuth, requireAuth, requireKycLevel } from '../../middleware/auth';
 import { rateLimit } from '../../middleware/rate-limit';
 import { requestMeta } from '../auth/common';
 import { OkSchema } from '../me/schemas';
-import { KycStatusSchema, KycSubmissionBody, KycSubmissionSchema, PayoutAccountBody, PayoutAccountSchema } from './schemas';
+import { KycStatusSchema, KycSubmissionBody, KycSubmissionSchema, PayoutAccountBody, PayoutAccountSchema, PayoutDefaultBody } from './schemas';
 import * as svc from './service';
 
 const tags = ['KYC'];
@@ -62,8 +63,11 @@ export function registerKyc(app: App) {
       method: 'post',
       path: '/v1/kyc/payout-accounts',
       tags,
-      summary: 'Add a payout account (bank name inquiry)',
-      description: 'The account number is encrypted; responses only show the mask (****1234). The bank-registered holder name must match the verified identity.',
+      summary: 'Add a payout account (bank name inquiry; step-up OTP)',
+      description:
+        'Requires `stepUp` (SENSITIVE_ACTION OTP, action PAYOUT_ACCOUNT_ADD, targetId = own user id) — `403 STEP_UP_REQUIRED` otherwise. ' +
+        'The account number is encrypted; responses only show the mask (****1234). A bank holder name that differs from the verified identity ' +
+        'is stored as `NAME_MISMATCH` (manual review, never default) instead of being accepted.',
       security: bearer,
       middleware: [requireAuth, requireKycLevel(3), rateLimit({ name: 'kyc.payout_add', limit: 10, windowSec: 3600, key: 'user' })] as const,
       request: jsonBody(PayoutAccountBody),
@@ -94,13 +98,19 @@ export function registerKyc(app: App) {
       method: 'post',
       path: '/v1/kyc/payout-accounts/{id}/default',
       tags,
-      summary: 'Make a verified payout account the default',
+      summary: 'Make a verified payout account the default (step-up OTP)',
+      description: 'Requires `stepUp` (SENSITIVE_ACTION OTP, action PAYOUT_ACCOUNT_SET_DEFAULT, targetId = account id) unless it already is the default.',
       security: bearer,
       middleware: [requireAuth, requireKycLevel(3)] as const,
-      request: { params: IdParam },
+      request: { params: IdParam, body: { content: { 'application/json': { schema: PayoutDefaultBody } }, required: false } },
       responses: { 200: jsonContent(PayoutAccountSchema), ...errorResponses },
     }),
-    async (c) => c.json(await svc.setDefaultPayoutAccount(c.get('deps'), getAuth(c), c.req.valid('param').id), 200),
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      const parsed = PayoutDefaultBody.safeParse(body ?? {});
+      if (!parsed.success) throw Errors.validation({ issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) });
+      return c.json(await svc.setDefaultPayoutAccount(c.get('deps'), getAuth(c), c.req.valid('param').id, parsed.data, await requestMeta(c)), 200);
+    },
   );
 
   app.route('/', r);

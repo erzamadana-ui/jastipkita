@@ -168,6 +168,7 @@ Map<String, dynamic> transactionDetailJson({
       'quantity': 1,
       'deliveryMethod': null,
       'purchaseCeiling': <String, dynamic>{'minor': 11000, 'idr': 1208611},
+      'purchaseCeilingMinor': 11000,
       'purchaseCeilingIdr': 1208611,
       'autoConfirmAt': null,
       'statusChangedAt': '2026-09-27T07:05:00.000Z',

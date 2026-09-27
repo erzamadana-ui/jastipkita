@@ -32,7 +32,7 @@ function setPending(date: string | null) {
 }
 
 async function load() {
-  if (!session.getAccessToken()) { $('#acc-signed-out')!.hidden = false; return; }
+  if (!(await session.ensureAccessToken())) { $('#acc-signed-out')!.hidden = false; return; }
   try {
     const p = await api<Profile>('/v1/me', { auth: true });
     $('#acc-signed-in')!.hidden = false;
@@ -49,7 +49,7 @@ async function load() {
     $('#acc-since')!.textContent = new Date(p.createdAt).toLocaleDateString('id-ID', { dateStyle: 'medium' });
     setPending(p.deletionScheduledFor);
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) { session.clear(); $('#acc-signed-out')!.hidden = false; return; }
+    if (e instanceof ApiError && e.status === 401) { session.dropAccessToken(); $('#acc-signed-out')!.hidden = false; return; }
     $('#acc-signed-out')!.hidden = false;
     showError(describeError(e));
   }
@@ -57,7 +57,7 @@ async function load() {
 
 $('#acc-logout')?.addEventListener('click', async () => {
   try { await api('/v1/auth/logout', { method: 'POST', auth: true }); } catch { /* ignore */ }
-  session.clear();
+  session.clear(); // removes the in-memory token and every jk:* key (sessionStorage + localStorage)
   location.reload();
 });
 

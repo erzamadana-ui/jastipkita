@@ -22,17 +22,17 @@ const items = [
 ---
 <Base title="Masuk" description="Masuk ke akun JastipKita dengan kode sekali pakai (OTP) lewat e-mail atau nomor HP." path="/masuk/" noindex>
   <section class="section-tight">
-    <div class="container" style="max-width:520px">
+    <div class="container maxw-520">
       <div class="card auth-card">
         <span class="icon-tile"><Icon name="log-in" /></span>
         <h1 class="auth-title">Masuk ke JastipKita</h1>
         <p class="small muted">Tanpa kata sandi — kami kirim kode 6 digit. Akun baru dibuat otomatis setelah kamu menyetujui Syarat & Ketentuan dan Kebijakan Privasi.</p>
 
         {CONFIG.apiIsPlaceholder && (
-          <div class="note note-warning" style="margin-top:16px"><Icon name="clock" /><p>Layanan akun belum dibuka untuk umum. Formulir ini akan berfungsi saat server JastipKita aktif.</p></div>
+          <div class="note note-warning mt-16"><Icon name="clock" /><p>Layanan akun belum dibuka untuk umum. Formulir ini akan berfungsi saat server JastipKita aktif.</p></div>
         )}
 
-        <form id="otp-request" class="form-grid" style="margin-top:20px" novalidate>
+        <form id="otp-request" class="form-grid mt-20" novalidate>
           <fieldset class="seg" aria-label="Metode">
             <legend class="sr-only">Kirim kode lewat</legend>
             <label><input type="radio" name="channel" value="EMAIL" checked /><span>E-mail</span></label>
@@ -47,7 +47,7 @@ const items = [
           <button class="btn btn-primary btn-block" type="submit" id="req-btn">Kirim kode</button>
         </form>
 
-        <form id="otp-verify" class="form-grid" style="margin-top:20px" novalidate hidden>
+        <form id="otp-verify" class="form-grid mt-20" novalidate hidden>
           <p class="small" id="sent-to"></p>
           <div class="field">
             <label for="code">Kode 6 digit</label>
@@ -58,9 +58,9 @@ const items = [
           <button class="btn btn-ghost btn-block" type="button" id="restart">Ganti e-mail / nomor</button>
         </form>
 
-        <form id="consent-form" class="form-grid" style="margin-top:20px" novalidate hidden>
+        <form id="consent-form" class="form-grid mt-20" novalidate hidden>
           <fieldset class="consents">
-            <legend class="small" style="font-weight:600;margin-bottom:8px">Akun baru — mohon setujui dokumen berikut:</legend>
+            <legend class="small fw-600 mb-8">Akun baru — mohon setujui dokumen berikut:</legend>
             <div id="consent-list" class="consent-list">
               {items.map((i) => (
                 <label class="check">
@@ -82,13 +82,13 @@ const items = [
         <script type="application/json" id="consent-fallback" set:html={JSON.stringify(fallback).replace(/</g, '\\u003c')}></script>
 
         {CONFIG.enableGoogleLogin && CONFIG.googleClientId && (
-          <div style="margin-top:20px">
+          <div class="mt-20">
             <div class="or"><span>atau</span></div>
             <button class="btn btn-block" type="button" id="google-btn" data-client-id={CONFIG.googleClientId}>Masuk dengan Google</button>
-            <p class="xsmall muted" style="margin-top:6px">Memuat skrip Google Identity Services hanya setelah tombol ditekan.</p>
+            <p class="xsmall muted mt-6">Memuat skrip Google Identity Services hanya setelah tombol ditekan.</p>
           </div>
         )}
-        <p class="xsmall muted" style="margin-top:20px">Sesi web disimpan di tab ini saja (sessionStorage) dan berakhir saat tab ditutup. Kami tidak memakai cookie pelacak.</p>
+        <p class="xsmall muted mt-20">Token akses hanya disimpan di memori halaman; token penyegar disimpan di tab ini saja (sessionStorage) dan hilang saat tab ditutup atau kamu keluar. Kami tidak memakai cookie pelacak.</p>
       </div>
     </div>
   </section>

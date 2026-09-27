@@ -1,0 +1,73 @@
+/* Utility classes replacing inline style="" attributes so the CSP can use style-src 'self' (SEC-14).
+   Declared !important (except display) to keep the precedence the inline styles had. */
+.border-0 { border:0 !important; }
+.flex { display:flex; }
+.flex-wrap { flex-wrap:wrap !important; }
+.fs-16 { font-size:1rem !important; }
+.fw-600 { font-weight:600 !important; }
+.g-10 { --gap:10px !important; }
+.g-12 { --gap:12px !important; }
+.g-14 { --gap:14px !important; }
+.g-16 { --gap:16px !important; }
+.g-20 { --gap:20px !important; }
+.g-24 { --gap:24px !important; }
+.gap-10 { gap:10px !important; }
+.gap-12 { gap:12px !important; }
+.gap-14 { gap:14px !important; }
+.gap-6 { gap:6px !important; }
+.h-14 { height:14px !important; }
+.h-22 { height:22px !important; }
+.h-40 { height:40px !important; }
+.h-6 { height:6px !important; }
+.h-64 { height:64px !important; }
+.items-center { align-items:center !important; }
+.items-start { align-items:start !important; }
+.justify-between { justify-content:space-between !important; }
+.justify-center { justify-content:center !important; }
+.m-14-auto-0 { margin:14px auto 0 !important; }
+.m-20-0 { margin:20px 0 !important; }
+.maxw-340 { max-width:340px !important; }
+.maxw-520 { max-width:520px !important; }
+.maxw-560 { max-width:560px !important; }
+.maxw-600 { max-width:600px !important; }
+.maxw-760 { max-width:760px !important; }
+.mb-12 { margin-bottom:12px !important; }
+.mb-14 { margin-bottom:14px !important; }
+.mb-18 { margin-bottom:18px !important; }
+.mb-24 { margin-bottom:24px !important; }
+.mb-8 { margin-bottom:8px !important; }
+.minh-260 { min-height:260px !important; }
+.mt-10 { margin-top:10px !important; }
+.mt-12 { margin-top:12px !important; }
+.mt-14 { margin-top:14px !important; }
+.mt-16 { margin-top:16px !important; }
+.mt-18 { margin-top:18px !important; }
+.mt-20 { margin-top:20px !important; }
+.mt-24 { margin-top:24px !important; }
+.mt-28 { margin-top:28px !important; }
+.mt-4 { margin-top:4px !important; }
+.mt-40 { margin-top:40px !important; }
+.mt-6 { margin-top:6px !important; }
+.mt-8 { margin-top:8px !important; }
+.mx-auto { margin-inline:auto !important; }
+.p-16-18 { padding:16px 18px !important; }
+.p-18-20 { padding:18px 20px !important; }
+.p-22 { padding:22px !important; }
+.p-24 { padding:24px !important; }
+.pt-0 { padding-top:0 !important; }
+.pt-8 { padding-top:8px !important; }
+.rounded-pill { border-radius:var(--jk-radius-pill) !important; }
+.st-12 { --stack:12px !important; }
+.st-14 { --stack:14px !important; }
+.st-16 { --stack:16px !important; }
+.st-20 { --stack:20px !important; }
+.st-28 { --stack:28px !important; }
+.st-6 { --stack:6px !important; }
+.text-center { text-align:center !important; }
+.text-hero-muted { color:var(--hero-ink-muted) !important; }
+.text-success { color:var(--jk-color-success-text) !important; }
+.text-warning { color:var(--jk-color-warning-text) !important; }
+.w-40p { width:40% !important; }
+.w-50p { width:50% !important; }
+.w-60p { width:60% !important; }
+.w-64 { width:64px !important; }

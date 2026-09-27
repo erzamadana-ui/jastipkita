@@ -205,7 +205,7 @@ Format tabel sama dengan §4. Guard selain aktor dicek di service layer / engine
 | SCHEDULED | PROCESSING | SYSTEM, ADMIN | `PAYOUT_CLEAR`: risk ALLOW/REVIEW, tidak ada dispute terbuka, rekening terverifikasi |
 | SCHEDULED | ON_HOLD | SYSTEM, ADMIN | alasan hold wajib |
 | SCHEDULED | CANCELLED | ADMIN | — |
-| ON_HOLD | SCHEDULED | ADMIN | `HOLD_RELEASE`: approver tercatat |
+| ON_HOLD | SCHEDULED | ADMIN, SYSTEM | `HOLD_RELEASE`: ADMIN — approver tercatat; SYSTEM — hanya hold otomatis karena dispute (`DISPUTE_OPEN`) setelah dispute CLOSED, tanpa risk review terbuka dan tanpa flag hold payout |
 | ON_HOLD | CANCELLED | ADMIN | — |
 | PROCESSING | PAID | SYSTEM | disbursement sukses |
 | PROCESSING | FAILED | SYSTEM | disbursement gagal |

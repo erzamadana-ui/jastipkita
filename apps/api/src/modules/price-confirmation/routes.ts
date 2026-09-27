@@ -3,6 +3,7 @@ import type { App } from '../../context';
 import { bearer, createRouter, errorResponses, IdempotencyHeader, jsonBody, jsonContent } from '../../lib/openapi';
 import { getAuth, requireAuth } from '../../middleware/auth';
 import { requireIdempotency } from '../../middleware/idempotency';
+import { rateLimit } from '../../middleware/rate-limit';
 import { LooseResult, TxIdParam } from '../transactions/schemas';
 import { clarifyPriceConfirmation, priceCheck, respondPriceConfirmation } from './service';
 
@@ -54,7 +55,7 @@ export function registerPriceConfirmationRoutes(app: App) {
       tags: ['Price confirmation'],
       summary: 'Buyer approves / rejects (no-fault full refund) / asks for clarification (Idempotency-Key required)',
       security: bearer,
-      middleware: [requireAuth, requireIdempotency] as const,
+      middleware: [requireAuth, rateLimit({ name: 'money.price_respond', limit: 30, windowSec: 60, key: 'user' }), requireIdempotency] as const,
       request: { params: PcParams, headers: IdempotencyHeader, ...jsonBody(RespondBody) },
       responses: { 200: jsonContent(LooseResult), ...errorResponses },
     }),

@@ -5,9 +5,12 @@ import { Errors } from '../lib/errors';
 
 /**
  * Idempotency for financial mutations (checkout, payment, refund, payout, price approval...).
- * Client sends `Idempotency-Key: <uuid>`; the first response (2xx/4xx) is stored for 24h and replayed.
+ * Client sends `Idempotency-Key: <uuid>`; the first final response (2xx / non-transient 4xx) is stored for 24h and replayed.
+ * Transient outcomes are NOT stored — 5xx, 429 (rate limit) and thrown errors mark the key FAILED so a retry with the
+ * SAME key (after Retry-After) runs the handler again (BUG-QA-05). A concurrent duplicate gets 409
+ * IDEMPOTENCY_IN_PROGRESS without touching the key.
  * Same key + different body → 422 IDEMPOTENCY_KEY_REUSED. Concurrent duplicate → 409 IDEMPOTENCY_IN_PROGRESS.
- * Must run after requireAuth.
+ * Must run after requireAuth — and AFTER rateLimit on money routes, so a throttled call never claims the key.
  */
 export const requireIdempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
   const key = c.req.header('idempotency-key');
@@ -60,7 +63,7 @@ export const requireIdempotency: MiddlewareHandler<AppEnv> = async (c, next) => 
     throw err;
   }
   const status = c.res.status;
-  if (status >= 500) {
+  if (status >= 500 || status === 429) {
     await sql`UPDATE idempotency_keys SET status = 'FAILED', locked_until = NULL WHERE user_id = ${auth.userId} AND key = ${key}`;
     return;
   }

@@ -12,14 +12,14 @@ All endpoints are under `/v1`, JSON camelCase, errors `{ error: { code, message,
 
 | Endpoint | Auth | Notes |
 |---|---|---|
-| `POST /auth/otp/request` | public (LOGIN) / 🔒 (VERIFY_*) | `{channel SMS\|WHATSAPP\|EMAIL, destination, purpose LOGIN\|VERIFY_PHONE\|VERIFY_EMAIL, locale?}` → `{challengeId, expiresAt, resendAvailableAt, devCode?}` |
+| `POST /auth/otp/request` | public (LOGIN) / 🔒 (VERIFY_*, SENSITIVE_ACTION) | `{channel SMS\|WHATSAPP\|EMAIL, destination, purpose LOGIN\|VERIFY_PHONE\|VERIFY_EMAIL\|SENSITIVE_ACTION, locale?, action?, targetId?}` → `{challengeId, expiresAt, resendAvailableAt, devCode?}` — SENSITIVE_ACTION: see §3.1 |
 | `POST /auth/otp/verify` | public / 🔒 | `{challengeId, code, device?, consents?}` → LOGIN `{purpose, verified, tokens, user, isNewUser}`; VERIFY_* `{purpose, verified, user}` |
 | `POST /auth/google` | public | `{idToken, nonce?, device?, consents?}` → `{tokens, user, isNewUser}` |
 | `POST /auth/apple` | public | `{identityToken, rawNonce?, nonce?, fullName?, device?, consents?}` → `{tokens, user, isNewUser}` (see *Apple nonce*) |
 | `POST /auth/refresh` | public | `{refreshToken}` → `{tokens}` (rotation) |
 | `POST /auth/logout` · `GET /auth/sessions` · `DELETE /auth/sessions/{id}` | 🔒 | |
-| `POST /auth/mfa/totp/enroll` | 🔒 admin (any role) | secret returned once |
-| `POST /auth/mfa/totp/confirm` · `POST /auth/mfa/verify` | 🔒 | step-up token with `mfa_at` |
+| `POST /auth/mfa/totp/enroll` | 🔒 admin (any role), **fresh OTP-login session ≤ 15 min** | secret returned once; `403 MFA_ENROLL_FRESH_LOGIN_REQUIRED`, `409 MFA_ENROLLMENT_IN_PROGRESS` (other session), `409 MFA_ALREADY_ENROLLED` (reset = maker-checker, §3.2) |
+| `POST /auth/mfa/totp/confirm` · `POST /auth/mfa/verify` | 🔒 | step-up token with `mfa_at`; confirm only from the enrolling session (`403 MFA_ENROLL_SESSION_MISMATCH`, `409 MFA_ENROLLMENT_EXPIRED` after 15 min) |
 | `GET /me` · `PATCH /me` · `POST /me/mode` | 🔒 | |
 | `GET/POST /me/devices` · `DELETE /me/devices/{id}` | 🔒 | |
 | `GET/POST /me/consents` | 🔒 | append-only; `version` must be one of `GET /consents/requirements` `acceptedVersions` (422 `CONSENT_VERSION_INVALID {allowedVersions}`) |
@@ -29,7 +29,7 @@ All endpoints are under `/v1`, JSON camelCase, errors `{ error: { code, message,
 | `POST /files/uploads` · `POST /files/{id}/complete` · `GET /files/{id}` · `GET /files/{id}/url` · `GET /files/{id}/content` | 🔒 | |
 | `GET /kyc/status` | 🔒 | |
 | `POST /kyc/submissions` | 🔒 K2 | |
-| `GET/POST /kyc/payout-accounts` · `DELETE /kyc/payout-accounts/{id}` · `POST /kyc/payout-accounts/{id}/default` | 🔒 K3 | masked only |
+| `GET/POST /kyc/payout-accounts` · `DELETE /kyc/payout-accounts/{id}` · `POST /kyc/payout-accounts/{id}/default` | 🔒 K3 | masked only; POST and `/default` need `stepUp` (§3.1) |
 | `POST /privacy/export` · `POST /privacy/delete-account` | 🔒 | |
 | `GET /privacy/requests` · `POST /privacy/cancel-deletion` | 🔒 (also PENDING_DELETION) | |
 | `PUT /dev/storage/upload/{token}` · `GET /dev/storage/download/{token}` | none | **development/test only** (404 otherwise), memory storage |
@@ -135,11 +135,58 @@ until Compliance publishes a reviewed version (admin `POST /v1/admin/legal-docum
   returns a step-up token) → verify (step-up: new access token for the **same session** with `mfa_at`, used by
   `requireRecentMfa`). Replay protection: a code whose time-step ≤ `last_used_step` is rejected
   (`MFA_CODE_REPLAYED`). 5 failures in 15 min → `429 MFA_LOCKED`. Refreshing drops `mfa_at` (step-up again).
+* **Session origin (SEC-13):** every refresh family records `auth_method` (`OTP` | `GOOGLE` | `APPLE`) and
+  `session_started_at` at login; both are copied on rotation (a refreshed session keeps its original age).
+
+### 3.1 Step-up OTP for sensitive money actions (SEC-12)
+Changing where money goes needs more than a bearer token (a stolen access token must not be able to redirect a
+refund or a payout):
+
+| Action (`action`) | `targetId` | Protected endpoint |
+|---|---|---|
+| `REFUND_DESTINATION_SET` | refund id | `POST /v1/refunds/{id}/destination` |
+| `PAYOUT_ACCOUNT_ADD` | own user id | `POST /v1/kyc/payout-accounts` |
+| `PAYOUT_ACCOUNT_SET_DEFAULT` | payout account id | `POST /v1/kyc/payout-accounts/{id}/default` (not needed when it already is the default) |
+
+1. `POST /auth/otp/request {purpose: SENSITIVE_ACTION, action, targetId, channel, destination}` (bearer). The
+   destination must be the user's **verified** phone (SMS/WhatsApp) or verified login / transaction e-mail —
+   otherwise `422 STEP_UP_DESTINATION_NOT_VERIFIED`. Missing action/target → `400 STEP_UP_ACTION_REQUIRED`;
+   `PAYOUT_ACCOUNT_ADD` for another user → `422 STEP_UP_TARGET_INVALID`. Same resend cooldown / hourly / daily limits
+   as other OTPs. The challenge row stores `action` + `target_id` (DB CHECK) and lives **10 minutes**.
+2. Send `stepUp: {challengeId, code}` in the protected request body. The code is verified and consumed in its own
+   committed transaction **before** the action (so a failed attempt counts even if the action fails later):
+   none → `403 STEP_UP_REQUIRED {purpose, action, targetId}`; wrong / consumed / someone else's → `400 OTP_INVALID`;
+   other action or target → `403 STEP_UP_MISMATCH` (+ `STEP_UP_TARGET_MISMATCH` security event); expired →
+   `400 OTP_EXPIRED`; 5 wrong codes → `429 OTP_LOCKED`. Single use. Success writes `SENSITIVE_ACTION_VERIFIED`.
+3. Holder-name check against the KYC identity (users with a verified identity, i.e. ≥ L3; tolerant token match —
+   upper-case, accents and punctuation stripped, abbreviations/truncation accepted): a mismatch is **never
+   auto-accepted** — a refund destination is stored `PENDING_REVIEW` (FINANCE: `/v1/admin/refund-destinations`), a
+   payout account `NAME_MISMATCH` (admin payout-account queue → verification override). Without a verified identity
+   the typed holder name is the reference (payout account mismatch → `422 BANK_ACCOUNT_NAME_MISMATCH`).
+
+### 3.2 TOTP enrollment & reset (SEC-13)
+TOTP enrollment is trust-on-first-use, so it is narrowed to the moment the admin has just proven possession of the
+phone / e-mail:
+* `POST /auth/mfa/totp/enroll` only from a session whose family was created by an **OTP login ≤ 15 minutes ago**
+  (`SECURITY.MFA_ENROLL_FRESH_SESSION_SEC`); Google/Apple sessions and older (refreshed) sessions get
+  `403 MFA_ENROLL_FRESH_LOGIN_REQUIRED` (+ `MFA_ENROLL_DENIED` security event).
+* A pending (unconfirmed) factor belongs to the session that started it (`mfa_factors.enroll_session_id`): only that
+  session can confirm it (`403 MFA_ENROLL_SESSION_MISMATCH`) or restart it; another session gets
+  `409 MFA_ENROLLMENT_IN_PROGRESS {retryAfterSec}` until the pending factor is 15 minutes old. Confirming after 15 min →
+  `409 MFA_ENROLLMENT_EXPIRED`.
+* A **confirmed** factor is never replaced by self-service (`409 MFA_ALREADY_ENROLLED`). Reset = maker-checker:
+  `POST /v1/admin/users/{id}/mfa-reset-requests {reason ≥ 10}` (rbac.manage + fresh MFA, not for yourself) →
+  another **SUPER_ADMIN** (≠ requester, ≠ subject, fresh MFA) approves `POST /v1/admin/rbac/mfa-reset-requests/{id}/approve`
+  (or rejects / the requester cancels `…/reject`). Applying disables the factor, deletes recovery codes, revokes every
+  session (`MFA_RESET` HIGH security event, audit `auth.mfa_reset_applied`); the admin then logs in with OTP and
+  enrolls again. `admin_mfa_reset_requests` is append-only history guarded by `trg_admin_mfa_reset_guard` (same
+  checks in the DB, 72 h expiry, one pending request per user).
 
 Security events written: `LOGIN_SUCCESS`, `LOGIN_FAILED`, `USER_REGISTERED`, `SIGNUP_BLOCKED`, `OTP_VERIFY_FAILED`,
 `OTP_LOCKED`, `OTP_RATE_LIMITED`, `PHONE_VERIFIED`, `PHONE_CONFLICT`, `TRANSACTION_EMAIL_CHANGED`, `ACCOUNT_LINKED`,
 `LOGOUT`, `SESSION_REVOKED`, `DEVICE_REMOVED`, `MFA_ENROLL_STARTED`, `MFA_ENABLED`, `MFA_VERIFIED`, `MFA_FAILED`,
-`MFA_RECOVERY_CODE_USED`, `UPLOAD_TYPE_MISMATCH`, `MALWARE_UPLOAD`, `SENSITIVE_FILE_VIEWED`,
+`MFA_RECOVERY_CODE_USED`, `MFA_ENROLL_DENIED`, `MFA_RESET`, `SENSITIVE_ACTION_VERIFIED`, `STEP_UP_TARGET_MISMATCH`,
+`REFUND_DESTINATION_NAME_MISMATCH`, `UPLOAD_TYPE_MISMATCH`, `MALWARE_UPLOAD`, `SENSITIVE_FILE_VIEWED`,
 `KYC_DUPLICATE_IDENTITY`, `PAYOUT_ACCOUNT_INVALID`, `PAYOUT_ACCOUNT_NAME_MISMATCH`, `DATA_EXPORT_REQUESTED`,
 `ACCOUNT_DELETION_REQUESTED`, `ACCOUNT_DELETION_CANCELLED` (+ `REFRESH_TOKEN_REUSE` from services/session).
 
@@ -215,10 +262,13 @@ provider error) → stays IN_REVIEW for the admin queue. Events `kyc.submitted`,
 
 Payout accounts (K3): number encrypted (AAD `payout_accounts.account_number:<id>`), HMAC `bank_account:<bank>:<number>`
 (same account on other users = risk signal), mask `****1234`. Name inquiry via `payment.validateBankAccount`
-(MOCK/SANDBOX in dev/test); the bank holder name must match the verified identity name (tolerant token match) →
-`VERIFIED` (+ `payout_account.verified`, first verified becomes default) — mismatch `422 BANK_ACCOUNT_NAME_MISMATCH`,
+(MOCK/SANDBOX in dev/test); adding an account needs the SENSITIVE_ACTION step-up (§3.1, checked after the duplicate
+check and before the bank inquiry). The bank holder name must match the verified identity name (tolerant token match)
+→ `VERIFIED` (+ `payout_account.verified`, first verified becomes default) — mismatch with a verified identity →
+stored `NAME_MISMATCH` (201, never default, admin review); mismatch without one → `422 BANK_ACCOUNT_NAME_MISMATCH`;
 invalid `422 BANK_ACCOUNT_INVALID`, inquiry unavailable → stored `PENDING` (cannot be default). Only VERIFIED can be
-default; delete is refused while payouts are pending (`409 PAYOUT_ACCOUNT_IN_USE`). Responses show only the mask.
+default (switching the default needs a step-up too); delete is refused while payouts are pending
+(`409 PAYOUT_ACCOUNT_IN_USE`). Responses show only the mask.
 
 ## 6. Privacy (UU PDP)
 

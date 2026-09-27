@@ -37,7 +37,8 @@ export function registerAuth(app: App) {
       summary: 'Request a one-time code (SMS / WhatsApp / e-mail)',
       description:
         'LOGIN is public and doubles as sign-up (no account enumeration: the response is identical whether or not an account exists). ' +
-        'VERIFY_PHONE / VERIFY_EMAIL require a bearer token. Limits: 60 s resend cooldown, 5/hour and 10/day per destination, 20/hour per IP.',
+        'VERIFY_PHONE / VERIFY_EMAIL require a bearer token. SENSITIVE_ACTION (bearer; `action` + `targetId` required) is a step-up for ' +
+        'refund destinations and payout accounts: sent only to the verified phone / e-mail, valid 10 min, single use, bound to action + target. Limits: 60 s resend cooldown, 5/hour and 10/day per destination, 20/hour per IP.',
       middleware: [rateLimit({ name: 'auth.otp.request', limit: 30, windowSec: 60, key: 'ip' }), optionalAuth] as const,
       request: jsonBody(OtpRequestBody),
       responses: { 200: jsonContent(OtpRequestResponse), ...errorResponses },

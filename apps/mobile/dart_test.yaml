@@ -1,0 +1,6 @@
+# Test tags. `store` = store screenshots (test/store_screenshots): excluded from the normal run
+# and executed separately in CI:
+#   flutter test --tags store --update-goldens --dart-define=STORE_SCREENSHOTS=true test/store_screenshots
+tags:
+  store:
+    timeout: 4x

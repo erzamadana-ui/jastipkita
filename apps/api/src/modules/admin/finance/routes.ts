@@ -80,5 +80,29 @@ export function registerAdminFinance(app: App) {
     }),
     async (c) => c.json(await svc.retryPayout(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').note), 200),
   );
+  r.openapi(
+    createRoute({
+      method: 'get', path: '/v1/admin/refund-destinations', tags: refundTags, security: bearer,
+      summary: 'Refund destinations awaiting manual review (holder name ≠ verified identity; default PENDING_REVIEW)',
+      middleware: adminGuard(['refunds.approve']),
+      request: { query: z.object({ status: StatusCsvQuery }) },
+      responses: { 200: jsonContent(AdminPage), ...errorResponses },
+    }),
+    async (c) => c.json(await svc.listRefundDestinations(await adminCtx(c), c.req.valid('query')), 200),
+  );
+  r.openapi(
+    createRoute({
+      method: 'post', path: '/v1/admin/refund-destinations/{id}/review', tags: refundTags, security: bearer,
+      summary: 'Approve (→ VALID, refund processed) or reject (→ REJECTED, buyer asked again) a PENDING_REVIEW destination; reviewer ≠ buyer',
+      middleware: adminGuard(['refunds.approve'], { mfa: true, idempotent: true }),
+      request: {
+        params: IdParam,
+        headers: IdempotencyHeader,
+        ...jsonBody(z.object({ decision: z.enum(['APPROVE', 'REJECT']), note: z.string().trim().min(5).max(1000) }).openapi('RefundDestinationReview')),
+      },
+      responses: { 200: jsonContent(AdminLoose), ...errorResponses },
+    }),
+    async (c) => c.json(await svc.reviewRefundDestination(await adminCtx(c), c.req.valid('param').id, c.req.valid('json')), 200),
+  );
   app.route('/', r);
 }

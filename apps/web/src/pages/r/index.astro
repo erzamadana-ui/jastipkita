@@ -9,7 +9,7 @@ const rb = BUSINESS['referral.buyer'];
 ---
 <Base title="Kamu diundang ke JastipKita" description="Undangan bergabung ke JastipKita — titip belanja luar negeri lewat traveler terverifikasi dengan SafePay." path="/r/" noindex>
   <section class="section-tight">
-    <div class="container" style="max-width:600px">
+    <div class="container maxw-600">
       <div class="card referral">
         <span class="icon-tile success"><Icon name="gift" /></span>
         <h1 class="ref-title">Kamu diundang ke JastipKita</h1>
@@ -21,14 +21,14 @@ const rb = BUSINESS['referral.buyer'];
         </div>
         <p class="error-text" id="ref-invalid" hidden><Icon name="circle-alert" size={16} />Kode undangan tidak ditemukan di tautan ini.</p>
         {rb.enabled && (
-          <ul class="list-check" role="list" style="margin-top:18px">
+          <ul class="list-check mt-18" role="list">
             <li><Icon name="check" /><span>Kamu dan pengundang masing-masing mendapat <strong>{formatIdr(rb.refereeCreditIdr)} JastipKita Credit</strong> setelah transaksi pertamamu selesai dengan nilai minimal {formatIdr(rb.minFirstTransactionIdr)}.</span></li>
             <li><Icon name="check" /><span>Credit berlaku {rb.creditExpiryDays} hari, hanya sebagai potongan saat checkout, dan tidak dapat dicairkan.</span></li>
           </ul>
         )}
-        <p class="xsmall muted" style="margin-top:10px">Ketentuan program dapat berubah dan berlaku batas bulanan. Masukkan kode ini saat mendaftar di aplikasi.</p>
-        <div style="margin-top:20px"><StoreButtons /></div>
-        <p style="margin-top:18px"><a class="link-arrow" href={url('/')}>Pelajari cara kerja JastipKita<Icon name="arrow-right" /></a></p>
+        <p class="xsmall muted mt-10">Ketentuan program dapat berubah dan berlaku batas bulanan. Masukkan kode ini saat mendaftar di aplikasi.</p>
+        <div class="mt-20"><StoreButtons /></div>
+        <p class="mt-18"><a class="link-arrow" href={url('/')}>Pelajari cara kerja JastipKita<Icon name="arrow-right" /></a></p>
       </div>
     </div>
   </section>

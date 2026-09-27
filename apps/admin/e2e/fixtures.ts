@@ -396,6 +396,56 @@ export function refunds(approved: Set<string>) {
   };
 }
 
+// ------------------------------------------------------------------ SEC-12 refund destinations & payouts
+
+export const refundDestinations = {
+  data: [
+    { id: 'rd-1', refundId: 'rf-7', refundNumber: 'RFD-260927-K4P9WZ', transactionId: TX_ID, buyerId: 'a1b2c3d4-0000-4000-8000-000000000001', buyerDisplayName: 'Dewi A.', bankCode: 'BCA', accountMask: '****0961', validationStatus: 'PENDING_REVIEW', nameMatch: 'MISMATCH', amountIdr: 3_150_000, createdAt: daysAgo(0.2), canReview: true },
+    { id: 'rd-2', refundId: 'rf-8', refundNumber: 'RFD-260926-J2L5QX', transactionId: TX_ID, buyerId: ME_ID, buyerDisplayName: 'Rina P.', bankCode: 'MANDIRI', accountMask: '****4410', validationStatus: 'PENDING_REVIEW', nameMatch: 'MISMATCH', amountIdr: 780_000, createdAt: daysAgo(1.1), canReview: false },
+    { id: 'rd-3', refundId: 'rf-9', refundNumber: 'RFD-260925-B8H3NC', transactionId: TX_ID, buyerId: 'a1b2c3d4-0000-4000-8000-000000000003', buyerDisplayName: 'Agus W.', bankCode: 'BNI', accountMask: '****2207', validationStatus: 'PENDING_REVIEW', nameMatch: 'MISMATCH', amountIdr: 12_900_000, createdAt: daysAgo(2.4), canReview: true },
+  ],
+  nextCursor: null,
+};
+
+const payout = (id: string, number: string, over: Record<string, unknown>) => ({
+  id,
+  number,
+  travelerId: '9f1e2d3c-0000-4000-8000-00000000000' + id.slice(-1),
+  travelerDisplayName: 'Bagus P.',
+  transactionId: TX_ID,
+  transactionNumber: 'JK-260921-7KQ2MD',
+  amountIdr: 450_000,
+  feeIdr: 4_500,
+  netIdr: 445_500,
+  status: 'ON_HOLD',
+  holdReason: null,
+  heldBy: null,
+  heldAt: null,
+  releasedBy: null,
+  releasedAt: null,
+  transactionHoldReason: null,
+  scheduledFor: daysAgo(-1),
+  paidAt: null,
+  provider: 'XENDIT',
+  sandbox: true,
+  failureReason: null,
+  attempts: 0,
+  destination: { bankCode: 'BCA', accountMask: '****5521', verificationStatus: 'VERIFIED' },
+  canRelease: true,
+  createdAt: daysAgo(3),
+  ...over,
+});
+
+export const payouts = {
+  data: [
+    payout('po-1', 'PO-260926-4TQ8', { holdReason: 'DISPUTE_OPEN', heldAt: daysAgo(1) }),
+    payout('po-2', 'PO-260925-9WX2', { holdReason: 'Verifikasi bukti pembelian ulang', heldBy: ME_ID, heldAt: daysAgo(2), canRelease: false, netIdr: 1_285_000 }),
+    payout('po-3', 'PO-260924-7KD3', { holdReason: 'RISK_REVIEW_OPEN', heldAt: daysAgo(2.5), transactionHoldReason: 'RISK_REVIEW', netIdr: 2_310_000 }),
+    payout('po-4', 'PO-260924-2MN5', { holdReason: 'PAYOUT_ACCOUNT_UNVERIFIED', heldAt: daysAgo(0.5), destination: { bankCode: 'BRI', accountMask: '****7710', verificationStatus: 'NAME_MISMATCH' }, netIdr: 610_000 }),
+  ],
+  nextCursor: null,
+};
+
 // ------------------------------------------------------------------ config
 
 const cfg = (version: number, status: string, value: unknown, createdBy: string | null, extra: Record<string, unknown> = {}) => ({

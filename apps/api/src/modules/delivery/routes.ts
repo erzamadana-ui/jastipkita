@@ -110,7 +110,7 @@ export function registerDeliveryRoutes(app: App) {
       tags: ['Delivery'],
       summary: 'Buyer confirms receipt (Idempotency-Key required) → BUYER_CONFIRMED → COMPLETED (release + payout scheduled)',
       security: bearer,
-      middleware: [requireAuth, requireIdempotency] as const,
+      middleware: [requireAuth, rateLimit({ name: 'money.confirm_receipt', limit: 30, windowSec: 60, key: 'user' }), requireIdempotency] as const,
       request: { params: TxIdParam, headers: IdempotencyHeader },
       responses: { 200: jsonContent(LooseResult), ...errorResponses },
     }),

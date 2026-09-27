@@ -141,6 +141,22 @@ export interface RoleGrantResult {
   expiresAt: string | null;
   message: string;
 }
+/** SEC-13: TOTP factor reset of another admin — maker-checker (requester ≠ approver ≠ subject, approver SUPER_ADMIN). */
+export interface MfaResetRequest {
+  id: string;
+  userId: string;
+  factorId: string | null;
+  reason: string;
+  requestedBy: string;
+  approvedBy: string | null;
+  rejectedBy: string | null;
+  status: 'PENDING' | 'APPLIED' | 'REJECTED' | 'EXPIRED' | 'CANCELLED';
+  decisionNote: string | null;
+  decidedAt: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
 export interface RoleRequest {
   id: string;
   userId: string;
@@ -441,6 +457,23 @@ export interface PayoutItem {
   destination: { bankCode: string; accountMask: string; verificationStatus: string };
   canRelease: boolean;
   createdAt: string;
+}
+
+/** SEC-12: refund bank destination whose holder name ≠ the buyer's verified identity (GET /v1/admin/refund-destinations). */
+export interface RefundDestinationItem {
+  id: string;
+  refundId: string;
+  refundNumber: string | null;
+  transactionId: string;
+  buyerId: string;
+  buyerDisplayName: string | null;
+  bankCode: string;
+  accountMask: string;
+  validationStatus: 'PENDING_REVIEW' | 'VALID' | 'REJECTED' | string;
+  nameMatch: string | null;
+  amountIdr: number;
+  createdAt: string;
+  canReview: boolean;
 }
 
 // ---------------------------------------------------------------- config

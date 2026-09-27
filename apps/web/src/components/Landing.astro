@@ -156,16 +156,16 @@ const faqEn = [
     <div class="safepay-grid">
       <div>
         <span class="eyebrow"><Icon name="shield-check" size={16} />SafePay</span>
-        <h2 id="safepay-title" class="h-section" style="margin-top:10px">{t('Dana ditahan sampai barang kamu terima', 'Funds are held until you receive your item')}</h2>
-        <p class="lead" style="margin-top:14px">{t('Traveler tidak menerima uang sebelum barang sampai di tanganmu. Dan traveler tidak boleh membeli sebelum pembayaranmu aman.', 'The traveler receives nothing before the item is in your hands — and may not buy before your payment is secured.')}</p>
-        <ol class="fund-flow" role="list" style="margin-top:28px">
+        <h2 id="safepay-title" class="h-section mt-10">{t('Dana ditahan sampai barang kamu terima', 'Funds are held until you receive your item')}</h2>
+        <p class="lead mt-14">{t('Traveler tidak menerima uang sebelum barang sampai di tanganmu. Dan traveler tidak boleh membeli sebelum pembayaranmu aman.', 'The traveler receives nothing before the item is in your hands — and may not buy before your payment is secured.')}</p>
+        <ol class="fund-flow mt-28" role="list">
           <li><span class="icon-tile"><Icon name="wallet" /></span><div><h4>{t('Kamu membayar', 'You pay')}</h4><p>{t('Lewat Virtual Account, QRIS, e-wallet, atau kartu — diproses mitra payment gateway berizin Bank Indonesia.', 'By virtual account, QRIS, e-wallet or card — processed by a payment-gateway partner licensed by Bank Indonesia.')}</p></div></li>
           <li><span class="icon-tile success"><Icon name="lock" /></span><div><h4>{t('Dana ditahan & dicatat per transaksi', 'Funds held & ledgered per transaction')}</h4><p>{t('Tidak melewati rekening pribadi siapa pun. Status berubah menjadi PAYMENT SECURED.', 'Never through anyone’s personal account. Status becomes PAYMENT SECURED.')}</p></div></li>
           <li><span class="icon-tile"><Icon name="shopping-bag" /></span><div><h4>{t('Traveler membeli setelah disetujui', 'Traveler buys once approved')}</h4><p>{t('Harga aktual dikonfirmasi dulu. Beda harga di luar toleransi = kamu yang memutuskan.', 'The actual price is confirmed first. Out-of-tolerance changes are your call.')}</p></div></li>
           <li><span class="icon-tile success"><Icon name="circle-check" /></span><div><h4>{t('Kamu terima & konfirmasi', 'You receive & confirm')}</h4><p>{t('Baru kemudian traveler fee dan penggantian harga barang diteruskan ke traveler.', 'Only then are the traveler fee and item reimbursement released.')}</p></div></li>
         </ol>
       </div>
-      <div class="stack" style="--stack:14px">
+      <div class="stack st-14">
         <div class="banner banner-blocked" role="img" aria-label={t('Contoh banner aplikasi traveler: Jangan beli dulu', 'Traveler app banner example: do not purchase')}>
           <span class="ic"><Icon name="octagon-x" /></span>
           <div><div class="ov">Do not purchase</div><div class="tt">{t('Jangan beli dulu', 'Do not buy yet')}</div><div class="dd">{t('Pembayaran penitip belum aman. Pembelian dibuka otomatis saat status PURCHASE APPROVED.', 'The buyer’s payment is not secured. Purchasing unlocks automatically at PURCHASE APPROVED.')}</div></div>
@@ -196,15 +196,15 @@ const faqEn = [
     <div class="safepay-grid">
       <div>
         <span class="eyebrow">{t('Harga transparan', 'Transparent pricing')}</span>
-        <h2 id="price-title" class="h-section" style="margin-top:10px">{t('Semua biaya, 11 baris, sebelum kamu membayar', 'Every cost, 11 lines, before you pay')}</h2>
-        <p class="lead" style="margin-top:14px">{t('Tidak ada “biaya lain-lain”. Bea masuk dan pajak impor diberi label Estimasi lengkap dengan aturan yang dipakai, karena nilai finalnya ditetapkan Bea Cukai.', 'No “miscellaneous fees”. Import duty and taxes are labelled Estimate with the rule that was used, because Customs sets the final amount.')}</p>
-        <ul class="list-check" role="list" style="margin-top:24px">
+        <h2 id="price-title" class="h-section mt-10">{t('Semua biaya, 11 baris, sebelum kamu membayar', 'Every cost, 11 lines, before you pay')}</h2>
+        <p class="lead mt-14">{t('Tidak ada “biaya lain-lain”. Bea masuk dan pajak impor diberi label Estimasi lengkap dengan aturan yang dipakai, karena nilai finalnya ditetapkan Bea Cukai.', 'No “miscellaneous fees”. Import duty and taxes are labelled Estimate with the rule that was used, because Customs sets the final amount.')}</p>
+        <ul class="list-check mt-24" role="list">
           <li><Icon name="check" /><span>{t(`JastipKita Protection ${bps(BUSINESS['pricing.protection_fee'].rateBps)} dan Platform Fee ${bps(BUSINESS['pricing.platform_fee'].rateBps)} dari harga barang, dengan batas minimum & maksimum.`, `JastipKita Protection ${bps(BUSINESS['pricing.protection_fee'].rateBps, 'en')} and Platform Fee ${bps(BUSINESS['pricing.platform_fee'].rateBps, 'en')} of the item price, with floors and caps.`)}</span></li>
           <li><Icon name="check" /><span>{t(`Kurs dikunci ${BUSINESS['fx.lock'].lockMinutes} menit saat checkout, markup kurs ditampilkan.`, `Exchange rate locked for ${BUSINESS['fx.lock'].lockMinutes} minutes at checkout, markup disclosed.`)}</span></li>
           <li><Icon name="check" /><span>{t('Biaya pembayaran berubah sesuai metode yang kamu pilih — dan kamu melihatnya sebelum membayar.', 'The payment fee follows the method you choose — and you see it before paying.')}</span></li>
           <li><Icon name="check" /><span>{t('Diskon & credit tampil sebagai baris negatif; pajak dan bea tidak pernah didiskon.', 'Discounts & credit appear as negative lines; taxes and duties are never discounted.')}</span></li>
         </ul>
-        <p style="margin-top:24px"><a class="link-arrow" href={calc}>{t('Hitung bea & pajak barangmu', 'Estimate duties for your item')}<Icon name="arrow-right" /></a></p>
+        <p class="mt-24"><a class="link-arrow" href={calc}>{t('Hitung bea & pajak barangmu', 'Estimate duties for your item')}<Icon name="arrow-right" /></a></p>
       </div>
       <PriceBreakdown
         lines={q.lines}
@@ -226,9 +226,9 @@ const faqEn = [
       <span class="eyebrow">{t('Kepercayaan', 'Trust')}</span>
       <h2 id="trust-title" class="h-section">{t('Dibangun untuk transaksi dengan orang yang belum kamu kenal', 'Built for transactions with people you have never met')}</h2>
     </div>
-    <div class="grid grid-2" style="--gap:20px">
+    <div class="grid grid-2 g-20">
       <article class="card kyc-card">
-        <div style="display:flex;gap:14px;align-items:center;margin-bottom:18px"><span class="icon-tile"><Icon name="id-card" /></span><h3 class="h-card">{t('5 level verifikasi (KYC)', '5 verification levels (KYC)')}</h3></div>
+        <div class="flex gap-14 items-center mb-18"><span class="icon-tile"><Icon name="id-card" /></span><h3 class="h-card">{t('5 level verifikasi (KYC)', '5 verification levels (KYC)')}</h3></div>
         <ul class="kyc-list" role="list">
           {kyc.map(([lvl, name, desc]) => (
             <li><span class={`kyc-badge kyc-${lvl}`}><span class="dot" aria-hidden="true"></span>{t('Level', 'Level')} {lvl}</span><div><strong class="small">{name}</strong><p class="small muted">{desc}</p></div></li>
@@ -239,21 +239,21 @@ const faqEn = [
           <p>{t('Foto KTP/paspor dan selfie disimpan terenkripsi dan hanya dipakai untuk verifikasi. Data biometrik diproses dengan persetujuan terpisah.', 'ID photos and selfies are stored encrypted and used only for verification. Biometric data is processed under a separate consent.')} <a href={url('/legal/kyc-consent/')}>{t('Persetujuan KYC', 'KYC consent (ID)')}</a></p>
         </div>
       </article>
-      <div class="grid" style="--gap:20px">
+      <div class="grid g-20">
         <article class="card">
-          <div style="display:flex;gap:14px;align-items:center"><span class="icon-tile success"><Icon name="star" /></span><h3 class="h-card">Trust Score 0–100</h3></div>
-          <p class="small muted" style="margin-top:12px">{t('Dihitung dari verifikasi, transaksi selesai, ketepatan waktu, rating, dan riwayat pembayaran — dikurangi pembatalan, dispute, dan sinyal penipuan. Penyesuaian manual wajib beralasan dan tercatat.', 'Computed from verification, completed transactions, punctuality, ratings and payment history — minus cancellations, disputes and fraud signals. Manual adjustments require a reason and are audited.')}</p>
+          <div class="flex gap-14 items-center"><span class="icon-tile success"><Icon name="star" /></span><h3 class="h-card">Trust Score 0–100</h3></div>
+          <p class="small muted mt-12">{t('Dihitung dari verifikasi, transaksi selesai, ketepatan waktu, rating, dan riwayat pembayaran — dikurangi pembatalan, dispute, dan sinyal penipuan. Penyesuaian manual wajib beralasan dan tercatat.', 'Computed from verification, completed transactions, punctuality, ratings and payment history — minus cancellations, disputes and fraud signals. Manual adjustments require a reason and are audited.')}</p>
           <div class="trust-meter" aria-hidden="true"><span class="t1"></span><span class="t2"></span><span class="t3"></span><span class="t4"></span></div>
           <div class="trust-legend" aria-hidden="true"><span>0–39 {t('Rendah', 'Low')}</span><span>40–69 {t('Cukup', 'Fair')}</span><span>70–84 {t('Baik', 'Good')}</span><span>85+ {t('Sangat', 'Excellent')}</span></div>
           <p class="sr-only">{t('Tingkat: 0–39 rendah, 40–69 cukup, 70–84 baik, 85–100 sangat tepercaya.', 'Tiers: 0–39 low, 40–69 fair, 70–84 good, 85–100 excellent.')}</p>
         </article>
         <article class="card">
-          <div style="display:flex;gap:14px;align-items:center"><span class="icon-tile"><Icon name="plane" /></span><h3 class="h-card">{t('Trip terverifikasi', 'Verified trips')}</h3></div>
-          <p class="small muted" style="margin-top:12px">{t('Trip hanya aktif setelah tiket atau boarding pass diverifikasi tim. Data sensitif di dokumen perjalanan disamarkan.', 'Trips only go live after the ticket or boarding pass is verified. Sensitive data on travel documents is masked.')}</p>
+          <div class="flex gap-14 items-center"><span class="icon-tile"><Icon name="plane" /></span><h3 class="h-card">{t('Trip terverifikasi', 'Verified trips')}</h3></div>
+          <p class="small muted mt-12">{t('Trip hanya aktif setelah tiket atau boarding pass diverifikasi tim. Data sensitif di dokumen perjalanan disamarkan.', 'Trips only go live after the ticket or boarding pass is verified. Sensitive data on travel documents is masked.')}</p>
         </article>
         <article class="card">
-          <div style="display:flex;gap:14px;align-items:center"><span class="icon-tile warning"><Icon name="scale" /></span><h3 class="h-card">{t('Dispute Center', 'Dispute Center')}</h3></div>
-          <ul class="sla-list tnum" role="list" style="margin-top:12px">
+          <div class="flex gap-14 items-center"><span class="icon-tile warning"><Icon name="scale" /></span><h3 class="h-card">{t('Dispute Center', 'Dispute Center')}</h3></div>
+          <ul class="sla-list tnum mt-12" role="list">
             <li><span>{t('Buka dispute setelah barang diterima', 'Open a dispute after delivery')}</span><strong>{sla.openWindowHoursAfterDelivery} {t('jam', 'h')}</strong></li>
             <li><span>{t('Pengumpulan bukti', 'Evidence collection')}</span><strong>{sla.evidenceHours} {t('jam', 'h')}</strong></li>
             <li><span>{t('Target keputusan', 'Decision target')}</span><strong>{sla.reviewHours} {t('jam', 'h')}</strong></li>
@@ -273,7 +273,7 @@ const faqEn = [
       <h2 id="countries-title" class="h-section">{t('Enam rute pertama, masing-masing dengan aturannya sendiri', 'Six launch routes, each with its own rules')}</h2>
       <p class="lead">{t('Tujuan pengiriman: Indonesia. Setiap halaman negara berisi kategori populer, contoh estimasi bea & pajak, dan barang yang perlu diwaspadai.', 'Destination: Indonesia. Each country page lists popular categories, a duty & tax example and items to watch out for (in Indonesian).')}</p>
     </div>
-    <div class="grid grid-3" style="--gap:16px">
+    <div class="grid grid-3 g-16">
       {COUNTRY_PAGES.map((c) => (
         <a class="card card-link country-card" href={url(`/${c.slug}/`)} hreflang={id ? undefined : 'id'}>
           <div class="country-top">
@@ -298,29 +298,29 @@ const faqEn = [
 <!-- ============ TRAVELER EARNINGS ============ -->
 <section class="section section-alt" id="traveler" aria-labelledby="traveler-title">
   <div class="container">
-    <div class="safepay-grid" style="align-items:center">
+    <div class="safepay-grid items-center">
       <div>
         <span class="eyebrow">{t('Untuk traveler', 'For travelers')}</span>
-        <h2 id="traveler-title" class="h-section" style="margin-top:10px">{t('Bagasi kosongmu bisa jadi penghasilan — dengan aturan yang jelas', 'Turn spare luggage into income — with clear rules')}</h2>
-        <p class="lead" style="margin-top:14px">{t('Kamu menentukan sendiri fee, kapasitas, dan kategori yang kamu terima. Pembayaran penitip sudah diamankan SafePay sebelum kamu membeli, jadi kamu tidak perlu menagih siapa pun.', 'You set your own fee, capacity and accepted categories. The buyer’s payment is secured by SafePay before you buy, so you never have to chase anyone.')}</p>
-        <ul class="list-check" role="list" style="margin-top:24px">
+        <h2 id="traveler-title" class="h-section mt-10">{t('Bagasi kosongmu bisa jadi penghasilan — dengan aturan yang jelas', 'Turn spare luggage into income — with clear rules')}</h2>
+        <p class="lead mt-14">{t('Kamu menentukan sendiri fee, kapasitas, dan kategori yang kamu terima. Pembayaran penitip sudah diamankan SafePay sebelum kamu membeli, jadi kamu tidak perlu menagih siapa pun.', 'You set your own fee, capacity and accepted categories. The buyer’s payment is secured by SafePay before you buy, so you never have to chase anyone.')}</p>
+        <ul class="list-check mt-24" role="list">
           <li><Icon name="check" /><span>{t(`Fee traveler minimal ${f(bounds.minIdr)} dan maksimal ${bps(bounds.maxRateBps)} dari harga barang per titipan.`, `Traveler fee at least ${f(bounds.minIdr)} and at most ${bps(bounds.maxRateBps, 'en')} of the item price.`)}</span></li>
           <li><Icon name="check" /><span>{t('Harga barang diganti penuh sesuai struk yang disetujui; fee dibayar setelah penitip konfirmasi.', 'Item cost reimbursed per the approved receipt; the fee is paid after the buyer confirms.')}</span></li>
           <li><Icon name="check" /><span>{t('Kamu hanya membeli setelah pembayaran aman — tidak ada risiko penitip menghilang.', 'You only buy after the payment is secured — no risk of buyers disappearing.')}</span></li>
         </ul>
-        <ul class="list-check list-x" role="list" style="margin-top:14px">
+        <ul class="list-check list-x mt-14" role="list">
           <li><Icon name="x" /><span>{t('Wajib deklarasi jujur: titipan bukan barang pribadi. Pajak atas penghasilanmu adalah tanggung jawabmu.', 'Honest declaration is mandatory: items are not personal goods. Tax on your income is your responsibility.')}</span></li>
         </ul>
-        <p style="margin-top:24px"><a class="link-arrow" href={url('/legal/traveler-agreement/')}>{t('Baca Perjanjian Traveler', 'Read the Traveler Agreement (ID)')}<Icon name="arrow-right" /></a></p>
+        <p class="mt-24"><a class="link-arrow" href={url('/legal/traveler-agreement/')}>{t('Baca Perjanjian Traveler', 'Read the Traveler Agreement (ID)')}<Icon name="arrow-right" /></a></p>
       </div>
       <div class="card">
         <h3 class="h-card">{t('Contoh satu titipan', 'One request, for example')}</h3>
-        <p class="small muted" style="margin-top:4px">{t('Sneakers ¥60.000, traveler fee 10% (contoh — kamu yang menentukan).', '¥60,000 sneakers, 10% traveler fee (example — you set it).')}</p>
-        <div class="grid grid-2" style="--gap:16px;margin-top:20px">
+        <p class="small muted mt-4">{t('Sneakers ¥60.000, traveler fee 10% (contoh — kamu yang menentukan).', '¥60,000 sneakers, 10% traveler fee (example — you set it).')}</p>
+        <div class="grid grid-2 g-16 mt-20">
           <div class="stat"><span class="k">{t('Penggantian harga barang', 'Item reimbursement')}</span><span class="v tnum">{f(itemPrice)}</span></div>
-          <div class="stat"><span class="k">{t('Traveler fee untukmu', 'Your traveler fee')}</span><span class="v tnum" style="color:var(--jk-color-success-text)">{f(travelerFee)}</span></div>
+          <div class="stat"><span class="k">{t('Traveler fee untukmu', 'Your traveler fee')}</span><span class="v tnum text-success">{f(travelerFee)}</span></div>
         </div>
-        <div class="divider-dots" style="margin:20px 0"></div>
+        <div class="divider-dots m-20-0"></div>
         <ol class="gate-list" role="list">
           <li class="blocked"><Icon name="octagon-x" /><div><strong>DO NOT PURCHASE</strong><span>{t('Menunggu pembayaran / konfirmasi harga', 'Waiting for payment / price confirmation')}</span></div></li>
           <li class="ok"><Icon name="shield-check" /><div><strong>PURCHASE APPROVED</strong><span>{t('Boleh beli — maks. harga yang disetujui', 'You may buy — up to the approved price')}</span></div></li>
@@ -328,7 +328,7 @@ const faqEn = [
           <li><Icon name="qr-code" /><div><strong>{t('Serah terima', 'Hand-over')}</strong><span>{t('PIN/QR atau kurir', 'PIN/QR or courier')}</span></div></li>
           <li class="ok"><Icon name="banknote" /><div><strong>Payout</strong><span>{t('Setelah penitip konfirmasi', 'After the buyer confirms')}</span></div></li>
         </ol>
-        <p class="small muted" style="margin-top:16px">{t('Bea & pajak yang kamu bayarkan saat kedatangan diganti dari estimasi yang sudah dibayar penitip, dengan bukti pembayaran resmi. Angka di atas ilustrasi, bukan jaminan penghasilan.', 'Duties you pay on arrival are reimbursed from the estimate the buyer already paid, against the official receipt. Figures are illustrative, not an earnings guarantee.')}</p>
+        <p class="small muted mt-16">{t('Bea & pajak yang kamu bayarkan saat kedatangan diganti dari estimasi yang sudah dibayar penitip, dengan bukti pembayaran resmi. Angka di atas ilustrasi, bukan jaminan penghasilan.', 'Duties you pay on arrival are reimbursed from the estimate the buyer already paid, against the official receipt. Figures are illustrative, not an earnings guarantee.')}</p>
       </div>
     </div>
   </div>
@@ -337,12 +337,12 @@ const faqEn = [
 <!-- ============ FAQ TEASER ============ -->
 <section class="section" id="faq" aria-labelledby="faq-title">
   <div class="container container-narrow">
-    <div class="section-head center" style="text-align:center">
+    <div class="section-head center text-center">
       <span class="eyebrow">FAQ</span>
       <h2 id="faq-title" class="h-section">{t('Pertanyaan yang paling sering', 'Frequently asked')}</h2>
     </div>
     <Faq items={id ? faqTeaser : faqEn} />
-    <p class="center" style="text-align:center;margin-top:24px"><a class="link-arrow" href={url('/bantuan/')}>{t('Buka pusat bantuan', 'Open the help center (ID)')}<Icon name="arrow-right" /></a></p>
+    <p class="center text-center mt-24"><a class="link-arrow" href={url('/bantuan/')}>{t('Buka pusat bantuan', 'Open the help center (ID)')}<Icon name="arrow-right" /></a></p>
   </div>
 </section>
 
@@ -353,20 +353,20 @@ const faqEn = [
       <div class="hero-orbits" aria-hidden="true">
         <svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice"><g fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1.2"><ellipse cx="980" cy="200" rx="520" ry="170" transform="rotate(-12 980 200)" /><ellipse cx="980" cy="200" rx="360" ry="112" transform="rotate(-12 980 200)" /></g></svg>
       </div>
-      <div class="safepay-grid" style="align-items:center">
+      <div class="safepay-grid items-center">
         <div>
           <span class="eyebrow">{t('Jadilah yang pertama', 'Be among the first')}</span>
-          <h2 id="early-title" class="h-section" style="margin-top:10px">{t('Belum ada ulasan — karena kami belum meluncur', 'No reviews yet — because we have not launched')}</h2>
-          <p class="lead" style="margin-top:14px">{t('Kami tidak memasang testimoni buatan. Ulasan di JastipKita nanti hanya datang dari transaksi yang benar-benar selesai. Jadilah penitip atau traveler pertama saat aplikasi tersedia.', 'We will not post made-up testimonials. Reviews on JastipKita will only come from transactions that actually completed. Be one of the first buyers or travelers when the app is available.')}</p>
+          <h2 id="early-title" class="h-section mt-10">{t('Belum ada ulasan — karena kami belum meluncur', 'No reviews yet — because we have not launched')}</h2>
+          <p class="lead mt-14">{t('Kami tidak memasang testimoni buatan. Ulasan di JastipKita nanti hanya datang dari transaksi yang benar-benar selesai. Jadilah penitip atau traveler pertama saat aplikasi tersedia.', 'We will not post made-up testimonials. Reviews on JastipKita will only come from transactions that actually completed. Be one of the first buyers or travelers when the app is available.')}</p>
         </div>
-        <div class="stack" style="--stack:16px">
+        <div class="stack st-16">
           <StoreButtons lang={lang} tone="on-dark" />
           {wa ? (
             <a class="btn btn-primary" href={wa} rel="noopener"><Icon name="message-circle" />{t('Daftar minat via WhatsApp', 'Join early access on WhatsApp')}</a>
           ) : (
-            <p class="small" style="color:var(--hero-ink-muted)">{t('Kanal pendaftaran minat dibuka menjelang peluncuran. Sementara itu, coba kalkulator dan pemeriksa barang kami.', 'Early-access sign-up opens closer to launch. Meanwhile, try our calculator and item checker.')}</p>
+            <p class="small text-hero-muted">{t('Kanal pendaftaran minat dibuka menjelang peluncuran. Sementara itu, coba kalkulator dan pemeriksa barang kami.', 'Early-access sign-up opens closer to launch. Meanwhile, try our calculator and item checker.')}</p>
           )}
-          <div style="display:flex;flex-wrap:wrap;gap:10px">
+          <div class="flex flex-wrap gap-10">
             <a class="btn btn-on-dark btn-sm" href={calc}><Icon name="calculator" />{t('Kalkulator bea', 'Duty calculator')}</a>
             <a class="btn btn-on-dark btn-sm" href={check}><Icon name="search" />{t('Cek barang terlarang', 'Restricted items')}</a>
           </div>

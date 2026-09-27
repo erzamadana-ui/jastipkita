@@ -7,19 +7,19 @@ import { CONFIG } from '../../../config.ts';
 ---
 <Base title="Buka di aplikasi JastipKita" description="Detail transaksi JastipKita hanya tersedia di aplikasi." path="/app/transactions/" noindex>
   <section class="section-tight">
-    <div class="container" style="max-width:560px">
+    <div class="container maxw-560">
       <div class="card deeplink" data-scheme={CONFIG.appScheme} data-package={CONFIG.androidPackage}>
         <span class="icon-tile"><Icon name="smartphone" /></span>
         <h1 class="dl-title">Buka di aplikasi JastipKita</h1>
         <p class="small muted">Detail transaksi, status SafePay, chat, dan serah terima hanya tersedia di aplikasi agar data transaksimu tetap aman.</p>
         <p class="dl-id" id="dl-id" hidden>Nomor transaksi: <strong class="tnum"></strong></p>
         <p class="error-text" id="dl-invalid" hidden><Icon name="circle-alert" size={16} />Tautan transaksi tidak valid.</p>
-        <div class="stack" style="--stack:12px;margin-top:20px">
+        <div class="stack st-12 mt-20">
           <a class="btn btn-primary btn-block" id="dl-open" href="#" hidden><Icon name="external-link" />Buka aplikasi</a>
           <StoreButtons />
           <a class="btn btn-ghost btn-block" href={url('/akun/')}><Icon name="user-check" />Lihat akun di web</a>
         </div>
-        <p class="xsmall muted" style="margin-top:16px">Belum punya aplikasinya? Aplikasi JastipKita belum diluncurkan; tautan toko aplikasi akan aktif saat rilis.</p>
+        <p class="xsmall muted mt-16">Belum punya aplikasinya? Aplikasi JastipKita belum diluncurkan; tautan toko aplikasi akan aktif saat rilis.</p>
       </div>
     </div>
   </section>

@@ -10,6 +10,7 @@ import {
   api,
   buyerL2,
   emailTemplates,
+  emailsTo,
   extraTrip,
   HELD,
   idem,
@@ -22,6 +23,7 @@ import {
   purchase,
   securedDeal,
   sendWebhook,
+  sensitiveOtp,
   tag,
   tick,
   travelToHandover,
@@ -149,13 +151,11 @@ describe('mandatory scenario: traveler cancellation', () => {
     expect(await txStatus(t, d.tx.id)).toBe('PURCHASED');
   });
 
-  // BUG (high, money stuck): POST /v1/trips/{id}/cancel is allowed while the trip has a PAID transaction. trips/service.ts
-  // cancelTrip() only emits `trip.cancelled {openTransactionIds}` "for the money group", but NO outbox consumer subscribes
-  // to `trip.cancelled` (src/jobs/*.ts), so the transaction stays PAYMENT_SECURED on a CANCELLED trip forever: no refund,
-  // no buyer notification, no traveler penalty, escrow never released. Expected (docs/api/marketplace.md §7, domain §3):
-  // the cancellation matrix is applied (traveler cancels AFTER_PAYMENT → full refund incl. payment fee, penalty 5).
-  let tripCancel: { txId: string; buyer: Actor; total: number };
-  it('setup for the trip-cancel BUG: traveler cancels a trip that has a paid transaction (API accepts it)', async () => {
+  // Fixed BUG-QA-01/02: `trip.cancelled` is consumed by the money group — every open transaction of the cancelled trip gets
+  // the cancellation matrix as the TRAVELER (paid → full refund incl. payment fee + penalty 5; unpaid → CANCELLED with the
+  // open invoice expired), both parties get `transaction.trip_cancelled`; quote/checkout refuse a CANCELLED trip and a
+  // webhook for it is recorded then auto-refunded (late-payment path). A trip with purchased goods cannot be cancelled.
+  it('trip cancelled with a PAID transaction → consumer: REFUND_PENDING → REFUNDED (incl. payment fee), penalty 5, both notified, escrow empty', async () => {
     const trip = await extraTrip(t, w);
     const d = await securedDeal(t, w, { tripId: trip.id });
     const c = await ok(api(t, w.traveler, 'POST', `/v1/trips/${trip.id}/cancel`, { reason: 'Penerbangan dibatalkan' }));
@@ -163,26 +163,87 @@ describe('mandatory scenario: traveler cancellation', () => {
     const [ev] = await t.adminSql<{ payload: { openTransactionIds: string[] } }[]>`SELECT payload FROM outbox_events WHERE event_type = 'trip.cancelled' AND aggregate_id = ${trip.id}`;
     expect(ev!.payload.openTransactionIds).toEqual([d.tx.id]);
     await tick(t, 5);
-    tripCancel = { txId: d.tx.id, buyer: d.buyer, total: d.quote.totalIdr };
-  });
-  it.fails('BUG: a paid transaction on a cancelled trip is never refunded (no consumer for trip.cancelled)', async () => {
-    expect(await txStatus(t, tripCancel.txId)).toBe('REFUNDED'); // actual: PAYMENT_SECURED
+    expect(await txStatus(t, d.tx.id)).toBe('REFUNDED');
+    const [rf] = await t.adminSql<{ amount_idr: string; status: string }[]>`SELECT amount_idr, status FROM refunds WHERE transaction_id = ${d.tx.id}`;
+    expect(rf!.status).toBe('SUCCEEDED');
+    expect(Number(rf!.amount_idr)).toBe(d.quote.totalIdr); // payment fee included (traveler-caused)
+    const [pen] = await t.adminSql<{ payload: { trustPenalty: number } }[]>`
+      SELECT payload FROM outbox_events WHERE event_type = 'transaction.cancelled_with_penalty' AND aggregate_id = ${d.tx.id}`;
+    expect(pen!.payload.trustPenalty).toBe(5);
+    const l = await txLedger(t, d.tx.id);
+    for (const b of HELD) expect(l[b] ?? 0, b).toBe(0);
+    for (const who of [d.buyer, w.traveler]) {
+      expect(await count(t.adminSql`SELECT 1 FROM notifications WHERE user_id = ${who.id} AND event_type = 'transaction.trip_cancelled' AND data->>'transactionId' = ${d.tx.id}`)).toBe(1);
+    }
+    expect(emailTemplates(t, d.buyer.email)).toEqual(expect.arrayContaining([tag('transaction.trip_cancelled')]));
+    expect(await unbalancedJournals(t)).toBe(0);
+    // replaying the event is a no-op
+    await tick(t, 5);
+    expect(await count(t.adminSql`SELECT id FROM refunds WHERE transaction_id = ${d.tx.id}`)).toBe(1);
   });
 
-  // Same root cause, worse effect: a MATCHED (unpaid) transaction of a cancelled trip stays MATCHED, and quote/checkout do
-  // not check the trip status — the buyer can still pay (→ PAYMENT_SECURED) for a trip that no longer exists.
-  let matchedOnCancelled: { buyer: Actor; txId: string };
-  it('setup for the pay-after-trip-cancel BUG: trip cancelled while its transaction is MATCHED', async () => {
+  it('trip with a PURCHASED transaction cannot be cancelled (409) — the Dispute Center / admin owns that money', async () => {
+    const trip = await extraTrip(t, w);
+    const d = await securedDeal(t, w, { tripId: trip.id });
+    await purchase(t, w.traveler, d.tx.id, 6000);
+    const r = await api(t, w.traveler, 'POST', `/v1/trips/${trip.id}/cancel`, { reason: 'Tidak jadi berangkat' });
+    expect(r.status).toBe(409);
+    expect(r.body.error).toMatchObject({ code: 'TRIP_HAS_PURCHASED_TRANSACTIONS', details: { transactionIds: [d.tx.id] } });
+    expect(await txStatus(t, d.tx.id)).toBe('PURCHASED');
+  });
+
+  it('MATCHED transaction on a cancelled trip: quote refused (422 TRIP_NOT_AVAILABLE) even before the consumer runs; then CANCELLED', async () => {
     const trip = await extraTrip(t, w);
     const d = await matchedDeal(t, w, { tripId: trip.id });
     await ok(api(t, w.traveler, 'POST', `/v1/trips/${trip.id}/cancel`, { reason: 'Tidak jadi berangkat' }));
+    const q = await api(t, d.buyer, 'POST', `/v1/transactions/${d.tx.id}/quote`, { channel: 'QRIS' });
+    expect(q.status).toBe(422);
+    expect(q.body.error).toMatchObject({ code: 'TRIP_NOT_AVAILABLE', details: { tripStatus: 'CANCELLED' } });
     await tick(t, 5);
-    matchedOnCancelled = { buyer: d.buyer, txId: d.tx.id };
+    expect(await txStatus(t, d.tx.id)).toBe('CANCELLED');
+    expect(await count(t.adminSql`SELECT 1 FROM notifications WHERE user_id = ${d.buyer.id} AND event_type = 'transaction.trip_cancelled'`)).toBe(1);
+    const again = await api(t, d.buyer, 'POST', `/v1/transactions/${d.tx.id}/quote`, { channel: 'QRIS' });
+    expect(again.status).toBe(422);
   });
-  it.fails('BUG: buyer can still quote, check out and pay a transaction whose trip is CANCELLED', async () => {
-    const { buyer, txId } = matchedOnCancelled;
-    const q = await api(t, buyer, 'POST', `/v1/transactions/${txId}/quote`, { channel: 'QRIS' });
-    expect(q.status).toBe(422); // actual: 201 — and checkout 201, webhook → PAYMENT_SECURED
+
+  it('AWAITING_PAYMENT on a cancelled trip: invoice expired + provider session cancelled → CANCELLED; paying anyway → recorded and auto-refunded', async () => {
+    const trip = await extraTrip(t, w);
+    const d = await matchedDeal(t, w, { tripId: trip.id });
+    const quote = await ok(api(t, d.buyer, 'POST', `/v1/transactions/${d.tx.id}/quote`, { channel: 'QRIS' }), 201);
+    const co = await ok(api(t, d.buyer, 'POST', `/v1/transactions/${d.tx.id}/checkout`, { quoteId: quote.quoteId }, idem()), 201);
+    const ref = await providerRefOf(t, co.paymentId);
+    await ok(api(t, w.traveler, 'POST', `/v1/trips/${trip.id}/cancel`, { reason: 'Visa ditolak' }));
+    await tick(t, 5);
+    expect(await txStatus(t, d.tx.id)).toBe('CANCELLED');
+    expect(t.payment.cancelledCheckouts).toContain(ref);
+    const [p] = await t.adminSql<{ status: string }[]>`SELECT status FROM payments WHERE id = ${co.paymentId}`;
+    expect(p!.status).toBe('EXPIRED');
+    const { res } = await providerPays(t, co.paymentId);
+    expect(res.status).toBe(200);
+    await tick(t, 3);
+    const [rf] = await t.adminSql<{ reason_code: string; status: string; amount_idr: string }[]>`SELECT reason_code, status, amount_idr FROM refunds WHERE payment_id = ${co.paymentId}`;
+    expect(rf).toMatchObject({ reason_code: 'LATE_PAYMENT', status: 'SUCCEEDED' });
+    expect(Number(rf!.amount_idr)).toBe(quote.totalIdr);
+    expect(await txStatus(t, d.tx.id)).toBe('CANCELLED');
+    expect((await txLedger(t, d.tx.id)).PROVIDER_CASH ?? 0).toBe(0);
+  });
+
+  it('webhook for a checkout whose trip was cancelled before the consumer ran → never PAYMENT_SECURED; late refund, then CANCELLED', async () => {
+    const trip = await extraTrip(t, w);
+    const d = await matchedDeal(t, w, { tripId: trip.id });
+    const quote = await ok(api(t, d.buyer, 'POST', `/v1/transactions/${d.tx.id}/quote`, { channel: 'QRIS' }), 201);
+    const co = await ok(api(t, d.buyer, 'POST', `/v1/transactions/${d.tx.id}/checkout`, { quoteId: quote.quoteId }, idem()), 201);
+    await ok(api(t, w.traveler, 'POST', `/v1/trips/${trip.id}/cancel`, { reason: 'Visa ditolak' }));
+    const { res } = await providerPays(t, co.paymentId); // races the trip.cancelled consumer
+    expect(res.status).toBe(200);
+    expect(res.body.outcome).toBe('SECURED_LATE_REFUND');
+    expect(await txStatus(t, d.tx.id)).toBe('AWAITING_PAYMENT');
+    await tick(t, 5);
+    expect(await txStatus(t, d.tx.id)).toBe('CANCELLED');
+    const refunds = await t.adminSql<{ reason_code: string; status: string }[]>`SELECT reason_code, status FROM refunds WHERE transaction_id = ${d.tx.id}`;
+    expect(refunds).toEqual([{ reason_code: 'LATE_PAYMENT', status: 'SUCCEEDED' }]); // exactly one refund
+    const l = await txLedger(t, d.tx.id);
+    for (const b of HELD) expect(l[b] ?? 0, b).toBe(0);
   });
 });
 
@@ -197,8 +258,16 @@ describe('mandatory scenario: refund (VA channel → bank disbursement)', () => 
     refundCase = { txId: d.tx.id, buyer: d.buyer, total: d.quote.totalIdr, refundId: list.data[0].id };
     await tick(t, 3);
     expect(await txStatus(t, d.tx.id)).toBe('REFUND_PENDING'); // waits for the destination
-    const dest = await ok(api(t, d.buyer, 'POST', `/v1/refunds/${list.data[0].id}/destination`, { bankCode: 'BCA', accountNumber: '8800112233', accountHolderName: 'Penitip E2E' }));
-    expect(dest.accountMask).toBe('****2233');
+    // the buyer is asked for a bank account (in-app + push + e-mail, critical) — BUG-QA-03 fixed
+    expect(await count(t.adminSql`SELECT 1 FROM notifications WHERE user_id = ${d.buyer.id} AND event_type = 'refund.destination_required'`)).toBe(1);
+    expect(emailTemplates(t, d.buyer.email)).toEqual(expect.arrayContaining([tag('refund.destination_required')]));
+    // SEC-12: step-up OTP bound to this refund
+    const noStepUp = await api(t, d.buyer, 'POST', `/v1/refunds/${list.data[0].id}/destination`, { bankCode: 'BCA', accountNumber: '8800112233', accountHolderName: 'Penitip E2E' });
+    expect(noStepUp.status).toBe(403);
+    expect(noStepUp.body.error.code).toBe('STEP_UP_REQUIRED');
+    const stepUp = await sensitiveOtp(t, d.buyer, 'REFUND_DESTINATION_SET', list.data[0].id);
+    const dest = await ok(api(t, d.buyer, 'POST', `/v1/refunds/${list.data[0].id}/destination`, { bankCode: 'BCA', accountNumber: '8800112233', accountHolderName: 'Penitip E2E', stepUp }));
+    expect(dest).toMatchObject({ accountMask: '****2233', validationStatus: 'VALID', reviewRequired: false });
     await tick(t, 3); // money.process_refunds (2 min)
     expect(await txStatus(t, d.tx.id)).toBe('REFUNDED');
     expect(t.payment.payouts.find((p) => p.accountNumber === '8800112233')?.amountIdr).toBe(d.quote.totalIdr);
@@ -207,14 +276,12 @@ describe('mandatory scenario: refund (VA channel → bank disbursement)', () => 
     expect(emailTemplates(t, d.buyer.email)).toEqual(expect.arrayContaining([tag('refund.requested'), tag('refund.succeeded')]));
   });
 
-  // BUG (medium): for VA/retail payments the refund needs a buyer bank account (`refund.destination_required` is emitted,
-  // docs/api/money.md §3 names engagement as its consumer), but no outbox consumer/template exists for it. The only message
-  // the buyer gets is `refund.requested`, which says the money goes back "ke metode pembayaran asal" — wrong for VA — so
-  // the refund silently waits for a destination the buyer was never asked for. Expected: a notification/e-mail asking the
-  // buyer to add a bank account (critical PAYMENT group).
-  it.fails('BUG: the buyer is never asked for a refund bank account (refund.destination_required has no consumer)', async () => {
-    const notes = await t.adminSql<{ event_type: string }[]>`SELECT event_type FROM notifications WHERE user_id = ${refundCase.buyer.id}`;
-    expect(notes.map((n) => n.event_type)).toContain('refund.destination_required'); // actual: only refund.requested ("ke metode pembayaran asal")
+  it('refund.requested for a bank-disbursed refund does not promise the original payment method; destination change confirmed', async () => {
+    const notes = await t.adminSql<{ event_type: string; body: string }[]>`SELECT event_type, body FROM notifications WHERE user_id = ${refundCase.buyer.id} ORDER BY created_at`;
+    const types = notes.map((n) => n.event_type);
+    expect(types).toEqual(expect.arrayContaining(['refund.requested', 'refund.destination_required', 'refund.destination_updated']));
+    const requested = notes.find((n) => n.event_type === 'refund.requested')!;
+    expect(requested.body).not.toMatch(/metode pembayaran asal/i);
   });
 });
 
@@ -287,12 +354,10 @@ describe('mandatory scenario: price change', () => {
     expect(await count(t.adminSql`SELECT 1 FROM outbox_events WHERE event_type = 'transaction.cancelled_with_penalty' AND aggregate_id = ${d.tx.id}`)).toBe(0);
   });
 
-  // BUG (medium): when the buyer asks for clarification (respond CLARIFY) the service emits
-  // `price_confirmation.clarification_requested` (price-confirmation/service.ts) but nothing consumes it — the traveler gets
-  // no notification, although the 15-minute window keeps running and CLARIFICATION_REQUESTED → EXPIRED ends in a refund.
-  // Expected (docs/api/money.md §3 "engagement (notify traveler)"): the traveler is notified (IN_APP/PUSH at least).
+  // Fixed BUG-QA-04: `price_confirmation.clarification_requested` notifies the traveler (in-app + push + e-mail, critical:
+  // the 15-minute window keeps running) with the buyer's question (contact details masked) and "do not purchase yet".
   let clarify: { travelerId: string; txId: string };
-  it('setup for the clarification BUG: buyer asks for clarification on a price change', async () => {
+  it('buyer asks for clarification on a price change', async () => {
     const d = await securedDeal(t, w);
     const chk = await ok(api(t, w.traveler, 'POST', `/v1/transactions/${d.tx.id}/price-check`, { actualUnitPriceMinor: 6900, currency: 'JPY' }));
     const ask = await ok(api(t, d.buyer, 'POST', `/v1/transactions/${d.tx.id}/price-confirmations/${chk.priceConfirmation.id}/respond`, { action: 'CLARIFY', note: 'Kenapa naik? Ada diskon member?' }, idem()));
@@ -301,10 +366,15 @@ describe('mandatory scenario: price change', () => {
     expect(await count(t.adminSql`SELECT 1 FROM outbox_events WHERE event_type = 'price_confirmation.clarification_requested' AND aggregate_id = ${chk.priceConfirmation.id}`)).toBe(1);
     clarify = { travelerId: w.traveler.id, txId: d.tx.id };
   });
-  it.fails('BUG: the traveler is not notified of a clarification request (clarification_requested has no consumer)', async () => {
-    const notes = await t.adminSql<{ n: number }[]>`
-      SELECT count(*)::int AS n FROM notifications WHERE user_id = ${clarify.travelerId} AND data->>'transactionId' = ${clarify.txId} AND event_type LIKE 'price%'`;
-    expect(notes[0]!.n).toBeGreaterThan(0); // actual: 0
+  it('the traveler is notified of the clarification request (in-app + e-mail), with the question and DO NOT PURCHASE', async () => {
+    const notes = await t.adminSql<{ event_type: string; body: string }[]>`
+      SELECT event_type, body FROM notifications WHERE user_id = ${clarify.travelerId} AND data->>'transactionId' = ${clarify.txId} AND event_type LIKE 'price%'`;
+    expect(notes.map((n) => n.event_type)).toContain('price.clarification_requested');
+    expect(notes.find((n) => n.event_type === 'price.clarification_requested')!.body).toMatch(/Jawab sebelum/);
+    const mail = emailsTo(t, w.traveler.email).filter((m) => m.tags!.template === tag('price.clarification_requested')).at(-1)!;
+    expect(mail.html).toContain('Kenapa naik');
+    expect(mail.html).toContain('JANGAN BELI DULU');
+    expect(emailTemplates(t, w.traveler.email)).toEqual(expect.arrayContaining([tag('price.clarification_requested')]));
   });
 });
 
@@ -346,13 +416,10 @@ describe('mandatory scenario: network loss (retry with the same Idempotency-Key)
     expect(await count(t.adminSql`SELECT id FROM payments WHERE transaction_id = ${d.tx.id}`)).toBe(1);
   });
 
-  // BUG (medium): on money routes the rate limiter runs AFTER requireIdempotency (checkout/routes.ts:
-  // [requireAuth, requireKycLevel(2), requireIdempotency, rateLimit]); the limiter's 429 is a 4xx, so the idempotency
-  // middleware stores it as the COMPLETED response and replays it for 24 h. A client that follows Retry-After and retries
-  // with the SAME key — exactly what the network-loss guidance says — gets the cached 429 forever and can never check out
-  // with that key. Expected: 429 (and other transient errors) are not persisted (key released), or the limiter runs first.
+  // Fixed BUG-QA-05: money routes rate-limit BEFORE the idempotency claim, and a 429/5xx is never persisted (key marked
+  // FAILED) — a client that follows Retry-After and retries with the SAME key gets a real result.
   let limited: { buyer: Actor; tx2: string; quoteId: string; key: Record<string, string>; firstStatus: number };
-  it('setup for the 429-replay BUG: 11th checkout call in a minute is rate limited', async () => {
+  it('11th checkout call in a minute is rate limited (429) without consuming its Idempotency-Key', async () => {
     const buyer = await buyerL2(t);
     const d1 = await matchedDeal(t, w, { buyer });
     const d2 = await matchedDeal(t, w, { buyer });
@@ -362,13 +429,19 @@ describe('mandatory scenario: network loss (retry with the same Idempotency-Key)
     const key = idem();
     const r = await api(t, buyer, 'POST', `/v1/transactions/${d2.tx.id}/checkout`, { quoteId: q2.quoteId }, key);
     expect(r.status).toBe(429);
+    const [row] = await t.adminSql<{ status: string }[]>`SELECT status FROM idempotency_keys WHERE user_id = ${buyer.id} AND key = ${key['idempotency-key']}`;
+    expect(row?.status ?? 'NONE').not.toBe('COMPLETED');
     t.clock.advance(61_000); // Retry-After elapsed; the FX lock (30 min) is still valid
     limited = { buyer, tx2: d2.tx.id, quoteId: q2.quoteId, key, firstStatus: r.status };
   });
-  it.fails('BUG: a rate-limited (429) checkout is replayed from the idempotency store after Retry-After', async () => {
+  it('retry after Retry-After with the SAME key → 201 (not a replayed 429); a further retry replays that 201', async () => {
     const retry = await api(t, limited.buyer, 'POST', `/v1/transactions/${limited.tx2}/checkout`, { quoteId: limited.quoteId }, limited.key);
-    expect(retry.headers.get('idempotent-replayed')).not.toBe('true'); // actual: 'true' with status 429
-    expect(retry.status).toBe(201);
+    expect(retry.headers.get('idempotent-replayed')).not.toBe('true');
+    expect(retry.status, JSON.stringify(retry.body)).toBe(201);
+    const again = await api(t, limited.buyer, 'POST', `/v1/transactions/${limited.tx2}/checkout`, { quoteId: limited.quoteId }, limited.key);
+    expect(again.status).toBe(201);
+    expect(again.headers.get('idempotent-replayed')).toBe('true');
+    expect(again.body.paymentId).toBe(retry.body.paymentId);
   });
 });
 

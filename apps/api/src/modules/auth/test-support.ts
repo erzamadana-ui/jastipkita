@@ -30,6 +30,28 @@ export async function otpVerify(t: TestContext, body: Record<string, unknown>, o
   });
 }
 
+/**
+ * SEC-12 step-up proof for a sensitive action: requests a SENSITIVE_ACTION OTP (default: the user's verified e-mail)
+ * and returns `{ challengeId, code }` (devCode). Waits out the per-destination resend cooldown if needed.
+ */
+export async function sensitiveStepUp(
+  t: TestContext,
+  user: { accessToken: string; email?: string | null },
+  action: 'REFUND_DESTINATION_SET' | 'PAYOUT_ACCOUNT_ADD' | 'PAYOUT_ACCOUNT_SET_DEFAULT',
+  targetId: string,
+  opts: { channel?: 'EMAIL' | 'SMS'; destination?: string } = {},
+): Promise<{ challengeId: string; code: string }> {
+  const body = { channel: opts.channel ?? 'EMAIL', destination: opts.destination ?? user.email, purpose: 'SENSITIVE_ACTION', action, targetId };
+  const ip = `198.51.100.${1 + Math.floor(Math.random() * 250)}`;
+  let rq = await otpRequest(t, body, { token: user.accessToken, ip });
+  if (rq.status === 429 && rq.body?.error?.code === 'OTP_COOLDOWN') {
+    t.clock.advance((Number(rq.body.error.details?.retryAfterSec ?? 60) + 1) * 1000);
+    rq = await otpRequest(t, body, { token: user.accessToken, ip });
+  }
+  if (rq.status !== 200) throw new Error(`step-up otp request failed ${rq.status} ${JSON.stringify(rq.body)}`);
+  return { challengeId: rq.body.challengeId, code: rq.body.devCode };
+}
+
 /** Full phone OTP sign-up/login. Returns the verify response body. */
 export async function phoneLogin(t: TestContext, phone = randomPhone(), extra: Record<string, unknown> = {}, ip?: string) {
   const req = await otpRequest(t, { channel: 'SMS', destination: phone, purpose: 'LOGIN' }, ip ? { ip } : {});

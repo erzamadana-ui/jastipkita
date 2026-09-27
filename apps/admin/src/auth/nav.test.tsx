@@ -25,7 +25,7 @@ describe('permission-based navigation', () => {
 
   it('FINANCE sees money screens but not disputes, KYC or the DB center', () => {
     const nav = renderNav(['FINANCE']);
-    for (const l of ['Dashboard', 'Persetujuan refund', 'Payout traveler', 'Rekening settlement', 'Rekonsiliasi', 'Audit log', 'Business config']) expect(nav.getByRole('link', { name: l })).toBeInTheDocument();
+    for (const l of ['Dashboard', 'Persetujuan refund', 'Review rekening refund', 'Payout traveler', 'Rekening settlement', 'Rekonsiliasi', 'Audit log', 'Business config']) expect(nav.getByRole('link', { name: l })).toBeInTheDocument();
     for (const l of ['Dispute', 'Review KYC', 'DB & Infra Center', 'Promo']) expect(nav.queryByRole('link', { name: l })).not.toBeInTheDocument();
   });
 

@@ -10,6 +10,7 @@ import '../../../core/format/money.dart';
 import '../../../core/l10n/l10n.dart';
 import '../../../core/l10n/labels.dart';
 import '../../../core/models/transaction.dart';
+import '../../../core/network/step_up.dart';
 import '../../../core/router/deep_links.dart';
 import '../../../core/storage/settings.dart';
 import '../../../widgets/common.dart';
@@ -18,6 +19,7 @@ import '../../../widgets/jk_button.dart';
 import '../../../widgets/jk_text_field.dart';
 import '../../../widgets/money_text.dart';
 import '../../../widgets/sheets_and_glass.dart';
+import '../../auth/presentation/step_up_sheet.dart';
 import '../../files/data/file_upload_service.dart';
 import '../data/transaction_repository.dart';
 
@@ -480,24 +482,35 @@ class _RatingBodyState extends ConsumerState<_RatingBody> {
 }
 
 /// Bank account for a refund on a channel that cannot be refunded automatically (e.g. VA).
+/// Protected by the SEC-12 step-up OTP; a holder name that differs from the verified identity is
+/// accepted for FINANCE review (`PENDING_REVIEW`) and the buyer is told so.
 Future<void> showRefundDestinationSheet(BuildContext context, WidgetRef ref, String transactionId, RefundInfo refund) async {
+  RefundDestinationResult? saved;
   await showJkBottomSheet<void>(
     context,
     title: context.l10n.refundDestinationTitle,
     builder: (BuildContext sheetContext) => _BankForm(
       submitLabel: sheetContext.l10n.refundDestinationSubmit,
-      intro: sheetContext.l10n.refundDestinationIntro(Money.idr(refund.amountIdr, locale: sheetContext.localeCode)),
+      intro: refund.destinationRejected
+          ? sheetContext.l10n.refundDestinationRejected
+          : sheetContext.l10n.refundDestinationIntro(Money.idr(refund.amountIdr, locale: sheetContext.localeCode)),
       onSubmit: (String bank, String number, String holder) async {
-        await ref.read(transactionRepositoryProvider).setRefundDestination(
+        saved = await ref.read(transactionRepositoryProvider).setRefundDestination(
               refund.id,
               bankCode: bank,
               accountNumber: number,
               accountHolderName: holder,
+              stepUp: stepUpPrompt(sheetContext),
             );
       },
     ),
   );
   _refreshTransaction(ref, transactionId);
+  final result = saved;
+  if (result == null) return;
+  if (!context.mounted) return;
+  final l10n = context.l10n;
+  showJkSnack(context, result.reviewRequired ? l10n.refundDestinationReview : l10n.refundDestinationSaved);
 }
 
 /// Bank-account form shared by refund destination and payout accounts. The number is sent once
@@ -556,6 +569,8 @@ class _BankFormState extends State<_BankForm> {
       if (!mounted) return;
       _number.clear();
       Navigator.of(context).pop();
+    } on StepUpCancelled {
+      // The user closed the step-up sheet: keep the form as typed, nothing was changed.
     } on Object catch (e) {
       if (!mounted) return;
       setState(() => _error = errorMessage(context.l10n, e));

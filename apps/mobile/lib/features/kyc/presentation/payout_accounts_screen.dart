@@ -8,12 +8,14 @@ import '../../../core/domain/domain.dart';
 import '../../../core/l10n/l10n.dart';
 import '../../../core/l10n/labels.dart';
 import '../../../core/models/account.dart';
+import '../../../core/network/step_up.dart';
 import '../../../core/router/deep_links.dart';
 import '../../../widgets/common.dart';
 import '../../../widgets/jk_button.dart';
 import '../../../widgets/sheets_and_glass.dart';
 import '../../../widgets/states.dart';
 import '../../auth/application/session_controller.dart';
+import '../../auth/presentation/step_up_sheet.dart';
 import '../../transactions/presentation/transaction_sheets.dart';
 import '../data/kyc_repository.dart';
 
@@ -29,8 +31,11 @@ class PayoutAccountsScreen extends ConsumerStatefulWidget {
 class _PayoutAccountsScreenState extends ConsumerState<PayoutAccountsScreen> {
   String? _busy;
 
+  /// Adding an account needs the step-up OTP (SEC-12). A holder name that differs from the verified
+  /// identity is saved as `NAME_MISMATCH` for admin review.
   Future<void> _add() async {
     final l10n = context.l10n;
+    PayoutAccount? added;
     await showJkBottomSheet<void>(
       context,
       title: l10n.payoutAccountAdd,
@@ -38,20 +43,30 @@ class _PayoutAccountsScreenState extends ConsumerState<PayoutAccountsScreen> {
         submitLabel: sheetContext.l10n.payoutAccountAdd,
         intro: sheetContext.l10n.payoutAccountIntro,
         onSubmit: (String bank, String number, String holder) async {
-          await ref.read(kycRepositoryProvider).addPayoutAccount(bankCode: bank, accountNumber: number, holderName: holder);
+          added = await ref.read(kycRepositoryProvider).addPayoutAccount(
+                bankCode: bank,
+                accountNumber: number,
+                holderName: holder,
+                stepUp: stepUpPrompt(sheetContext),
+              );
         },
       ),
     );
     if (!mounted) return;
     ref.invalidate(payoutAccountsProvider);
+    final account = added;
+    if (account != null) showJkSnack(context, account.isUnderReview ? l10n.payoutAccountAddedReview : l10n.payoutAccountAdded);
   }
 
-  Future<void> _run(String key, Future<Object?> Function() action) async {
+  Future<void> _run(String key, Future<Object?> Function() action, {String? success}) async {
     setState(() => _busy = key);
     try {
       await action();
       if (!mounted) return;
       ref.invalidate(payoutAccountsProvider);
+      if (success != null) showJkSnack(context, success);
+    } on StepUpCancelled {
+      // Step-up sheet closed: nothing changed.
     } on Object catch (e) {
       if (!mounted) return;
       showJkSnack(context, errorMessage(context.l10n, e), error: true);
@@ -136,8 +151,12 @@ class _PayoutAccountsScreenState extends ConsumerState<PayoutAccountsScreen> {
                     const SizedBox(height: JkSpacing.s2),
                     StatusChip(
                       label: Labels.payoutAccountStatus(l10n, a.verificationStatus),
-                      tone: jk.status[a.isVerified ? 'secured' : 'actionRequired']!,
+                      tone: jk.status[a.isVerified ? 'secured' : (a.isUnderReview ? 'open' : 'actionRequired')]!,
                     ),
+                    if (a.isUnderReview) ...<Widget>[
+                      const SizedBox(height: JkSpacing.s2),
+                      NoticeBox(tone: NoticeTone.info, title: l10n.statusUnderReview, message: l10n.payoutAccountReviewBody),
+                    ],
                     const SizedBox(height: JkSpacing.s2),
                     Wrap(
                       spacing: JkSpacing.s2,
@@ -149,7 +168,11 @@ class _PayoutAccountsScreenState extends ConsumerState<PayoutAccountsScreen> {
                             variant: JkButtonVariant.tertiary,
                             loading: _busy == 'default:${a.id}',
                             onPressed: _busy == null
-                                ? () => _run('default:${a.id}', () => ref.read(kycRepositoryProvider).makeDefault(a.id))
+                                ? () => _run(
+                                      'default:${a.id}',
+                                      () => ref.read(kycRepositoryProvider).makeDefault(a.id, stepUp: stepUpPrompt(this.context)),
+                                      success: l10n.payoutAccountDefaultChanged,
+                                    )
                                 : null,
                           ),
                         JkButton(

@@ -84,7 +84,7 @@ export interface NavSection {
 export type IconName =
   | 'dashboard' | 'users' | 'kyc' | 'trip' | 'tx' | 'dispute' | 'refund' | 'payout' | 'bank' | 'recon' | 'risk'
   | 'trust' | 'referral' | 'promo' | 'config' | 'customs' | 'restricted' | 'ticket' | 'chat' | 'faq' | 'legal'
-  | 'audit' | 'rbac' | 'db';
+  | 'audit' | 'rbac' | 'db' | 'shield';
 
 export const NAV: NavSection[] = [
   { title: 'Ringkasan', items: [{ to: '/', label: 'Dashboard', icon: 'dashboard', cap: { perms: ['analytics.read'] } }] },
@@ -102,6 +102,7 @@ export const NAV: NavSection[] = [
     title: 'Keuangan',
     items: [
       { to: '/refunds', label: 'Persetujuan refund', icon: 'refund', cap: { perms: ['refunds.approve'] } },
+      { to: '/refund-destinations', label: 'Review rekening refund', icon: 'shield', cap: { perms: ['refunds.approve'] } },
       { to: '/payouts', label: 'Payout traveler', icon: 'payout', cap: { perms: ['payouts.manage'] } },
       { to: '/finance/settlement', label: 'Rekening settlement', icon: 'bank', cap: { perms: ['finance.settlement.read_masked'] } },
       { to: '/finance/reconciliation', label: 'Rekonsiliasi', icon: 'recon', cap: { perms: ['finance.reports.read'] } },
@@ -164,12 +165,15 @@ export const CAP = {
   suspendUser: { perms: ['users.suspend'] },
   manageRoles: { perms: ['rbac.manage'] },
   approveRoleRequest: { perms: ['rbac.manage'], role: 'SUPER_ADMIN' },
+  mfaResetRequest: { perms: ['rbac.manage'] },
+  mfaResetApprove: { perms: ['rbac.manage'], role: 'SUPER_ADMIN' },
   kycReview: { perms: ['kyc.review'] },
   tripVerify: { perms: ['trips.verify'] },
   txCancel: { perms: ['transactions.override'] },
   txRefund: { perms: ['transactions.override', 'refunds.request'] },
   disputes: { perms: ['disputes.manage'] },
   refundApprove: { perms: ['refunds.approve'] },
+  refundDestinationReview: { perms: ['refunds.approve'] },
   payouts: { perms: ['payouts.manage'] },
   settlementRequest: { perms: ['finance.settlement.request_change'] },
   settlementApprove: { perms: ['finance.settlement.approve_change'], role: 'FINANCE_SUPER_ADMIN' },

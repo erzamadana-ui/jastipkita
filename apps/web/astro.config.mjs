@@ -17,7 +17,8 @@ export default defineConfig({
   build: {
     format: 'directory',
     assets: '_assets',
-    inlineStylesheets: 'auto',
+    // CSP (SEC-14): no inline <style> blocks — every stylesheet is an external file (style-src 'self').
+    inlineStylesheets: 'never',
   },
   compressHTML: true,
   integrations: [
@@ -28,6 +29,7 @@ export default defineConfig({
     }),
   ],
   vite: {
-    build: { assetsInlineLimit: 2048 },
+    // CSP (SEC-14): never inline bundled scripts or assets as data:/inline code (script-src 'self').
+    build: { assetsInlineLimit: 0 },
   },
 });

@@ -250,13 +250,43 @@ export async function kycApproved(t: TestContext, who: Actor, admin: Actor, full
   return { submissionId: sub.submission.id };
 }
 
-/** Payout account through the API; the provider's bank-name inquiry is overridden to return the identity name. */
+/**
+ * SEC-12 step-up: SENSITIVE_ACTION OTP bound to (action, targetId), delivered to the actor's VERIFIED phone (SMS) or
+ * e-mail — what the app does before a refund destination / payout account change. Returns the `stepUp` proof.
+ */
+export async function sensitiveOtp(
+  t: TestContext,
+  who: Actor,
+  action: 'REFUND_DESTINATION_SET' | 'PAYOUT_ACCOUNT_ADD' | 'PAYOUT_ACCOUNT_SET_DEFAULT',
+  targetId: string,
+): Promise<{ challengeId: string; code: string }> {
+  const channels = [
+    ...(who.phone ? [{ channel: 'SMS', destination: who.phone }] : []),
+    { channel: 'EMAIL', destination: who.email },
+  ] as const;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    for (const ch of channels) {
+      const rq = await api(t, who, 'POST', '/v1/auth/otp/request', { ...ch, purpose: 'SENSITIVE_ACTION', action, targetId });
+      if (rq.status === 200) {
+        expect(rq.body.devCode).toMatch(/^\d{6}$/);
+        if (ch.channel === 'SMS') expect(t.sms.sent.at(-1)!.to).toBe(ch.destination);
+        return { challengeId: rq.body.challengeId, code: rq.body.devCode };
+      }
+      expect(rq.status, JSON.stringify(rq.body)).toBe(429); // resend cooldown on that destination (a login OTP just went out)
+    }
+    t.clock.advance(61_000);
+  }
+  throw new Error('step-up OTP could not be requested');
+}
+
+/** Payout account through the API (with step-up OTP); the provider's bank-name inquiry returns the identity name. */
 export async function payoutAccount(t: TestContext, who: Actor, holderName = 'BUDI SANTOSO'): Promise<{ id: string; mask: string }> {
   const original = t.payment.validateBankAccount.bind(t.payment);
   t.payment.validateBankAccount = (async (i: { accountNumber: string }) => ({ valid: /^\d{6,20}$/.test(i.accountNumber), holderName })) as typeof t.payment.validateBankAccount;
   try {
     const accountNumber = `55${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
-    const r = await ok(api(t, who, 'POST', '/v1/kyc/payout-accounts', { bankCode: 'BCA', accountNumber, holderName }), 201);
+    const stepUp = await sensitiveOtp(t, who, 'PAYOUT_ACCOUNT_ADD', who.id);
+    const r = await ok(api(t, who, 'POST', '/v1/kyc/payout-accounts', { bankCode: 'BCA', accountNumber, holderName, stepUp }), 201);
     expect(r).toMatchObject({ verificationStatus: 'VERIFIED', isDefault: true, accountMask: `****${accountNumber.slice(-4)}` });
     expect(JSON.stringify(r)).not.toContain(accountNumber);
     return { id: r.id, mask: r.accountMask };

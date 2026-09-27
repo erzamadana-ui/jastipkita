@@ -168,8 +168,61 @@ export interface PayoutRunResult {
   skipped: number;
 }
 
+/**
+ * SYSTEM auto-release (§15.7 ON_HOLD → SCHEDULED, guard HOLD_RELEASE for SYSTEM): a payout the processor itself held
+ * because a dispute was open (`hold_reason = DISPUTE_OPEN`, `held_by IS NULL`) goes back to SCHEDULED once every dispute
+ * of the transaction is CLOSED (after the appeal window or an admin close), no risk review on the transaction, its payments
+ * or proofs is OPEN/IN_REVIEW, and the transaction carries no payout hold flag. Anything else keeps the manual
+ * maker-checker release (POST /v1/admin/payouts/{id}/release).
+ */
+export async function releaseClearedDisputeHolds(deps: AppDeps, filter: { transactionId?: string | undefined } = {}): Promise<number> {
+  const now = deps.clock.now();
+  const candidates = await deps.sql<{ id: string }[]>`
+    SELECT p.id FROM payouts p JOIN transactions t ON t.id = p.transaction_id
+     WHERE p.status = 'ON_HOLD' AND p.hold_reason = 'DISPUTE_OPEN' AND p.held_by IS NULL AND t.payout_hold_reason IS NULL
+       AND NOT EXISTS (SELECT 1 FROM disputes d WHERE d.transaction_id = p.transaction_id AND d.status <> 'CLOSED')
+       ${filter.transactionId ? deps.sql`AND p.transaction_id = ${filter.transactionId}` : deps.sql``}
+     ORDER BY p.created_at LIMIT 100`;
+  let released = 0;
+  for (const { id } of candidates) {
+    const ok = await deps.sql.begin(async (db) => {
+      await setDbActor(db, 'SYSTEM', null);
+      const [row] = await db<{ id: string; number: string; status: string; hold_reason: string | null; held_by: string | null; traveler_id: string; transaction_id: string; amount_idr: number; scheduled_for: Date }[]>`
+        SELECT id, number, status, hold_reason, held_by, traveler_id, transaction_id, amount_idr, scheduled_for FROM payouts WHERE id = ${id} FOR UPDATE SKIP LOCKED`;
+      if (!row || row.status !== 'ON_HOLD' || row.hold_reason !== 'DISPUTE_OPEN' || row.held_by) return false;
+      const [t] = await db<{ payout_hold_reason: string | null }[]>`SELECT payout_hold_reason FROM transactions WHERE id = ${row.transaction_id} FOR UPDATE`;
+      const [openDisputes] = await db<{ n: number }[]>`SELECT count(*)::int AS n FROM disputes WHERE transaction_id = ${row.transaction_id} AND status <> 'CLOSED'`;
+      const [openReviews] = await db<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM risk_reviews rv
+         WHERE rv.status IN ('OPEN','IN_REVIEW')
+           AND ((rv.subject_type = 'TRANSACTION' AND rv.subject_id = ${row.transaction_id})
+             OR (rv.subject_type = 'PAYMENT' AND rv.subject_id IN (SELECT id FROM payments WHERE transaction_id = ${row.transaction_id}))
+             OR (rv.subject_type = 'PURCHASE_PROOF' AND rv.subject_id IN (SELECT id FROM purchase_proofs WHERE transaction_id = ${row.transaction_id})))`;
+      const eligible = !t?.payout_hold_reason && (openDisputes?.n ?? 0) === 0 && (openReviews?.n ?? 0) === 0;
+      const check = payoutFsm.canTransition('ON_HOLD', 'SCHEDULED', 'SYSTEM', { autoReleaseEligible: eligible });
+      if (!check.ok) return false;
+      const scheduledFor = row.scheduled_for > now ? row.scheduled_for : now;
+      await db`UPDATE payouts SET status = 'SCHEDULED', hold_reason = NULL, released_at = ${now}, scheduled_for = ${scheduledFor} WHERE id = ${id}`;
+      await emitEvent(db, 'payout', id, 'payout.scheduled', {
+        payoutId: id,
+        payoutNumber: row.number,
+        travelerId: row.traveler_id,
+        transactionId: row.transaction_id,
+        amountIdr: Number(row.amount_idr),
+        scheduledFor: scheduledFor.toISOString(),
+        kind: 'HOLD_AUTO_RELEASED',
+      });
+      await audit(db, { actorType: 'SYSTEM', actorId: null, action: 'payout.auto_released', entityType: 'payout', entityId: id, before: { status: 'ON_HOLD', holdReason: 'DISPUTE_OPEN' }, after: { status: 'SCHEDULED' }, meta: { transactionId: row.transaction_id } });
+      return true;
+    });
+    if (ok) released++;
+  }
+  return released;
+}
+
 export async function processPayouts(deps: AppDeps, filter: { transactionId?: string | undefined } = {}): Promise<PayoutRunResult> {
   const policy = await moneyPolicy(deps.sql);
+  await releaseClearedDisputeHolds(deps, filter);
   const now = deps.clock.now();
   const due = await deps.sql<{ id: string }[]>`
     SELECT id FROM payouts WHERE status = 'SCHEDULED' AND scheduled_for <= ${now}

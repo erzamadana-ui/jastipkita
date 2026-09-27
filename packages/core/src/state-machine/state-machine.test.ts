@@ -346,6 +346,11 @@ describe('supporting FSMs', () => {
     expect(payoutFsm.canTransition('SCHEDULED', 'ON_HOLD', 'SYSTEM', {}).ok).toBe(false);
     expect(payoutFsm.canTransition('SCHEDULED', 'ON_HOLD', 'SYSTEM', { reason: 'Dispute risk' }).ok).toBe(true);
     expect(payoutFsm.canTransition('ON_HOLD', 'SCHEDULED', 'ADMIN', { holdReleasedBy: 'admin-1' }).ok).toBe(true);
+    // SYSTEM auto-release only for a cleared dispute hold; never with an approver alone
+    const sys = payoutFsm.canTransition('ON_HOLD', 'SCHEDULED', 'SYSTEM', { holdReleasedBy: 'admin-1' });
+    expect(sys.ok ? '' : sys.code).toBe('AUTO_RELEASE_NOT_ELIGIBLE');
+    expect(payoutFsm.canTransition('ON_HOLD', 'SCHEDULED', 'SYSTEM', { autoReleaseEligible: true }).ok).toBe(true);
+    expect(payoutFsm.canTransition('ON_HOLD', 'SCHEDULED', 'ADMIN', { autoReleaseEligible: true }).ok).toBe(false);
     expect(payoutFsm.canTransition('FAILED', 'CANCELLED', 'SYSTEM', {}).ok).toBe(false);
     expect(payoutFsm.isTerminal('CANCELLED')).toBe(true);
     expect(kycSubmissionFsm.canTransition('IN_REVIEW', 'APPROVED', 'ADMIN', { livenessPassed: true, documentMatches: true, notDuplicate: false }).ok).toBe(false);

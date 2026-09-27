@@ -657,6 +657,8 @@ class RefundInfo {
     this.method,
     this.destinationRequired = false,
     this.destinationMask,
+    this.destinationBankCode,
+    this.destinationStatus,
     this.failureReason,
   });
 
@@ -670,6 +672,8 @@ class RefundInfo {
       method: readStringOrNull(json, 'method'),
       destinationRequired: readBool(json, 'destinationRequired'),
       destinationMask: destination == null ? null : readStringOrNull(destination, 'accountMask'),
+      destinationBankCode: destination == null ? null : readStringOrNull(destination, 'bankCode'),
+      destinationStatus: destination == null ? null : readStringOrNull(destination, 'validationStatus'),
       failureReason: readStringOrNull(json, 'failureReason'),
     );
   }
@@ -681,7 +685,58 @@ class RefundInfo {
   final String? method;
   final bool destinationRequired;
   final String? destinationMask;
+  final String? destinationBankCode;
+
+  /// `VALID` | `PENDING_REVIEW` (holder name ≠ verified identity, FINANCE decides) | `REJECTED`.
+  final String? destinationStatus;
   final String? failureReason;
+
+  static const Set<String> _closed = <String>{'SUCCEEDED', 'REJECTED', 'CANCELLED'};
+
+  /// The destination waits for FINANCE (money.md §5.3); the refund is paid only after approval.
+  bool get destinationUnderReview => destinationStatus == RefundDestinationResult.pendingReview;
+
+  /// FINANCE rejected the account: the buyer is asked for another one (`refund.destination_required`).
+  bool get destinationRejected => destinationStatus == RefundDestinationResult.rejected && !_closed.contains(status);
+
+  bool get needsDestination => destinationRequired || destinationRejected;
+}
+
+/// `POST /refunds/{id}/destination` → `{refundId, bankCode, accountMask, validationStatus, reviewRequired, validatedAt}`.
+class RefundDestinationResult {
+  const RefundDestinationResult({
+    required this.refundId,
+    required this.validationStatus,
+    this.bankCode,
+    this.accountMask,
+    this.reviewRequired = false,
+    this.validatedAt,
+  });
+
+  factory RefundDestinationResult.fromJson(Json json) {
+    final status = readString(json, 'validationStatus', valid);
+    return RefundDestinationResult(
+      refundId: readString(json, 'refundId'),
+      validationStatus: status,
+      bankCode: readStringOrNull(json, 'bankCode'),
+      accountMask: readStringOrNull(json, 'accountMask'),
+      reviewRequired: readBool(json, 'reviewRequired') || status == pendingReview,
+      validatedAt: readDate(json, 'validatedAt'),
+    );
+  }
+
+  static const String valid = 'VALID';
+  static const String pendingReview = 'PENDING_REVIEW';
+  static const String rejected = 'REJECTED';
+
+  final String refundId;
+  final String validationStatus;
+  final String? bankCode;
+  final String? accountMask;
+
+  /// Holder name ≠ verified identity: stored `PENDING_REVIEW`, paid only after FINANCE approval.
+  final bool reviewRequired;
+  final DateTime? validatedAt;
 }
 
 /// Row of `GET /transactions`.
@@ -701,12 +756,14 @@ class TransactionSummary {
     this.counterpartyName,
     this.counterpartyAvatarUrl,
     this.purchaseCeilingIdr,
+    this.purchaseCeilingMinor,
     this.createdAt,
     this.statusChangedAt,
   });
 
   factory TransactionSummary.fromJson(Json json) {
     final gate = readObjectOrNull(json, 'purchaseGate');
+    final ceiling = readObjectOrNull(json, 'purchaseCeiling');
     final item = readObjectOrNull(json, 'item');
     final counterparty = readObjectOrNull(json, 'counterparty');
     return TransactionSummary(
@@ -724,6 +781,7 @@ class TransactionSummary {
       counterpartyName: counterparty == null ? null : readStringOrNull(counterparty, 'displayName'),
       counterpartyAvatarUrl: counterparty == null ? null : readStringOrNull(counterparty, 'avatarUrl'),
       purchaseCeilingIdr: readIntOrNull(json, 'purchaseCeilingIdr'),
+      purchaseCeilingMinor: readIntOrNull(json, 'purchaseCeilingMinor') ?? (ceiling == null ? null : readIntOrNull(ceiling, 'minor')),
       createdAt: readDate(json, 'createdAt'),
       statusChangedAt: readDate(json, 'statusChangedAt'),
     );
@@ -745,6 +803,9 @@ class TransactionSummary {
   final String? counterpartyName;
   final String? counterpartyAvatarUrl;
   final int? purchaseCeilingIdr;
+
+  /// Minor units of the item currency.
+  final int? purchaseCeilingMinor;
   final DateTime? createdAt;
   final DateTime? statusChangedAt;
 
@@ -815,9 +876,9 @@ class TransactionDetail {
       totalIdr: readIntOrNull(json, 'totalIdr'),
       securedIdr: readInt(json, 'securedIdr'),
       itemCurrency: (item?.currency ?? readStringOrNull(json, 'itemCurrency'))?.trim(),
-      // The item-currency ceiling only exists in the deprecated `purchaseCeiling.minor`; the proof
-      // form needs it to compare the receipt total in the shop's currency.
-      purchaseCeilingMinor: ceiling == null ? null : readIntOrNull(ceiling, 'minor'),
+      // Item-currency ceiling (the proof form compares the receipt total in the shop's currency):
+      // top-level `purchaseCeilingMinor`, falling back to the deprecated `purchaseCeiling.minor`.
+      purchaseCeilingMinor: readIntOrNull(json, 'purchaseCeilingMinor') ?? (ceiling == null ? null : readIntOrNull(ceiling, 'minor')),
       purchaseCeilingIdr: readIntOrNull(json, 'purchaseCeilingIdr'),
       deliveryMethod: readStringOrNull(json, 'deliveryMethod'),
       autoConfirmAt: readDate(json, 'autoConfirmAt'),

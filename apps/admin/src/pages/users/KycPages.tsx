@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Kyc } from '../../api/admin';
 import type { PayoutAccountReview } from '../../api/types';
 import { useAuth, useCan } from '../../auth/AuthProvider';
@@ -15,7 +15,12 @@ import { KycBadge } from './UsersPage';
 
 export function KycQueuePage() {
   const nav = useNavigate();
-  const [tab, setTab] = useState<'submissions' | 'payout'>('submissions');
+  const { me } = useAuth();
+  const perm = useCan(CAP.kycReview);
+  const [params, setParams] = useSearchParams();
+  const tab: 'submissions' | 'payout' = params.get('tab') === 'payout' ? 'payout' : 'submissions';
+  const setTab = (t: 'submissions' | 'payout') => setParams(t === 'payout' ? { tab: 'payout' } : {}, { replace: true });
+  const [accStatus, setAccStatus] = useState('');
   const [status, setStatus] = useState('PENDING,IN_REVIEW');
   const { query, rows, pagination } = useCursorQuery(['kyc', 'queue', status], (cursor) => Kyc.queue({ status, cursor, limit: 25 }));
   const accounts = useQuery({ queryKey: ['kyc', 'payout-accounts'], queryFn: Kyc.payoutAccounts, enabled: tab === 'payout' });
@@ -77,10 +82,23 @@ export function KycQueuePage() {
           />
         </Card>
       ) : (
-        <Card title="Rekening payout belum terverifikasi" hint="UNVERIFIED / PENDING / FAILED / NAME_MISMATCH — nomor rekening hanya tampil sebagai mask" flush>
+        <Card
+          title="Rekening payout belum terverifikasi"
+          hint="UNVERIFIED / PENDING / FAILED / NAME_MISMATCH — nomor rekening hanya tampil sebagai mask. Payout ke rekening yang belum VERIFIED tidak diproses."
+          actions={<Select className="select--sm" aria-label="Filter status rekening" value={accStatus} onChange={setAccStatus} placeholder="Semua status" options={['NAME_MISMATCH', 'UNVERIFIED', 'PENDING', 'FAILED']} />}
+          flush
+        >
+          {(accounts.data?.data ?? []).some((a) => a.verificationStatus === 'NAME_MISMATCH') ? (
+            <div style={{ padding: '12px 18px 0' }}>
+              <Callout tone="warning">
+                <strong>NAME_MISMATCH</strong>: nama pemilik rekening berbeda dari nama KYC terverifikasi (rekening tetap tersimpan, tidak pernah jadi default).
+                Verifikasi hanya bila ada bukti kepemilikan yang sah; bila ragu, gagalkan agar traveler menambah rekening atas namanya sendiri.
+              </Callout>
+            </div>
+          ) : null}
           <DataTable
             caption="Rekening payout"
-            rows={accounts.data?.data}
+            rows={accounts.data?.data.filter((a) => !accStatus || a.verificationStatus === accStatus)}
             loading={accounts.isPending}
             error={accounts.error}
             rowKey={(a) => a.id}
@@ -88,21 +106,24 @@ export function KycQueuePage() {
             columns={[
               { key: 'u', header: 'Pengguna', render: (a) => <Link to={`/users/${a.userId}`}>{a.userDisplayName ?? a.userId}</Link> },
               { key: 'b', header: 'Rekening', render: (a) => <span className="mono">{a.bankCode} {a.accountMask}</span> },
-              { key: 's', header: 'Status', render: (a) => <StatusBadge status={a.verificationStatus} /> },
-              { key: 'c', header: 'Dibuat', render: (a) => <DateTime value={a.createdAt} /> },
+              { key: 's', header: 'Status', render: (a) => (a.verificationStatus === 'NAME_MISMATCH' ? <Badge tone="warning">Nama ≠ KYC</Badge> : <StatusBadge status={a.verificationStatus} />) },
+              { key: 'c', header: 'Dibuat', render: (a) => <DateTime value={a.createdAt} />, sortValue: (a) => a.createdAt },
               {
                 key: 'act',
                 header: 'Override',
-                render: (a) => (
-                  <span className="btn-group">
-                    <Button size="sm" variant="success" mfa onClick={() => setDlg({ acc: a, to: 'VERIFIED' })}>
-                      Verifikasi
-                    </Button>
-                    <Button size="sm" variant="danger-outline" mfa onClick={() => setDlg({ acc: a, to: 'FAILED' })}>
-                      Gagalkan
-                    </Button>
-                  </span>
-                ),
+                render: (a) => {
+                  const block = perm.reason ?? (a.userId === me?.id ? 'Rekening milik Anda sendiri (maker-checker)' : null);
+                  return (
+                    <span className="btn-group">
+                      <Button size="sm" variant="success" mfa disabledReason={block} onClick={() => setDlg({ acc: a, to: 'VERIFIED' })}>
+                        Verifikasi
+                      </Button>
+                      <Button size="sm" variant="danger-outline" mfa disabledReason={block ?? (a.verificationStatus === 'FAILED' ? 'Sudah FAILED' : null)} onClick={() => setDlg({ acc: a, to: 'FAILED' })}>
+                        Gagalkan
+                      </Button>
+                    </span>
+                  );
+                },
               },
             ]}
           />
@@ -117,7 +138,11 @@ export function KycQueuePage() {
         tone={dlg?.to === 'VERIFIED' ? 'success' : 'danger'}
         mfa
         onConfirm={(reason) => override.mutateAsync({ id: dlg!.acc.id, status: dlg!.to, reason })}
-      />
+      >
+        {dlg?.to === 'VERIFIED' && dlg.acc.verificationStatus === 'NAME_MISMATCH' ? (
+          <Callout tone="warning">Nama pemilik rekening tidak cocok dengan KYC. Catat bukti kepemilikan (mis. tiket support/dokumen) di alasan — tercatat di audit log.</Callout>
+        ) : null}
+      </ActionDialog>
     </div>
   );
 }

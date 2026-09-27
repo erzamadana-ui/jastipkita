@@ -20,12 +20,14 @@ export interface OtpRow {
   expires_at: Date;
   consumed_at: Date | null;
   created_at: Date;
+  action: string | null;
+  target_id: string | null;
 }
 
 export async function lockOtp(db: Db, id: string): Promise<OtpRow | undefined> {
   const [row] = await db<OtpRow[]>`
     SELECT id, user_id, channel, destination_hash, destination_enc, purpose, code_hash, attempts, max_attempts,
-           expires_at, consumed_at, created_at
+           expires_at, consumed_at, created_at, action, target_id
       FROM otp_challenges WHERE id = ${id} FOR UPDATE`;
   return row;
 }
@@ -66,6 +68,8 @@ export async function insertOtp(
     expiresAt: Date;
     ipHash: Uint8Array | null;
     now: Date;
+    action?: string | null;
+    targetId?: string | null;
   },
 ) {
   // a newer code supersedes older unused ones for the same destination + purpose
@@ -73,9 +77,10 @@ export async function insertOtp(
             WHERE destination_hash = ${buf(r.destHash)} AND purpose = ${r.purpose} AND consumed_at IS NULL AND expires_at > ${r.now}`;
   await db`
     INSERT INTO otp_challenges (id, user_id, channel, destination_hash, destination_enc, enc_key_id, purpose, code_hash,
-                                max_attempts, expires_at, ip_hash, created_at)
+                                max_attempts, expires_at, ip_hash, created_at, action, target_id)
     VALUES (${r.id}, ${r.userId}, ${r.channel}, ${buf(r.destHash)}, ${buf(r.destEnc)}, ${r.encKeyId}, ${r.purpose},
-            ${buf(r.codeHash)}, ${r.maxAttempts}, ${r.expiresAt}, ${r.ipHash ? buf(r.ipHash) : null}, ${r.now})`;
+            ${buf(r.codeHash)}, ${r.maxAttempts}, ${r.expiresAt}, ${r.ipHash ? buf(r.ipHash) : null}, ${r.now},
+            ${r.action ?? null}, ${r.targetId ?? null})`;
 }
 
 export async function consumeOtp(db: Db, id: string, now: Date) {
@@ -182,13 +187,16 @@ export interface MfaFactorRow {
   secret_enc: Buffer;
   confirmed_at: Date | null;
   last_used_step: number | null;
+  created_at: Date;
+  /** SEC-13: session family that started the enrollment (NULL for factors enrolled before 0090). */
+  enroll_session_id: string | null;
 }
 
 export async function activeFactor(db: Db, userId: string, lock = false) {
   const [r] = lock
-    ? await db<MfaFactorRow[]>`SELECT id, secret_enc, confirmed_at, last_used_step FROM mfa_factors
+    ? await db<MfaFactorRow[]>`SELECT id, secret_enc, confirmed_at, last_used_step, created_at, enroll_session_id FROM mfa_factors
                                  WHERE user_id = ${userId} AND type = 'TOTP' AND disabled_at IS NULL FOR UPDATE`
-    : await db<MfaFactorRow[]>`SELECT id, secret_enc, confirmed_at, last_used_step FROM mfa_factors
+    : await db<MfaFactorRow[]>`SELECT id, secret_enc, confirmed_at, last_used_step, created_at, enroll_session_id FROM mfa_factors
                                  WHERE user_id = ${userId} AND type = 'TOTP' AND disabled_at IS NULL`;
   return r;
 }

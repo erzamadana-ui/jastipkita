@@ -16,6 +16,7 @@ import { base64UrlDecode, base64UrlEncode } from '../../lib/crypto';
 import { AppError, Errors } from '../../lib/errors';
 import { getAuth, requireAdmin, requireAuth, requirePermission, requireRecentMfa } from '../../middleware/auth';
 import { requireIdempotency } from '../../middleware/idempotency';
+import { rateLimit } from '../../middleware/rate-limit';
 import { audit } from '../../services/audit';
 import { requestMeta, type RequestMeta } from '../auth/common';
 
@@ -37,7 +38,8 @@ export interface GuardOptions {
 export function adminGuard(permissions: readonly string[], opts: GuardOptions = {}): MiddlewareHandler<AppEnv>[] {
   const chain: MiddlewareHandler<AppEnv>[] = [requireAuth, requireAdmin, requirePermission(...permissions)];
   if (opts.mfa) chain.push(requireRecentMfa);
-  if (opts.idempotent) chain.push(requireIdempotency);
+  // Money routes: the rate limit runs BEFORE the idempotency claim so a throttled call never consumes the key (BUG-QA-05).
+  if (opts.idempotent) chain.push(rateLimit({ name: 'admin.money', limit: 60, windowSec: 60, key: 'user' }), requireIdempotency);
   return chain;
 }
 

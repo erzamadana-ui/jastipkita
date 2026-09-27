@@ -25,6 +25,7 @@ const TransactionDetailPage = lazy(() => import('./pages/transactions/Transactio
 const DisputesPage = lazy(() => import('./pages/disputes/DisputesPage'));
 const DisputeDetailPage = lazy(() => import('./pages/disputes/DisputeDetailPage'));
 const RefundsPage = lazy(() => import('./pages/finance/RefundsPage'));
+const RefundDestinationsPage = lazy(() => import('./pages/finance/RefundDestinationsPage'));
 const PayoutsPage = lazy(() => import('./pages/finance/PayoutsPage'));
 const SettlementPage = lazy(() => import('./pages/finance/SettlementPage'));
 const ReconciliationPage = lazy(() => import('./pages/finance/ReconciliationPage'));
@@ -125,6 +126,7 @@ function AppRoutes() {
           <Route path="/disputes" element={r(CAP.disputes, <DisputesPage />)} />
           <Route path="/disputes/:id" element={r(CAP.disputes, <DisputeDetailPage />)} />
           <Route path="/refunds" element={r(CAP.refundApprove, <RefundsPage />)} />
+          <Route path="/refund-destinations" element={r(CAP.refundDestinationReview, <RefundDestinationsPage />)} />
           <Route path="/payouts" element={r(CAP.payouts, <PayoutsPage />)} />
           <Route path="/finance/settlement" element={r({ perms: ['finance.settlement.read_masked'] }, <SettlementPage />)} />
           <Route path="/finance/reconciliation" element={r({ perms: ['finance.reports.read'] }, <ReconciliationPage />)} />

@@ -300,6 +300,10 @@ jobs:
           if [ "$had_test" = false ]; then rm -f test/widget_test.dart; fi
           echo "created=true" >> "$GITHUB_OUTPUT"
       - if: steps.app.outputs.present == 'true'
+        name: Native configuration (deep links, permissions, display name, app ids)
+        run: |
+          if [ -f tool/configure_native.py ]; then python3 tool/configure_native.py; else echo "tool/configure_native.py not found"; fi
+      - if: steps.app.outputs.present == 'true'
         run: flutter pub get
       - if: steps.app.outputs.present == 'true'
         name: Launcher icons & native splash (when configured)
@@ -315,7 +319,17 @@ jobs:
       - if: steps.app.outputs.present == 'true'
         name: Tests
         run: |
-          if [ -d test ] && [ -n "$(find test -name '*_test.dart' -print -quit)" ]; then flutter test; else echo "::notice title=mobile::no tests found"; fi
+          if [ -d test ] && [ -n "$(find test -name '*_test.dart' -print -quit)" ]; then flutter test --exclude-tags store; else echo "::notice title=mobile::no tests found"; fi
+      - if: steps.app.outputs.present == 'true'
+        name: Store screenshots (tag store, real Poppins fonts; does not gate the build)
+        continue-on-error: true
+        run: |
+          if [ -d test/store_screenshots ]; then
+            # country flags in the screenshots need a colour emoji font (optional; Poppins comes from the app assets)
+            sudo apt-get install -y --no-install-recommends fonts-noto-color-emoji >/dev/null 2>&1 || echo "emoji font unavailable — flags render as text"
+            flutter test --tags store --update-goldens --dart-define=STORE_SCREENSHOTS=true test/store_screenshots
+            find build/store_screenshots -name '*.png' | sort
+          else echo "no store screenshot tests"; fi
       - if: steps.app.outputs.present == 'true'
         name: Build APK (debug, staging API)
         run: flutter build apk --debug --dart-define=API_BASE_URL=${{ env.CI_API_BASE_URL }} --dart-define=APP_ENV=staging
@@ -334,6 +348,13 @@ jobs:
           name: mobile-web
           path: apps/mobile/build/web
           retention-days: 7
+      - if: steps.app.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-screenshots
+          path: apps/mobile/build/store_screenshots
+          retention-days: 14
+          if-no-files-found: warn
       - if: steps.scaffold.outputs.created == 'true'
         uses: actions/upload-artifact@v4
         with:

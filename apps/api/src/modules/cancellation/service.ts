@@ -339,6 +339,17 @@ export async function cancelTransaction(deps: AppDeps, auth: AuthContext, id: st
     const { tx, role } = await requireParty(db, id, auth, { forUpdate: true });
     return cancelInTx(deps, db, tx, { actor: role, actorId: auth.userId, reason: body.reason, cause: effectiveCause(body.cause, tx, role) });
   });
-  if (out.refunds.length) await processRefunds(deps, { transactionId: id });
+  if (out.refunds.length) {
+    await processRefunds(deps, { transactionId: id });
+    out.refunds = await freshRefunds(deps.sql, out.refunds);
+  }
   return out;
+}
+
+/** Re-reads refund status/method after processing (BUG-QA-06: the response — and its idempotent replay — must not be stale). */
+export async function freshRefunds(db: Db, refunds: CancelOutcome['refunds']): Promise<CancelOutcome['refunds']> {
+  if (!refunds.length) return refunds;
+  const rows = await db<{ id: string; status: string; method: string | null }[]>`SELECT id, status, breakdown->>'method' AS method FROM refunds WHERE id = ANY(${refunds.map((r) => r.id)}::uuid[])`;
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return refunds.map((r) => ({ ...r, status: byId.get(r.id)?.status ?? r.status, method: byId.get(r.id)?.method ?? r.method }));
 }

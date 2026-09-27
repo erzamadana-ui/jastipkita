@@ -1,8 +1,10 @@
 /**
  * Site-wide progressive enhancement (~1 kB): mobile nav, theme toggle, consent banner.
- * Storage policy: only strictly-necessary keys, written only after an explicit user action:
- *   jk-consent  — the visitor's cookie/analytics choice ("necessary" | "analytics")
- *   jk-theme    — theme the visitor picked with the toggle
+ * Storage policy: only strictly-necessary keys, all prefixed `jk:` (shared origin — SEC-14), written only after an
+ * explicit user action, and removed on logout (session.clear()):
+ *   jk:consent  — the visitor's cookie/analytics choice ("necessary" | "analytics")   [localStorage]
+ *   jk:theme    — theme the visitor picked with the toggle                           [localStorage]
+ * (jk:refresh / jk:device live in sessionStorage — see src/lib/api.ts.)
  * No analytics or third-party trackers are loaded, regardless of consent.
  */
 
@@ -19,6 +21,14 @@ function safeSet(key: string, value: string): void {
   } catch {
     /* storage unavailable — choice lasts for this page view only */
   }
+}
+
+// One-time cleanup of pre-release unscoped keys (never shipped publicly, but may exist on test devices).
+try {
+  for (const k of ['jk-consent', 'jk-theme']) localStorage.removeItem(k);
+  for (const k of ['jk-session', 'jk-device']) sessionStorage.removeItem(k);
+} catch {
+  /* storage unavailable */
 }
 
 // ---- Mobile navigation ----
@@ -56,18 +66,18 @@ document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((btn
   btn.addEventListener('click', () => {
     const next = effectiveTheme() === 'dark' ? 'light' : 'dark';
     root.setAttribute('data-theme', next);
-    safeSet('jk-theme', next);
+    safeSet('jk:theme', next);
   });
 });
 
 // ---- Consent banner ----
 const banner = document.querySelector<HTMLElement>('[data-consent]');
 if (banner) {
-  const stored = safeGet('jk-consent');
+  const stored = safeGet('jk:consent');
   if (!stored) banner.hidden = false;
   banner.querySelectorAll<HTMLButtonElement>('[data-consent-choice]').forEach((b) => {
     b.addEventListener('click', () => {
-      safeSet('jk-consent', b.dataset.consentChoice === 'analytics' ? 'analytics' : 'necessary');
+      safeSet('jk:consent', b.dataset.consentChoice === 'analytics' ? 'analytics' : 'necessary');
       banner.hidden = true;
     });
   });

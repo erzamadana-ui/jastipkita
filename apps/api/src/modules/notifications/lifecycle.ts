@@ -42,4 +42,10 @@ export const EMAIL_LIFECYCLE: readonly LifecycleEntry[] = [
   { step: 'Dispute updated', event: 'dispute.status_changed', template: 'dispute.updated' },
   { step: 'Dispute resolved', event: 'dispute.resolved', template: 'dispute.resolved' },
   { step: 'Final receipt', event: 'receipt.final_available', template: 'receipt.final', role: 'BUYER' },
+  // QA 2026-09-28 (BUG-QA-01..04) and SEC-12
+  { step: 'Price clarification requested (traveler)', event: 'price_confirmation.clarification_requested', template: 'price.clarification_requested', role: 'TRAVELER' },
+  { step: 'Refund destination required (VA/retail)', event: 'refund.destination_required', template: 'refund.destination_required', role: 'BUYER' },
+  { step: 'Refund destination set', event: 'refund.destination_set', template: 'refund.destination_updated', role: 'BUYER' },
+  { step: 'Trip cancelled by traveler (buyer)', event: 'transaction.trip_cancelled', template: 'transaction.trip_cancelled', role: 'BUYER' },
+  { step: 'Trip cancelled by traveler (traveler)', event: 'transaction.trip_cancelled', template: 'transaction.trip_cancelled', role: 'TRAVELER' },
 ];

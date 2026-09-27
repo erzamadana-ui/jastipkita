@@ -1,3 +1,4 @@
+import { cancelTransactionsOfCancelledTrip, type TripCancelledPayload } from '../modules/cancellation/trip-cancelled';
 import { autoConfirmDeliveries } from '../modules/delivery/service';
 import { bindProtectionPolicy, expireDuePayments, expireQuotesAndLocks } from '../modules/payments/service';
 import { processPayouts, scheduleOwedPayouts } from '../modules/payouts/service';
@@ -17,6 +18,13 @@ export const moneyJobs: JobGroup = {
     'payment.secured': [
       async (deps, e) => {
         await bindProtectionPolicy(deps, e.payload as { transactionId: string; purpose?: string });
+      },
+    ],
+    // BUG-QA-01: a cancelled trip's open transactions go through the cancellation matrix (as TRAVELER).
+    'trip.cancelled': [
+      async (deps, e) => {
+        const p = e.payload as unknown as TripCancelledPayload;
+        if (p?.tripId) await cancelTransactionsOfCancelledTrip(deps, p);
       },
     ],
   },

@@ -15,7 +15,7 @@ import { generateTotpSecret, numericCode, randomBytes, timingSafeEqual, totpUri,
 import { AppError, Errors } from '../../lib/errors';
 import { audit } from '../../services/audit';
 import { emitEvent } from '../../services/outbox';
-import { issueSession, markSessionMfaVerified, revokeSession, rotateRefreshToken, signAccessToken, type IssuedSession } from '../../services/session';
+import { issueSession, markSessionMfaVerified, revokeSession, rotateRefreshToken, sessionOrigin, signAccessToken, type IssuedSession } from '../../services/session';
 import { recomputeKycLevel } from '../kyc/level';
 import { fingerprintHash, insertConsents, loadProfile, missingSignupConsents, upsertUserDevice } from '../me/repository';
 import type { ConsentInput, DeviceInput, Profile } from '../me/schemas';
@@ -31,7 +31,14 @@ export interface AuthCallCtx {
 }
 
 export type Channel = 'SMS' | 'WHATSAPP' | 'EMAIL';
-export type OtpPurpose = 'LOGIN' | 'VERIFY_PHONE' | 'VERIFY_EMAIL';
+export type OtpPurpose = 'LOGIN' | 'VERIFY_PHONE' | 'VERIFY_EMAIL' | 'SENSITIVE_ACTION';
+/** SEC-12: money-routing changes guarded by a SENSITIVE_ACTION step-up OTP (bound to action + target id). */
+export type SensitiveActionCode = 'REFUND_DESTINATION_SET' | 'PAYOUT_ACCOUNT_ADD' | 'PAYOUT_ACCOUNT_SET_DEFAULT';
+const SENSITIVE_ACTION_TEXT: Record<SensitiveActionCode, { id: string; en: string }> = {
+  REFUND_DESTINATION_SET: { id: 'mengatur rekening tujuan refund', en: 'set a refund bank account' },
+  PAYOUT_ACCOUNT_ADD: { id: 'menambah rekening pencairan', en: 'add a payout bank account' },
+  PAYOUT_ACCOUNT_SET_DEFAULT: { id: 'mengganti rekening pencairan utama', en: 'change your main payout account' },
+};
 
 type Outcome<T> = { ok: true; value: T } | { ok: false; error: AppError };
 const ok = <T>(value: T): Outcome<T> => ({ ok: true, value });
@@ -81,17 +88,26 @@ export function normalizeDestination(channel: Channel, destination: string): str
  */
 export async function createOtpChallenge(
   deps: AppDeps,
-  input: { channel: Channel; destination: string; purpose: OtpPurpose; userId: string | null; locale?: 'id' | 'en' | undefined },
+  input: {
+    channel: Channel;
+    destination: string;
+    purpose: OtpPurpose;
+    userId: string | null;
+    locale?: 'id' | 'en' | undefined;
+    action?: SensitiveActionCode | undefined;
+    targetId?: string | undefined;
+  },
   req: RequestMeta,
 ): Promise<OtpChallengeResult> {
   const { channel, destination, purpose } = input;
+  const ttlSec = purpose === 'SENSITIVE_ACTION' ? SECURITY.SENSITIVE_OTP_TTL_SEC : SECURITY.OTP_TTL_SEC;
   const now = deps.clock.now();
   const destHash = await deps.crypto.hashIdentifier(channel === 'EMAIL' ? 'email' : 'phone', destination);
   const id = crypto.randomUUID();
   const code = numericCode(6);
   const codeHash = await deps.crypto.hashIdentifier('otp', `${id}:${code}`);
   const destEnc = await deps.crypto.encrypt(destination, `otp_challenges.destination:${id}`);
-  const expiresAt = new Date(now.getTime() + SECURITY.OTP_TTL_SEC * 1000);
+  const expiresAt = new Date(now.getTime() + ttlSec * 1000);
 
   const outcome = await inTx(deps, async (tx): Promise<Outcome<null>> => {
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${Buffer.from(destHash).toString('hex')}, 7270))`;
@@ -126,6 +142,8 @@ export async function createOtpChallenge(
       expiresAt,
       ipHash: req.ipHash,
       now,
+      action: input.action ?? null,
+      targetId: input.targetId ?? null,
     });
     return ok(null);
   });
@@ -134,16 +152,22 @@ export async function createOtpChallenge(
   // Delivery is synchronous by nature (the user is waiting for the code) — the one place the identity
   // module talks to SMS/e-mail providers directly instead of going through outbox notifications.
   const en = input.locale === 'en';
-  const text = en
-    ? `JastipKita: your verification code is ${code}. Valid for 5 minutes. Never share this code with anyone, including JastipKita staff.`
-    : `JastipKita: kode verifikasi Anda ${code}. Berlaku 5 menit. JANGAN berikan kode ini kepada siapa pun, termasuk pihak yang mengaku dari JastipKita.`;
+  const minutes = Math.round(ttlSec / 60);
+  const what = input.action ? SENSITIVE_ACTION_TEXT[input.action] : null;
+  const text = what
+    ? en
+      ? `JastipKita: code ${code} to ${what.en}. Valid for ${minutes} minutes. Not you? Do not share it, change nothing, and contact JastipKita support.`
+      : `JastipKita: kode ${code} untuk ${what.id}. Berlaku ${minutes} menit. Bukan kamu? JANGAN berikan kode ini dan segera hubungi CS JastipKita.`
+    : en
+      ? `JastipKita: your verification code is ${code}. Valid for ${minutes} minutes. Never share this code with anyone, including JastipKita staff.`
+      : `JastipKita: kode verifikasi Anda ${code}. Berlaku ${minutes} menit. JANGAN berikan kode ini kepada siapa pun, termasuk pihak yang mengaku dari JastipKita.`;
   try {
     if (channel === 'EMAIL') {
       await deps.providers.email.send({
         to: destination,
         subject: en ? 'Your JastipKita verification code' : 'Kode verifikasi JastipKita',
         text,
-        html: `<p>${en ? 'Your verification code' : 'Kode verifikasi Anda'}:</p><p style="font-size:24px;font-weight:600;letter-spacing:4px">${code}</p><p>${en ? 'Valid for 5 minutes. Never share this code.' : 'Berlaku 5 menit. Jangan bagikan kode ini kepada siapa pun.'}</p>`,
+        html: `<p>${en ? 'Your verification code' : 'Kode verifikasi Anda'}:</p><p style="font-size:24px;font-weight:600;letter-spacing:4px">${code}</p><p>${what ? (en ? `To ${what.en}. ` : `Untuk ${what.id}. `) : ''}${en ? `Valid for ${minutes} minutes. Never share this code.` : `Berlaku ${minutes} menit. Jangan bagikan kode ini kepada siapa pun.`}</p>`,
         tags: { category: 'otp', purpose },
         idempotencyKey: `otp:${id}`,
       });
@@ -166,9 +190,17 @@ export async function createOtpChallenge(
 
 export async function requestOtp(
   deps: AppDeps,
-  body: { channel: Channel; destination: string; purpose: OtpPurpose; locale?: 'id' | 'en' | undefined },
+  body: {
+    channel: Channel;
+    destination: string;
+    purpose: OtpPurpose;
+    locale?: 'id' | 'en' | undefined;
+    action?: SensitiveActionCode | undefined;
+    targetId?: string | undefined;
+  },
   ctx: AuthCallCtx,
 ): Promise<OtpChallengeResult> {
+  if (body.purpose === 'SENSITIVE_ACTION') return requestSensitiveActionOtp(deps, body, ctx);
   if (body.purpose === 'VERIFY_PHONE' && body.channel === 'EMAIL') throw Errors.badRequest('OTP_CHANNEL_INVALID', 'Verifikasi HP memakai SMS atau WhatsApp');
   if (body.purpose === 'VERIFY_EMAIL' && body.channel !== 'EMAIL') throw Errors.badRequest('OTP_CHANNEL_INVALID', 'Verifikasi e-mail memakai kanal EMAIL');
   if (body.purpose !== 'LOGIN' && !ctx.auth) throw Errors.unauthorized();
@@ -178,6 +210,86 @@ export async function requestOtp(
     { channel: body.channel, destination, purpose: body.purpose, userId: body.purpose === 'LOGIN' ? null : ctx.auth!.userId, locale: body.locale },
     ctx.req,
   );
+}
+
+// =================================================================== SEC-12 step-up for sensitive actions
+/**
+ * SENSITIVE_ACTION OTP: sent only to the caller's own VERIFIED phone (SMS/WhatsApp) or verified e-mail, bound to
+ * (action, targetId), valid 10 minutes, single use. A stolen access token alone can no longer re-route refunds or payouts.
+ */
+async function requestSensitiveActionOtp(
+  deps: AppDeps,
+  body: { channel: Channel; destination: string; locale?: 'id' | 'en' | undefined; action?: SensitiveActionCode | undefined; targetId?: string | undefined },
+  ctx: AuthCallCtx,
+): Promise<OtpChallengeResult> {
+  if (!ctx.auth) throw Errors.unauthorized();
+  if (!body.action || !body.targetId) throw Errors.badRequest('STEP_UP_ACTION_REQUIRED', 'action dan targetId wajib untuk purpose SENSITIVE_ACTION');
+  if (body.action === 'PAYOUT_ACCOUNT_ADD' && body.targetId !== ctx.auth.userId) {
+    throw Errors.unprocessable('STEP_UP_TARGET_INVALID', 'Untuk PAYOUT_ACCOUNT_ADD, targetId adalah id akunmu sendiri');
+  }
+  const destination = normalizeDestination(body.channel, body.destination);
+  const [u] = await deps.sql<{ phone_e164: string | null; phone_verified_at: Date | null; email: string | null; email_verified_at: Date | null; transaction_email: string | null }[]>`
+    SELECT phone_e164, phone_verified_at, email, email_verified_at, transaction_email FROM users WHERE id = ${ctx.auth.userId}`;
+  const allowed =
+    body.channel === 'EMAIL'
+      ? [u?.email_verified_at ? u.email : null, u?.transaction_email ?? null].filter((x): x is string => !!x).map((x) => x.toLowerCase())
+      : [u?.phone_verified_at ? u.phone_e164 : null].filter((x): x is string => !!x);
+  if (!allowed.includes(destination)) {
+    throw Errors.unprocessable('STEP_UP_DESTINATION_NOT_VERIFIED', 'Kode hanya dapat dikirim ke nomor HP / e-mail terverifikasi milikmu');
+  }
+  return createOtpChallenge(
+    deps,
+    { channel: body.channel, destination, purpose: 'SENSITIVE_ACTION', userId: ctx.auth.userId, locale: body.locale, action: body.action, targetId: body.targetId },
+    ctx.req,
+  );
+}
+
+/**
+ * Verifies and CONSUMES a SENSITIVE_ACTION step-up in its own committed DB transaction (so failed attempts count even
+ * when the caller's action fails later). Throws 403 STEP_UP_REQUIRED {action, targetId} when no proof was sent.
+ */
+export async function consumeSensitiveActionOtp(
+  deps: AppDeps,
+  input: { userId: string; action: SensitiveActionCode; targetId: string; proof?: { challengeId: string; code: string } | undefined },
+  req: RequestMeta | null,
+): Promise<{ challengeId: string }> {
+  const proof = input.proof;
+  if (!proof) {
+    throw new AppError(403, 'STEP_UP_REQUIRED', 'Verifikasi tambahan diperlukan: minta kode (purpose SENSITIVE_ACTION) lalu kirim stepUp', {
+      purpose: 'SENSITIVE_ACTION',
+      action: input.action,
+      targetId: input.targetId,
+    });
+  }
+  const now = deps.clock.now();
+  const outcome = await inTx(deps, async (tx): Promise<Outcome<string>> => {
+    const ch = await repo.lockOtp(tx, proof.challengeId);
+    if (!ch || ch.purpose !== 'SENSITIVE_ACTION' || ch.user_id !== input.userId || ch.consumed_at) return fail(OTP_INVALID());
+    if (ch.action !== input.action || ch.target_id !== input.targetId) {
+      await securityEvent(deps, tx, { userId: input.userId, type: 'STEP_UP_TARGET_MISMATCH', severity: 'MEDIUM', req, meta: { challengeId: ch.id, action: input.action } });
+      return fail(Errors.forbidden('Kode verifikasi ini untuk aksi lain', 'STEP_UP_MISMATCH'));
+    }
+    if (ch.expires_at.getTime() <= now.getTime()) return fail(Errors.badRequest('OTP_EXPIRED', 'Kode verifikasi sudah kedaluwarsa, silakan minta kode baru'));
+    if (ch.attempts >= ch.max_attempts) return fail(OTP_LOCKED());
+    const expected = await deps.crypto.hashIdentifier('otp', `${ch.id}:${proof.code}`);
+    if (!timingSafeEqual(u8(expected), u8(ch.code_hash))) {
+      const attempts = ch.attempts + 1;
+      await tx`UPDATE otp_challenges SET attempts = ${attempts} WHERE id = ${ch.id}`;
+      const locked = attempts >= ch.max_attempts;
+      await securityEvent(deps, tx, {
+        userId: input.userId,
+        type: locked ? 'OTP_LOCKED' : 'OTP_VERIFY_FAILED',
+        severity: locked ? 'MEDIUM' : 'LOW',
+        req,
+        meta: { challengeId: ch.id, purpose: 'SENSITIVE_ACTION', action: input.action, attempts },
+      });
+      return fail(locked ? OTP_LOCKED() : Errors.badRequest('OTP_INVALID', 'Kode verifikasi salah', { remainingAttempts: ch.max_attempts - attempts }));
+    }
+    await repo.consumeOtp(tx, ch.id, now);
+    await securityEvent(deps, tx, { userId: input.userId, type: 'SENSITIVE_ACTION_VERIFIED', severity: 'LOW', req, meta: { challengeId: ch.id, action: input.action } });
+    return ok(ch.id);
+  });
+  return { challengeId: unwrap(outcome) };
 }
 
 // =================================================================== account creation & login
@@ -236,7 +348,8 @@ async function createAccount(deps: AppDeps, tx: TxSql, input: NewUserInput, body
 
 async function finishLogin(deps: AppDeps, tx: TxSql, userId: string, method: string, body: SignupBody, req: RequestMeta, isNewUser: boolean) {
   const deviceId = body.device ? await upsertUserDevice(deps, tx, userId, body.device) : null;
-  const session = await issueSession(deps, tx, userId, { deviceId, ipHash: req.ipHash, userAgent: req.userAgent });
+  const authMethod = method === 'GOOGLE' || method === 'APPLE' ? method : 'OTP';
+  const session = await issueSession(deps, tx, userId, { deviceId, ipHash: req.ipHash, userAgent: req.userAgent, authMethod });
   await tx`UPDATE users SET last_login_at = ${deps.clock.now()} WHERE id = ${userId}`;
   await securityEvent(deps, tx, { userId, type: 'LOGIN_SUCCESS', deviceId, req, meta: { method, isNewUser, sessionId: session.sessionId } });
   return session;
@@ -530,18 +643,51 @@ export async function revokeUserSession(deps: AppDeps, auth: AuthContext, sessio
 const MFA_ISSUER = 'JastipKita';
 const mfaAad = (factorId: string) => `mfa_factors.secret:${factorId}`;
 
+/**
+ * SEC-13 — TOTP (re-)enrollment is trust-on-first-use, so it is only allowed from a FRESH session: the refresh family
+ * was created by an OTP login (phone/e-mail possession, not a social token) at most 15 minutes ago. A pending
+ * (unconfirmed) factor belongs to the session that started it: another session can replace it only after it has
+ * been pending for 15 minutes. A CONFIRMED factor is never replaced here — only through the maker-checker reset
+ * (POST /v1/admin/users/{id}/mfa-reset-requests, approved by another SUPER_ADMIN).
+ */
+async function assertFreshEnrollmentSession(deps: AppDeps, auth: AuthContext, req: RequestMeta) {
+  const origin = await sessionOrigin(deps.sql, auth.sessionId, auth.userId);
+  const now = deps.clock.now().getTime();
+  const fresh =
+    origin?.authMethod === 'OTP' && origin.startedAt !== null && now - origin.startedAt.getTime() <= SECURITY.MFA_ENROLL_FRESH_SESSION_SEC * 1000;
+  if (!fresh) {
+    await securityEvent(deps, deps.sql, { userId: auth.userId, type: 'MFA_ENROLL_DENIED', severity: 'MEDIUM', req, meta: { reason: 'STALE_SESSION', authMethod: origin?.authMethod ?? null } });
+    throw Errors.forbidden('Masuk ulang dengan kode OTP (≤ 15 menit) sebelum mendaftarkan authenticator', 'MFA_ENROLL_FRESH_LOGIN_REQUIRED', {
+      maxSessionAgeSec: SECURITY.MFA_ENROLL_FRESH_SESSION_SEC,
+      requiredAuthMethod: 'OTP',
+    });
+  }
+}
+
 export async function mfaEnroll(deps: AppDeps, auth: AuthContext, req: RequestMeta) {
+  await assertFreshEnrollmentSession(deps, auth, req);
   const secret = generateTotpSecret();
   const factorId = crypto.randomUUID();
   const secretEnc = await deps.crypto.encrypt(secret, mfaAad(factorId));
   const [u] = await deps.sql<{ email: string | null; phone_e164: string | null }[]>`SELECT email, phone_e164 FROM users WHERE id = ${auth.userId}`;
+  const now = deps.clock.now();
   await inTx(deps, async (tx) => {
     const existing = await repo.activeFactor(tx, auth.userId, true);
-    if (existing?.confirmed_at) throw Errors.conflict('MFA_ALREADY_ENROLLED', 'MFA sudah aktif untuk akun ini');
-    if (existing) await tx`DELETE FROM mfa_factors WHERE id = ${existing.id}`;
-    await tx`INSERT INTO mfa_factors (id, user_id, type, label, secret_enc, enc_key_id, created_at)
-             VALUES (${factorId}, ${auth.userId}, 'TOTP', 'Authenticator', ${buf(secretEnc)}, ${deps.crypto.activeKeyId}, ${deps.clock.now()})`;
-    await securityEvent(deps, tx, { userId: auth.userId, type: 'MFA_ENROLL_STARTED', severity: 'MEDIUM', req, meta: { factorId } });
+    if (existing?.confirmed_at) {
+      throw Errors.conflict('MFA_ALREADY_ENROLLED', 'MFA sudah aktif. Reset hanya melalui permintaan admin yang disetujui SUPER_ADMIN lain.');
+    }
+    if (existing) {
+      const pendingFresh = now.getTime() - existing.created_at.getTime() < SECURITY.MFA_PENDING_ENROLLMENT_TTL_SEC * 1000;
+      if (existing.enroll_session_id !== auth.sessionId && pendingFresh) {
+        throw Errors.conflict('MFA_ENROLLMENT_IN_PROGRESS', 'Pendaftaran authenticator sedang berlangsung dari sesi lain', {
+          retryAfterSec: Math.ceil((existing.created_at.getTime() + SECURITY.MFA_PENDING_ENROLLMENT_TTL_SEC * 1000 - now.getTime()) / 1000),
+        });
+      }
+      await tx`DELETE FROM mfa_factors WHERE id = ${existing.id}`;
+    }
+    await tx`INSERT INTO mfa_factors (id, user_id, type, label, secret_enc, enc_key_id, created_at, enroll_session_id)
+             VALUES (${factorId}, ${auth.userId}, 'TOTP', 'Authenticator', ${buf(secretEnc)}, ${deps.crypto.activeKeyId}, ${now}, ${auth.sessionId})`;
+    await securityEvent(deps, tx, { userId: auth.userId, type: 'MFA_ENROLL_STARTED', severity: 'MEDIUM', req, meta: { factorId, sessionId: auth.sessionId } });
     await audit(tx, { actorType: 'ADMIN', actorId: auth.userId, action: 'auth.mfa.enroll_started', entityType: 'mfa_factor', entityId: factorId, meta: {} });
   });
   return { factorId, secret, otpauthUri: totpUri(secret, u?.email ?? u?.phone_e164 ?? auth.userId, MFA_ISSUER), issuer: MFA_ISSUER };
@@ -573,6 +719,14 @@ export async function mfaConfirm(deps: AppDeps, auth: AuthContext, code: string,
     const f = await repo.activeFactor(tx, auth.userId, true);
     if (!f) return fail(Errors.conflict('MFA_NOT_ENROLLED', 'Mulai pendaftaran MFA terlebih dahulu'));
     if (f.confirmed_at) return fail(Errors.conflict('MFA_ALREADY_ENROLLED', 'MFA sudah aktif untuk akun ini'));
+    // SEC-13: only the session that started the enrollment (and saw the secret) may activate it, within the TTL.
+    if (f.enroll_session_id !== auth.sessionId) {
+      await mfaFailure(deps, tx, auth.userId, req, 'ENROLL_SESSION_MISMATCH', f.id);
+      return fail(Errors.forbidden('Konfirmasi harus dari sesi yang memulai pendaftaran', 'MFA_ENROLL_SESSION_MISMATCH'));
+    }
+    if (now.getTime() - f.created_at.getTime() > SECURITY.MFA_PENDING_ENROLLMENT_TTL_SEC * 1000) {
+      return fail(Errors.conflict('MFA_ENROLLMENT_EXPIRED', 'Pendaftaran authenticator kedaluwarsa, mulai lagi'));
+    }
     const locked = await assertMfaNotLocked(deps, tx, auth.userId);
     if (locked) return fail(locked);
     const secret = await deps.crypto.decryptString(u8(f.secret_enc), mfaAad(f.id));

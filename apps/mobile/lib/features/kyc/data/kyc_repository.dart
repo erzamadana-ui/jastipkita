@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/account.dart';
 import '../../../core/models/json.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/step_up.dart';
 
 /// KYC levels, identity submission (level 3) and payout accounts (masked only).
 class KycRepository {
@@ -53,30 +54,50 @@ class KycRepository {
 
   /// The full account number is sent once over TLS; the API stores it encrypted and only ever
   /// returns the mask (`****0961`). The app does not keep it after this call.
+  ///
+  /// Needs a step-up OTP (`PAYOUT_ACCOUNT_ADD`, target = own user id) — [stepUp] shows the sheet
+  /// when the API answers `403 STEP_UP_REQUIRED`. A holder name that differs from the verified
+  /// identity comes back as `NAME_MISMATCH` ([PayoutAccount.isUnderReview]): stored for admin
+  /// review, never default.
   Future<PayoutAccount> addPayoutAccount({
     required String bankCode,
     required String accountNumber,
     required String holderName,
+    required StepUpPrompt stepUp,
     bool makeDefault = true,
-  }) async =>
-      PayoutAccount.fromJson(
-        await _api.post(
-          '/kyc/payout-accounts',
-          body: <String, dynamic>{
-            'bankCode': bankCode,
-            'accountNumber': accountNumber,
-            'holderName': holderName,
-            'makeDefault': makeDefault,
-          },
+  }) =>
+      withStepUp<PayoutAccount>(
+        (StepUpProof? proof) async => PayoutAccount.fromJson(
+          await _api.post(
+            '/kyc/payout-accounts',
+            body: <String, dynamic>{
+              'bankCode': bankCode,
+              'accountNumber': accountNumber,
+              'holderName': holderName,
+              'makeDefault': makeDefault,
+              if (proof != null) 'stepUp': proof.take(),
+            },
+          ),
         ),
+        prompt: stepUp,
       );
 
   Future<void> removePayoutAccount(String id) async {
     await _api.delete('/kyc/payout-accounts/$id');
   }
 
-  Future<PayoutAccount> makeDefault(String id) async =>
-      PayoutAccount.fromJson(await _api.post('/kyc/payout-accounts/$id/default'));
+  /// Switching the default needs a step-up OTP (`PAYOUT_ACCOUNT_SET_DEFAULT`, target = account id)
+  /// unless the account already is the default.
+  Future<PayoutAccount> makeDefault(String id, {required StepUpPrompt stepUp}) => withStepUp<PayoutAccount>(
+        (StepUpProof? proof) async => PayoutAccount.fromJson(
+          await _api.post(
+            '/kyc/payout-accounts/$id/default',
+            body: proof == null ? null : <String, dynamic>{'stepUp': proof.take()},
+          ),
+        ),
+        prompt: stepUp,
+        expected: StepUpRequest(action: SensitiveAction.payoutAccountSetDefault, targetId: id),
+      );
 }
 
 final kycRepositoryProvider = Provider<KycRepository>((ref) => KycRepository(ref.watch(apiClientProvider)));

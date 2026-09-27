@@ -8,6 +8,8 @@ const SHOTS: { name: string; path: string; ready: (p: Page) => Promise<void> }[]
   { name: 'transaction-detail', path: `/transactions/${TX_ID}`, ready: async (p) => { await expect(p.locator('[data-line="TOTAL"]')).toBeVisible(); } },
   { name: 'transaction-ledger', path: `/transactions/${TX_ID}`, ready: async (p) => { await p.getByRole('tab', { name: /Ledger/ }).click(); await expect(p.getByText('Saldo per bucket')).toBeVisible(); } },
   { name: 'config-diff', path: '/config/pricing.platform_fee?tab=diff&version=3', ready: async (p) => { await expect(p.getByTestId('diff-table').first()).toContainText('rateBps'); } },
+  { name: 'refund-destinations', path: '/refund-destinations', ready: async (p) => { await expect(p.getByText('RFD-260927-K4P9WZ')).toBeVisible(); } },
+  { name: 'payouts', path: '/payouts', ready: async (p) => { await expect(p.getByTestId('hold-po-1')).toContainText('Otomatis · dispute'); } },
   { name: 'db-center', path: '/infra', ready: async (p) => { await expect(p.getByText('PostgreSQL 17.5', { exact: false })).toBeVisible(); await expect(p.getByText('REFUND_APPROVAL_BACKLOG')).toBeVisible(); } },
   { name: 'db-center-workflow', path: '/infra', ready: async (p) => { await p.getByRole('tab', { name: 'Workflow migrasi' }).click(); await expect(p.getByText('Migrasi skema (CI)')).toBeVisible(); } },
 ];

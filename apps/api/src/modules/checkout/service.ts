@@ -89,6 +89,13 @@ function usdValueString(itemIdrAtSpot: number, usdToIdr: string | null): string 
   return (cents / 100).toFixed(2);
 }
 
+/** BUG-QA-02: no quote/checkout for a transaction whose trip is cancelled or already completed. */
+function assertTripPayable(tripStatus: string) {
+  if (tripStatus === 'CANCELLED' || tripStatus === 'COMPLETED') {
+    throw Errors.unprocessable('TRIP_NOT_AVAILABLE', 'Trip traveler sudah dibatalkan/selesai; transaksi ini tidak dapat dibayar', { tripStatus });
+  }
+}
+
 export async function createQuote(deps: AppDeps, auth: AuthContext, id: string, input: QuoteRequest) {
   const now = deps.clock.now();
   const { tx } = await requireParty(deps.sql, id, auth, { role: 'BUYER' });
@@ -98,6 +105,7 @@ export async function createQuote(deps: AppDeps, auth: AuthContext, id: string, 
   const req = await loadRequest(deps.sql, tx.requestId);
   const trip = tx.tripId ? await loadTrip(deps.sql, tx.tripId) : null;
   if (!req || !trip || !tx.offerId || !tx.travelerId) throw Errors.unprocessable('TRANSACTION_INCOMPLETE', 'Data transaksi belum lengkap');
+  assertTripPayable(trip.status);
   if (req.unitPriceMinor === null || !req.priceCurrency) throw Errors.unprocessable('ITEM_PRICE_MISSING', 'Harga barang belum diisi pada request');
   if (!req.categoryCode) throw Errors.unprocessable('CATEGORY_REQUIRED', 'Kategori barang wajib diisi');
   const [offer] = await deps.sql<{ traveler_fee_idr: number }[]>`SELECT traveler_fee_idr FROM offers WHERE id = ${tx.offerId}`;
@@ -396,6 +404,10 @@ export async function checkout(deps: AppDeps, auth: AuthContext, id: string, inp
       });
     }
     if (tx.status !== 'MATCHED') throw Errors.unprocessable('CHECKOUT_NOT_ALLOWED', 'Checkout tidak tersedia pada status ini', { status: tx.status });
+    // FOR SHARE serializes with POST /trips/{id}/cancel (which updates the trip row): either the trip is cancelled
+    // first and checkout is refused, or checkout commits first and the trip.cancelled consumer stops the invoice.
+    const [tripRow] = tx.tripId ? await db<{ status: string }[]>`SELECT status FROM trips WHERE id = ${tx.tripId} FOR SHARE` : [];
+    if (tripRow) assertTripPayable(tripRow.status);
     const q = await loadQuote(db, input.quoteId, { forUpdate: true });
     if (!q || q.quote.transactionId !== tx.id) throw Errors.notFound('Penawaran harga', 'QUOTE_NOT_FOUND');
     if (q.quote.id !== tx.activeQuoteId || q.quote.status !== 'ACTIVE') {

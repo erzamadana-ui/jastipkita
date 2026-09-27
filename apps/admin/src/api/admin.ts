@@ -63,6 +63,17 @@ export const Rbac = {
   reject: (id: string, note: string) => call<{ id: string; status: string }>(c().POST('/v1/admin/rbac/role-requests/{id}/reject', { params: { path: { id } }, body: { note } })),
 };
 
+/** SEC-13 — confirmed TOTP factors are reset only through a maker-checker request (docs/api/admin.md §1). */
+export const MfaResets = {
+  request: (userId: string, reason: string) =>
+    call<T.MfaResetRequest & { message?: string }>(c().POST('/v1/admin/users/{id}/mfa-reset-requests', { params: { path: { id: userId } }, body: { reason } })),
+  list: (status?: QueryOf<'/v1/admin/rbac/mfa-reset-requests'>['status']) =>
+    call<T.Page<T.MfaResetRequest>>(c().GET('/v1/admin/rbac/mfa-reset-requests', { params: { query: status ? { status } : {} } })),
+  approve: (id: string, note?: string) =>
+    call<{ id: string; status: string; userId: string; sessionsRevoked: number }>(c().POST('/v1/admin/rbac/mfa-reset-requests/{id}/approve', { params: { path: { id } }, body: note ? { note } : {} })),
+  reject: (id: string, note: string) => call<{ id: string; status: string }>(c().POST('/v1/admin/rbac/mfa-reset-requests/{id}/reject', { params: { path: { id } }, body: { note } })),
+};
+
 // ------------------------------------------------------------------ kyc & trips
 export const Kyc = {
   queue: (q: QueryOf<'/v1/admin/kyc/submissions'>) => call<T.Page<T.KycSubmission>>(c().GET('/v1/admin/kyc/submissions', { params: { query: q } })),
@@ -107,6 +118,13 @@ export const Disputes = {
       c().POST('/v1/admin/disputes/{id}/resolve', { params: { path: { id }, header: idem(key) }, body }),
     ),
   close: (id: string, note: string) => call<{ id: string; status: string }>(c().POST('/v1/admin/disputes/{id}/close', { params: { path: { id } }, body: { note } })),
+};
+
+/** SEC-12 — refund destinations held for manual review because the holder name ≠ the verified identity. */
+export const RefundDestinations = {
+  list: (status?: string) => call<T.Page<T.RefundDestinationItem>>(c().GET('/v1/admin/refund-destinations', { params: { query: status ? { status } : {} } })),
+  review: (id: string, body: { decision: 'APPROVE' | 'REJECT'; note: string }, key: string) =>
+    call<{ id: string; refundId: string; validationStatus: string }>(c().POST('/v1/admin/refund-destinations/{id}/review', { params: { path: { id }, header: idem(key) }, body })),
 };
 
 export const Refunds = {

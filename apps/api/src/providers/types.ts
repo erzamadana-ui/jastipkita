@@ -85,6 +85,11 @@ export interface PaymentProvider {
   refund(input: RefundInput): Promise<{ supported: boolean; providerRef?: string; status: 'PENDING' | 'SUCCEEDED' | 'FAILED' }>;
   payout(input: PayoutInput): Promise<{ providerRef: string; status: 'PENDING' | 'SUCCEEDED' | 'FAILED' }>;
   validateBankAccount(input: { bankCode: string; accountNumber: string }): Promise<{ valid: boolean; holderName?: string }>;
+  /**
+   * Best effort: stop an open checkout session so it can no longer be paid (e.g. the trip was cancelled). Optional —
+   * funds that still arrive are captured as a late payment and refunded automatically.
+   */
+  cancelCheckout?(providerRef: string): Promise<void>;
   /** Sandbox/mock only: mark a checkout paid (for E2E tests and demos). */
   simulatePayment?(providerRef: string, channel?: string): Promise<void>;
 }

@@ -5,14 +5,14 @@ import { url } from '../../lib/paths.ts';
 ---
 <Base title="Akun saya" description="Lihat profil JastipKita, unduh data, dan ajukan penghapusan akun." path="/akun/" noindex>
   <section class="section-tight">
-    <div class="container" style="max-width:760px">
+    <div class="container maxw-760">
       <h1 class="acc-title">Akun saya</h1>
       <div id="acc-signed-out" class="card acc-card" hidden>
         <span class="icon-tile"><Icon name="lock" /></span>
         <div>
           <h2 class="h-card">Masuk untuk melihat akunmu</h2>
           <p class="small muted">Halaman ini menampilkan profil singkat dan tempat mengajukan penghapusan akun. Kalau belum bisa masuk, baca <a href={url('/hapus-akun/')}>cara menghapus akun & data</a>.</p>
-          <a class="btn btn-primary btn-sm" style="margin-top:14px" href={url('/masuk/?next=/jastipkita/akun/')}><Icon name="log-in" />Masuk</a>
+          <a class="btn btn-primary btn-sm mt-14" href={url('/masuk/?next=/jastipkita/akun/')}><Icon name="log-in" />Masuk</a>
         </div>
       </div>
       <div id="acc-error" class="note note-error" hidden><Icon name="circle-alert" /><p></p></div>
@@ -40,9 +40,9 @@ import { url } from '../../lib/paths.ts';
           <p class="xsmall muted" id="acc-export-msg" role="status"></p>
         </div>
 
-        <div id="acc-pending" class="note note-warning" style="margin-top:20px" hidden>
+        <div id="acc-pending" class="note note-warning mt-20" hidden>
           <Icon name="clock" />
-          <div><p id="acc-pending-text"></p><button class="btn btn-sm" type="button" id="acc-cancel" style="margin-top:10px">Batalkan penghapusan</button></div>
+          <div><p id="acc-pending-text"></p><button class="btn btn-sm mt-10" type="button" id="acc-cancel">Batalkan penghapusan</button></div>
         </div>
 
         <section class="card danger-card" id="hapus" aria-labelledby="del-title">
@@ -64,14 +64,14 @@ import { url } from '../../lib/paths.ts';
           </form>
         </section>
       </div>
-      <p class="xsmall muted" style="margin-top:24px">Butuh bantuan lain? <a href={url('/bantuan/')}>Pusat bantuan</a> · <a href={url('/legal/privacy-policy/')}>Kebijakan Privasi</a></p>
+      <p class="xsmall muted mt-24">Butuh bantuan lain? <a href={url('/bantuan/')}>Pusat bantuan</a> · <a href={url('/legal/privacy-policy/')}>Kebijakan Privasi</a></p>
     </div>
   </section>
 
   <dialog id="del-dialog" class="dialog" aria-labelledby="dlg-title">
     <form method="dialog">
       <h2 id="dlg-title" class="h-card">Hapus akun JastipKita?</h2>
-      <p class="small muted" style="margin-top:8px">Akun dijadwalkan terhapus dalam 14 hari dan kamu akan dikeluarkan dari semua perangkat. Kamu masih bisa membatalkannya selama masa tenggang.</p>
+      <p class="small muted mt-8">Akun dijadwalkan terhapus dalam 14 hari dan kamu akan dikeluarkan dari semua perangkat. Kamu masih bisa membatalkannya selama masa tenggang.</p>
       <div class="dlg-actions">
         <button class="btn" value="cancel">Batal</button>
         <button class="btn btn-danger" value="confirm">Ya, hapus akun</button>

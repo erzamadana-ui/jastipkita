@@ -3,6 +3,7 @@ import type { App } from '../../context';
 import { bearer, createRouter, errorResponses, IdempotencyHeader, jsonBody, jsonContent } from '../../lib/openapi';
 import { getAuth, requireAuth } from '../../middleware/auth';
 import { requireIdempotency } from '../../middleware/idempotency';
+import { rateLimit } from '../../middleware/rate-limit';
 import { loadTx } from '../transactions/common';
 import { LooseResult, TxIdParam } from '../transactions/schemas';
 import { cancelTransaction, previewCancellation } from './service';
@@ -83,7 +84,7 @@ export function registerCancellationRoutes(app: App) {
       summary: 'Cancel per cancellation matrix (Idempotency-Key required). Not allowed → 422 with reason (e.g. use Dispute Center)',
       description: 'Call GET /v1/transactions/{id}/cancel/preview first to show the exact outcome.',
       security: bearer,
-      middleware: [requireAuth, requireIdempotency] as const,
+      middleware: [requireAuth, rateLimit({ name: 'money.cancel', limit: 30, windowSec: 60, key: 'user' }), requireIdempotency] as const,
       request: { params: TxIdParam, headers: IdempotencyHeader, ...jsonBody(CancelBody) },
       responses: { 200: jsonContent(LooseResult), ...errorResponses },
     }),

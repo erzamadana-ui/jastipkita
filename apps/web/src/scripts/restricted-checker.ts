@@ -31,7 +31,7 @@ function banner(cls: Classification): string {
   const [id, en, descId, descEn] = LABEL[cls];
   return `<div class="class-banner class-${cls}" role="${cls === 'PROHIBITED' ? 'alert' : 'status'}">
     <span class="ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[cls]}</svg></span>
-    <div><div class="tt" style="font-weight:600">${escapeHtml(T(id, en))}</div><div class="small">${escapeHtml(T(descId, descEn))}</div></div></div>`;
+    <div><div class="tt fw-600">${escapeHtml(T(id, en))}</div><div class="small">${escapeHtml(T(descId, descEn))}</div></div></div>`;
 }
 
 function setStatus(state: string, label: string) {
@@ -50,8 +50,8 @@ function render(cls: Classification, messages: string[], extra: string[], foot: 
   if (!out) return;
   out.innerHTML = `${banner(cls)}
     ${messages.length ? `<ul class="rc-msgs">${messages.map((m) => `<li>${escapeHtml(m)}</li>`).join('')}</ul>` : ''}
-    ${extra.length ? `<p class="xsmall muted" style="margin-top:10px">${extra.map(escapeHtml).join(' · ')}</p>` : ''}
-    <p class="xsmall muted" style="margin-top:12px">${escapeHtml(foot)}</p>`;
+    ${extra.length ? `<p class="xsmall muted mt-10">${extra.map(escapeHtml).join(' · ')}</p>` : ''}
+    <p class="xsmall muted mt-12">${escapeHtml(foot)}</p>`;
 }
 
 form?.addEventListener('submit', async (ev) => {

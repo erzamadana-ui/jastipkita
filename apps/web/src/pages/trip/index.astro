@@ -18,13 +18,13 @@ const wa = whatsappUrl('Halo JastipKita, kabari saya saat trip traveler sudah te
   <section class="page-hero">
     <div class="container">
       <Breadcrumbs items={crumbs} />
-      <span class="eyebrow" style="margin-top:18px"><Icon name="plane-takeoff" size={16} />Trip discovery</span>
+      <span class="eyebrow mt-18"><Icon name="plane-takeoff" size={16} />Trip discovery</span>
       <h1>Cari traveler yang sedang ke luar negeri</h1>
       <p class="lead">Hanya trip berstatus aktif yang tampil. Nama traveler disingkat (nama depan + inisial) untuk melindungi privasi; detail lengkap terlihat di aplikasi setelah match.</p>
     </div>
   </section>
 
-  <section class="section-tight" style="padding-top:0">
+  <section class="section-tight pt-0">
     <div class="container">
       <form class="card trip-filters" id="trip-form" novalidate>
         <div class="field">
@@ -54,9 +54,9 @@ const wa = whatsappUrl('Halo JastipKita, kabari saya saat trip traveler sudah te
       </form>
 
       <div id="trip-results" class="trip-results" aria-live="polite" aria-busy="true">
-        {[0, 1, 2].map(() => <div class="card skeleton-card" aria-hidden="true"><div class="skeleton" style="height:22px;width:60%"></div><div class="skeleton" style="height:14px;width:40%;margin-top:12px"></div><div class="skeleton" style="height:6px;margin-top:20px"></div><div class="skeleton" style="height:40px;width:50%;margin-top:18px;border-radius:999px"></div></div>)}
+        {[0, 1, 2].map(() => <div class="card skeleton-card" aria-hidden="true"><div class="skeleton h-22 w-60p"></div><div class="skeleton h-14 w-40p mt-12"></div><div class="skeleton h-6 mt-20"></div><div class="skeleton h-40 w-50p mt-18 rounded-pill"></div></div>)}
       </div>
-      <div id="trip-more-wrap" hidden style="text-align:center;margin-top:20px"><button class="btn" id="trip-more" type="button">Muat lebih banyak</button></div>
+      <div class="text-center mt-20" id="trip-more-wrap" hidden><button class="btn" id="trip-more" type="button">Muat lebih banyak</button></div>
 
       <template id="trip-unavailable">
         <div class="card coming-soon">
