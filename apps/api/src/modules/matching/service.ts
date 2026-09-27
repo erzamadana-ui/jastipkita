@@ -26,7 +26,7 @@ import * as tripRepo from '../trips/repository';
 import { type TripPublicDto, effectiveRemainingKg, feeSpec, publicTripDto } from '../trips/service';
 import { type UserSignals, loadUserSignals, publicProfile, travelerLimit, unitWeightKg } from './signals';
 
-type Deps = Pick<AppDeps, 'sql' | 'config' | 'clock' | 'logger' | 'providers'>;
+type Deps = Pick<AppDeps, 'sql' | 'config' | 'clock' | 'logger' | 'providers' | 'env'>;
 
 // ------------------------------------------------------------------------------ strategy seam
 

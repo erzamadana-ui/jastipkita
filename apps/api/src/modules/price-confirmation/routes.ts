@@ -1,9 +1,9 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../context';
-import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../lib/openapi';
+import { bearer, createRouter, errorResponses, IdempotencyHeader, jsonBody, jsonContent } from '../../lib/openapi';
 import { getAuth, requireAuth } from '../../middleware/auth';
 import { requireIdempotency } from '../../middleware/idempotency';
-import { LooseResult, TxIdParam, IdemHeader } from '../transactions/schemas';
+import { LooseResult, TxIdParam } from '../transactions/schemas';
 import { clarifyPriceConfirmation, priceCheck, respondPriceConfirmation } from './service';
 
 const PcParams = TxIdParam.extend({ pcId: z.string().uuid().openapi({ param: { name: 'pcId', in: 'path' } }) });
@@ -52,10 +52,10 @@ export function registerPriceConfirmationRoutes(app: App) {
       method: 'post',
       path: '/v1/transactions/{id}/price-confirmations/{pcId}/respond',
       tags: ['Price confirmation'],
-      summary: 'Buyer approves / rejects (no-fault full refund) / asks for clarification (💰)',
+      summary: 'Buyer approves / rejects (no-fault full refund) / asks for clarification (Idempotency-Key required)',
       security: bearer,
       middleware: [requireAuth, requireIdempotency] as const,
-      request: { params: PcParams, headers: IdemHeader, ...jsonBody(RespondBody) },
+      request: { params: PcParams, headers: IdempotencyHeader, ...jsonBody(RespondBody) },
       responses: { 200: jsonContent(LooseResult), ...errorResponses },
     }),
     async (c) => {

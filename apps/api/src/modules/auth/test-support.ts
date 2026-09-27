@@ -4,8 +4,8 @@ import type { TestContext } from '../../../test/helpers';
 import { configureOAuthKeys } from './oauth';
 
 export const CONSENTS = [
-  { type: 'TOS' as const, version: '2026-09', granted: true },
-  { type: 'PRIVACY' as const, version: '2026-09', granted: true },
+  { type: 'TOS' as const, version: '0.1-template', granted: true },
+  { type: 'PRIVACY' as const, version: '0.1-template', granted: true },
 ];
 
 let phoneSeq = 0;

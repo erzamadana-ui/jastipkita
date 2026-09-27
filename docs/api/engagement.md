@@ -15,7 +15,9 @@ Binding references: `docs/00-domain-model.md` (§2 level 5, §4, §6/§15.3, §1
 | `POST /notifications/{id}/read` · `POST /notifications/read-all` | bearer | 404 for other users' ids |
 | `GET/PUT /notifications/preferences` | bearer | groups × channels, `locked` combos → `422 PREFERENCE_LOCKED` |
 | `GET /conversations` | bearer | one conversation per transaction, counterpart public name, last message preview, unread count |
-| `GET /conversations/{id}/messages` | bearer | participants only (others: 404), newest first, µs-precise cursor |
+| `GET /conversations/{id}` | bearer | one `Conversation` (same shape as the list item); participants only (others: 404) |
+| `GET /transactions/{id}/conversation` | bearer | parties only (others: 404) → `{conversationId, transactionId, created, conversation}`; creates the conversation lazily (same rules as the MATCHED outbox handler, idempotent) when the transaction reached MATCHED; `409 CONVERSATION_NOT_AVAILABLE` before that |
+| `GET /conversations/{id}/messages` | bearer | participants only (others: 404), newest first, µs-precise cursor; `attachments[] {fileId, mime, contentUrl}` (absolute) |
 | `POST /conversations/{id}/messages` | bearer | `TEXT`, `IMAGE`, `PRODUCT`, `RECEIPT`; `SYSTEM`/`STATUS` → `403 MESSAGE_TYPE_SYSTEM_ONLY`; 30/min/user |
 | `POST /conversations/{id}/read` | bearer | body optional `{messageId}` (default: latest) |
 | `POST /transactions/{id}/ratings` | bearer | after `COMPLETED`, once per side, 14-day window |

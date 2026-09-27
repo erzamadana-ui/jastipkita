@@ -31,7 +31,8 @@ describe('transaction reads', () => {
     expect(b.body.role).toBe('BUYER');
     expect(b.body.purchaseGate).toBeNull();
     expect(b.body.allowedActions).toEqual(expect.arrayContaining(['QUOTE', 'CANCEL']));
-    expect(b.body.traveler).toMatchObject({ id: p.traveler.id, displayName: 'Traveler Uji', kycLevel: 4 });
+    // public profile: first name + last initial only (never the full name)
+    expect(b.body.traveler).toMatchObject({ id: p.traveler.id, displayName: 'Traveler U.', kycLevel: 4 });
     expect(JSON.stringify(b.body.traveler)).not.toMatch(/@|\+62/);
     const tr = await call(t, p.traveler, 'GET', `/v1/transactions/${tx.id}`);
     expect(tr.body.role).toBe('TRAVELER');

@@ -10,7 +10,13 @@ export const MessageSchema = z
     senderId: z.string().uuid().nullable(),
     mine: z.boolean(),
     body: z.string().nullable().openapi({ description: 'Text as visible to participants (sensitive parts masked when FLAGGED; null when HIDDEN)' }),
-    attachments: z.array(z.object({ fileId: z.string().uuid(), mime: z.string() })),
+    attachments: z.array(
+      z.object({
+        fileId: z.string().uuid(),
+        mime: z.string(),
+        contentUrl: z.string().openapi({ description: 'Absolute URL (GET /v1/files/{id}/content, bearer auth; conversation participants only)' }),
+      }),
+    ),
     meta: z.record(z.string(), z.unknown()).openapi({ description: 'product / receipt / status references' }),
     moderation: z.object({ status: z.enum(['CLEAN', 'FLAGGED', 'HIDDEN']), reasons: z.array(z.string()) }),
     createdAt: z.string(),
@@ -32,6 +38,15 @@ export const ConversationSchema = z
     createdAt: z.string(),
   })
   .openapi('Conversation');
+
+export const ConversationLookupSchema = z
+  .object({
+    conversationId: z.string().uuid(),
+    transactionId: z.string().uuid(),
+    created: z.boolean().openapi({ description: 'true when this call created the (missing) conversation' }),
+    conversation: ConversationSchema,
+  })
+  .openapi('TransactionConversation');
 
 export const ConversationPage = z.object({ data: z.array(ConversationSchema), nextCursor: z.string().nullable() }).openapi('ConversationPage');
 export const MessagePage = z.object({ data: z.array(MessageSchema), nextCursor: z.string().nullable() }).openapi('ChatMessagePage');

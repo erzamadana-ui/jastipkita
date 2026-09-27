@@ -2,6 +2,7 @@ import type { App } from '../context';
 import { registerAuth } from './auth/routes';
 import { registerFiles } from './files/routes';
 import { registerKyc } from './kyc/routes';
+import { registerLegal } from './legal/routes';
 import { registerMe } from './me/routes';
 import { registerPrivacy } from './privacy/routes';
 
@@ -15,4 +16,5 @@ export function registerIdentity(app: App): void {
   registerFiles(app);
   registerKyc(app);
   registerPrivacy(app);
+  registerLegal(app);
 }

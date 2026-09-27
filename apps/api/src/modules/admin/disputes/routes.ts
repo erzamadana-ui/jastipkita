@@ -1,7 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../../context';
-import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../../lib/openapi';
-import { AdminIdemHeader, AdminLoose, AdminPage, adminCtx, adminGuard, IdParam, PageQuery, StatusCsvQuery } from '../common';
+import { bearer, createRouter, errorResponses, IdempotencyHeader, jsonBody, jsonContent } from '../../../lib/openapi';
+import { AdminLoose, AdminPage, adminCtx, adminGuard, IdParam, PageQuery, StatusCsvQuery } from '../common';
 import * as svc from './service';
 
 const tags = ['Admin · Disputes'];
@@ -78,7 +78,7 @@ export function registerAdminDisputes(app: App) {
       method: 'post', path: '/v1/admin/disputes/{id}/resolve', tags, security: bearer,
       summary: 'Resolve → refund via money requestRefund (REFUND_PENDING) or BUYER_CONFIRMED; dispute.resolved',
       middleware: adminGuard(['disputes.manage'], { mfa: true, idempotent: true }),
-      request: { params: IdParam, headers: AdminIdemHeader, ...jsonBody(ResolveBody) },
+      request: { params: IdParam, headers: IdempotencyHeader, ...jsonBody(ResolveBody) },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.resolveDispute(await adminCtx(c), c.req.valid('param').id, c.req.valid('json')), 200),

@@ -285,9 +285,12 @@ export class StaticFxProvider implements FxProvider {
 export class MockKycProvider implements KycProvider {
   readonly mode = 'MOCK' as const;
   readonly name = 'mock';
+  /** Recorded verify() inputs (submission id + liveness keys) so tests can assert what reached the provider. */
+  readonly calls: { submissionId: string; livenessFileKeys: string[] }[] = [];
   /** Keys containing "fail" fail liveness — lets tests exercise rejection paths. */
-  async verify(input: { submissionId: string; documentFileKey: string; selfieFileKey?: string; livenessFileKey?: string }) {
-    const failing = [input.documentFileKey, input.selfieFileKey, input.livenessFileKey].some((k) => k?.includes('fail'));
+  async verify(input: { submissionId: string; documentFileKey: string; selfieFileKey?: string; livenessFileKey?: string; livenessFileKeys?: string[] }) {
+    this.calls.push({ submissionId: input.submissionId, livenessFileKeys: input.livenessFileKeys ?? (input.livenessFileKey ? [input.livenessFileKey] : []) });
+    const failing = [input.documentFileKey, input.selfieFileKey, input.livenessFileKey, ...(input.livenessFileKeys ?? [])].some((k) => k?.includes('fail'));
     return failing
       ? { status: 'FAILED' as const, livenessScore: 0.2, faceMatchScore: 0.3, reasons: ['LIVENESS_FAILED'], providerRef: `mock_kyc_${randomToken(6)}` }
       : { status: 'PASSED' as const, livenessScore: 0.97, faceMatchScore: 0.93, reasons: [], providerRef: `mock_kyc_${randomToken(6)}` };

@@ -19,7 +19,7 @@ async function kycReadyUser() {
   const u = await phoneLogin(t);
   const token = u.tokens.accessToken;
   t.clock.advance(61_000);
-  expect((await t.request('POST', '/v1/me/consents', { token, body: { type: 'KYC', version: '2026-09' } })).status).toBe(201);
+  expect((await t.request('POST', '/v1/me/consents', { token, body: { type: 'KYC', version: '0.1-template' } })).status).toBe(201);
   const idFront = await uploadFile(t, token, 'KYC', 'image/jpeg', JPEG(300, 3));
   const selfie = await uploadFile(t, token, 'KYC', 'image/jpeg', JPEG(300, 5));
   return { id: u.user.id as string, token, idFront, selfie };

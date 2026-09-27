@@ -5,7 +5,7 @@
 import { type LimitResult, type RiskLevel, computeTransactionLimit } from '@jastipkita/core';
 import type { AppDeps } from '../../context';
 import type { Db } from '../../db/sql';
-import { type TrustBadgeTier, numOrNull, publicDisplayName, trustBadge, wibDate } from '../catalog/shared';
+import { type TrustBadgeTier, type TrustTierCode, numOrNull, publicDisplayName, trustBadge, trustTier, wibDate } from '../catalog/shared';
 
 export interface UserSignals {
   userId: string;
@@ -70,6 +70,9 @@ export interface PublicProfileDto {
   id: string;
   displayName: string;
   trustBadge: { tier: TrustBadgeTier; label: string };
+  trustScore: number;
+  trustTier: { tier: TrustTierCode; label: string; labelEn: string };
+  kycLevel: number;
   identityVerified: boolean;
   rating: { average: number | null; count: number };
   completedTransactions: number;
@@ -77,12 +80,25 @@ export interface PublicProfileDto {
 
 export function publicProfile(s: UserSignals | undefined, userId: string, role: 'TRAVELER' | 'BUYER'): PublicProfileDto {
   if (!s) {
-    return { id: userId, displayName: 'Pengguna JastipKita', trustBadge: trustBadge(1), identityVerified: false, rating: { average: null, count: 0 }, completedTransactions: 0 };
+    return {
+      id: userId,
+      displayName: 'Pengguna JastipKita',
+      trustBadge: trustBadge(1),
+      trustScore: 0,
+      trustTier: trustTier(0),
+      kycLevel: 1,
+      identityVerified: false,
+      rating: { average: null, count: 0 },
+      completedTransactions: 0,
+    };
   }
   return {
     id: s.userId,
     displayName: publicDisplayName(s.displayName, role === 'TRAVELER' ? 'Traveler JastipKita' : 'Penitip JastipKita'),
     trustBadge: trustBadge(s.kycLevel),
+    trustScore: s.trustScore,
+    trustTier: trustTier(s.trustScore),
+    kycLevel: s.kycLevel,
     identityVerified: s.kycLevel >= 3,
     rating: role === 'TRAVELER' ? s.travelerRating : s.buyerRating,
     completedTransactions: role === 'TRAVELER' ? s.travelerCompleted : s.buyerCompleted,

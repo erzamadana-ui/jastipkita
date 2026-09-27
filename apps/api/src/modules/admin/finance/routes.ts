@@ -1,7 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../../context';
-import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../../lib/openapi';
-import { AdminIdemHeader, AdminLoose, AdminPage, adminCtx, adminGuard, IdParam, PageQuery, ReasonBody, StatusCsvQuery } from '../common';
+import { bearer, createRouter, errorResponses, IdempotencyHeader, jsonBody, jsonContent } from '../../../lib/openapi';
+import { AdminLoose, AdminPage, adminCtx, adminGuard, IdParam, PageQuery, ReasonBody, StatusCsvQuery } from '../common';
 import * as svc from './service';
 
 const refundTags = ['Admin · Refunds'];
@@ -25,7 +25,7 @@ export function registerAdminFinance(app: App) {
       method: 'post', path: '/v1/admin/refunds/{id}/approve', tags: refundTags, security: bearer,
       summary: 'Approve (maker-checker: approver ≠ requester) → money approveRefund + processor',
       middleware: adminGuard(['refunds.approve'], { mfa: true, idempotent: true }),
-      request: { params: IdParam, headers: AdminIdemHeader },
+      request: { params: IdParam, headers: IdempotencyHeader },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.approveRefundAdmin(await adminCtx(c), c.req.valid('param').id), 200),
@@ -35,7 +35,7 @@ export function registerAdminFinance(app: App) {
       method: 'post', path: '/v1/admin/refunds/{id}/reject', tags: refundTags, security: bearer,
       summary: 'Reject (reason) → money rejectRefund (allocation journal reversed)',
       middleware: adminGuard(['refunds.approve'], { mfa: true, idempotent: true }),
-      request: { params: IdParam, headers: AdminIdemHeader, ...jsonBody(ReasonBody) },
+      request: { params: IdParam, headers: IdempotencyHeader, ...jsonBody(ReasonBody) },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.rejectRefundAdmin(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').reason), 200),
@@ -55,7 +55,7 @@ export function registerAdminFinance(app: App) {
       method: 'post', path: '/v1/admin/payouts/{id}/hold', tags: payoutTags, security: bearer,
       summary: 'Hold (SCHEDULED/FAILED → ON_HOLD, reason; holder recorded)',
       middleware: adminGuard(['payouts.manage'], { mfa: true, idempotent: true }),
-      request: { params: IdParam, headers: AdminIdemHeader, ...jsonBody(ReasonBody) },
+      request: { params: IdParam, headers: IdempotencyHeader, ...jsonBody(ReasonBody) },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.holdPayout(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').reason), 200),
@@ -65,7 +65,7 @@ export function registerAdminFinance(app: App) {
       method: 'post', path: '/v1/admin/payouts/{id}/release', tags: payoutTags, security: bearer,
       summary: 'Release hold (ON_HOLD → SCHEDULED, approver ≠ holder; clears the transaction payout hold)',
       middleware: adminGuard(['payouts.manage'], { mfa: true, idempotent: true }),
-      request: { params: IdParam, headers: AdminIdemHeader, ...jsonBody(NoteBody) },
+      request: { params: IdParam, headers: IdempotencyHeader, ...jsonBody(NoteBody) },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.releasePayout(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').note), 200),
@@ -75,7 +75,7 @@ export function registerAdminFinance(app: App) {
       method: 'post', path: '/v1/admin/payouts/{id}/retry', tags: payoutTags, security: bearer,
       summary: 'Retry a FAILED payout (→ SCHEDULED now, system retry budget reset)',
       middleware: adminGuard(['payouts.manage'], { mfa: true, idempotent: true }),
-      request: { params: IdParam, headers: AdminIdemHeader, ...jsonBody(NoteBody) },
+      request: { params: IdParam, headers: IdempotencyHeader, ...jsonBody(NoteBody) },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.retryPayout(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').note), 200),

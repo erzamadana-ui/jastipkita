@@ -1,7 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../../context';
-import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../../lib/openapi';
-import { AdminIdemHeader, AdminLoose, AdminPage, adminCtx, adminGuard, IdParam } from '../common';
+import { bearer, createRouter, errorResponses, IdempotencyHeader, jsonBody, jsonContent } from '../../../lib/openapi';
+import { AdminLoose, AdminPage, adminCtx, adminGuard, IdParam } from '../common';
 import * as svc from './service';
 
 const tags = ['Admin · Settlement accounts'];
@@ -48,7 +48,7 @@ export function registerAdminSettlement(app: App) {
       method: 'post', path: '/v1/admin/settlement-accounts/changes', tags, security: bearer,
       summary: 'Request a change (CREATE/UPDATE/DISABLE/SET_PRIMARY) — secret name + mask only; validated against the secret store',
       middleware: adminGuard(['finance.settlement.request_change'], { mfa: true, idempotent: true }),
-      request: { headers: AdminIdemHeader, ...jsonBody(ChangeBody) },
+      request: { headers: IdempotencyHeader, ...jsonBody(ChangeBody) },
       responses: { 201: jsonContent(AdminLoose, 'Requested'), ...errorResponses },
     }),
     async (c) => c.json(await svc.requestChange(await adminCtx(c), c.req.valid('json')), 201),
@@ -58,7 +58,7 @@ export function registerAdminSettlement(app: App) {
       method: 'post', path: '/v1/admin/settlement-accounts/changes/{id}/approve', tags, security: bearer,
       summary: 'Approve & apply (FINANCE_SUPER_ADMIN ≠ requester, MFA ≤ 15 min)',
       middleware: adminGuard(['finance.settlement.approve_change'], { mfa: true, idempotent: true }),
-      request: { params: IdParam, headers: AdminIdemHeader, ...jsonBody(z.object({ note: z.string().trim().max(1000).optional() })) },
+      request: { params: IdParam, headers: IdempotencyHeader, ...jsonBody(z.object({ note: z.string().trim().max(1000).optional() })) },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.approveChange(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').note), 200),
@@ -68,7 +68,7 @@ export function registerAdminSettlement(app: App) {
       method: 'post', path: '/v1/admin/settlement-accounts/changes/{id}/reject', tags, security: bearer,
       summary: 'Reject a pending change',
       middleware: adminGuard(['finance.settlement.approve_change'], { mfa: true, idempotent: true }),
-      request: { params: IdParam, headers: AdminIdemHeader, ...jsonBody(z.object({ note: z.string().trim().min(5).max(1000) })) },
+      request: { params: IdParam, headers: IdempotencyHeader, ...jsonBody(z.object({ note: z.string().trim().min(5).max(1000) })) },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.rejectChange(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').note), 200),

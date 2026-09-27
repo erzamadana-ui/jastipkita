@@ -70,13 +70,28 @@ export const CancelBody = z.object({ reason: z.string().trim().min(3).max(500) }
 
 const TripFee = z.object({ type: FeeTypeEnum, value: z.number().int(), label: z.string() }).openapi('TripFee');
 
+export const TrustTierSchema = z
+  .object({
+    tier: z.enum(['EXCELLENT', 'GOOD', 'FAIR', 'LOW']).openapi({ description: 'Trust Score band: EXCELLENT 85–100, GOOD 70–84, FAIR 40–69, LOW 0–39' }),
+    label: z.string().openapi({ example: 'Sangat tepercaya' }),
+    labelEn: z.string().openapi({ example: 'Excellent' }),
+  })
+  .openapi('TrustTier');
+
+export const TrustBadgeSchema = z
+  .object({ tier: z.enum(['TRUSTED_TRAVELER', 'TRAVELER_VERIFIED', 'IDENTITY_VERIFIED', 'BASIC']), label: z.string() })
+  .openapi('TrustBadge', { description: 'Verification badge derived from the KYC level' });
+
 export const PublicProfileSchema = z
   .object({
     id: z.string().uuid().openapi({ description: 'Public profile id' }),
     displayName: z.string().openapi({ description: 'First name + last initial only', example: 'Budi S.' }),
-    trustBadge: z.object({ tier: z.enum(['TRUSTED_TRAVELER', 'TRAVELER_VERIFIED', 'IDENTITY_VERIFIED', 'BASIC']), label: z.string() }),
+    trustBadge: TrustBadgeSchema,
+    trustScore: z.number().int().min(0).max(100).openapi({ description: 'Trust Score 0–100 (users.trust_score)', example: 82 }),
+    trustTier: TrustTierSchema,
+    kycLevel: z.number().int().min(1).max(5),
     identityVerified: z.boolean(),
-    rating: z.object({ average: z.number().nullable(), count: z.number().int() }),
+    rating: z.object({ average: z.number().nullable(), count: z.number().int() }).openapi({ description: 'Rating in the role shown (traveler or buyer)' }),
     completedTransactions: z.number().int(),
   })
   .openapi('PublicProfile');

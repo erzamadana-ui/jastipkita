@@ -7,7 +7,7 @@
  */
 import { type Actor, type CancellationResult, evaluateCancellation, type TransactionStatus } from '@jastipkita/core';
 import type { AppDeps, AuthContext } from '../../context';
-import type { TxSql } from '../../db/sql';
+import type { Db, TxSql } from '../../db/sql';
 import { AppError, Errors } from '../../lib/errors';
 import { audit } from '../../services/audit';
 import { emitEvent } from '../../services/outbox';
@@ -16,7 +16,7 @@ import { postJournal, settlementEntries, transactionBuckets } from '../ledger/se
 import { reverseCreditRedemption } from '../payments/service';
 import { schedulePayout } from '../payouts/service';
 import { allocateAcrossPayments, createRefundRows, maybeFinalizeRefunds, processRefunds, type RefundReason } from '../refunds/service';
-import { assertCanTransition, loadTx, requireParty, setDbActor, transitionTx, type TxRow } from '../transactions/common';
+import { assertCanTransition, loadTx, type PartyRole, requireParty, setDbActor, transitionTx, type TxRow } from '../transactions/common';
 
 export interface CancelInput {
   actor: Actor;
@@ -47,7 +47,7 @@ export interface CancelOutcome {
 }
 
 /** Quote lines as actually paid: supplemental top-ups are added to ITEM_PRICE and TOTAL. */
-async function paidLines(db: TxSql, tx: TxRow) {
+async function paidLines(db: Db, tx: TxRow) {
   if (!tx.activeQuoteId) return [];
   const q = (await loadQuote(db, tx.activeQuoteId))!;
   const [supp] = await db<{ s: number }[]>`
@@ -66,6 +66,71 @@ function penaltyUser(tx: TxRow, actor: Actor): { userId: string; role: 'BUYER' |
   return null;
 }
 
+/** Why the caller cannot cancel right now (null = POST /cancel would go through). */
+export type CancellationBlock =
+  | { code: 'CANCELLATION_NOT_ALLOWED'; message: string; details: Record<string, unknown> }
+  | { code: 'ADMIN_APPROVAL_REQUIRED'; message: string; details: Record<string, unknown> };
+
+export interface CancellationEvaluation {
+  result: CancellationResult;
+  paymentCaptured: boolean;
+  block: CancellationBlock | null;
+}
+
+/**
+ * Pure read: the matrix outcome for `input.actor` on `tx` exactly as cancelInTx() would apply it (same paid lines,
+ * same capture detection, same guards) — used by POST /cancel and by the side-effect-free preview.
+ */
+export async function evaluateCancellationFor(
+  deps: AppDeps,
+  db: Db,
+  tx: TxRow,
+  input: Pick<CancelInput, 'actor' | 'cause' | 'adminApprovalRecorded'>,
+): Promise<CancellationEvaluation> {
+  const [captured] = await db<{ n: number }[]>`
+    SELECT count(*)::int AS n FROM payments WHERE transaction_id = ${tx.id} AND status IN ('SECURED','PARTIALLY_REFUNDED')`;
+  const paymentCaptured = (captured?.n ?? 0) > 0 && !['REQUEST_CREATED', 'MATCHED', 'AWAITING_PAYMENT'].includes(tx.status);
+  const matrix = await deps.config.get('cancellation.matrix');
+  const lines = await paidLines(db, tx);
+  const result: CancellationResult = evaluateCancellation(
+    { status: tx.status, actor: input.actor, ...(input.cause ? { cause: input.cause } : {}), quoteLines: lines, paymentCaptured },
+    matrix,
+  );
+  let block: CancellationBlock | null = null;
+  if (tx.status === 'AWAITING_PAYMENT' && (captured?.n ?? 0) > 0) {
+    // Waiting for a SUPPLEMENTAL top-up after an approved price increase: §4 has no refund edge from
+    // AWAITING_PAYMENT; letting the top-up expire triggers the no-fault full refund automatically.
+    block = {
+      code: 'CANCELLATION_NOT_ALLOWED',
+      message: 'Pembayaran tambahan sedang menunggu; biarkan kedaluwarsa untuk refund penuh otomatis',
+      details: { stage: 'AFTER_PAYMENT', reasonCode: 'SUPPLEMENTAL_PAYMENT_PENDING' },
+    };
+  } else if (!result.allowed) {
+    block = {
+      code: 'CANCELLATION_NOT_ALLOWED',
+      message: result.reason ?? 'Pembatalan tidak diizinkan pada tahap ini',
+      details: {
+        stage: result.stage,
+        reasonCode: result.reasonCode,
+        hint: result.stage && ['AFTER_PURCHASE', 'DURING_TRAVEL', 'AFTER_ARRIVAL'].includes(result.stage) ? 'Gunakan Dispute Center' : undefined,
+      },
+    };
+  } else if (result.requiresAdminApproval && !(input.actor === 'ADMIN' && input.adminApprovalRecorded)) {
+    block = {
+      code: 'ADMIN_APPROVAL_REQUIRED',
+      message: 'Pembatalan pada tahap ini memerlukan persetujuan admin; hubungi Pusat Bantuan',
+      details: { stage: result.stage },
+    };
+  } else if (result.transitionPath[0] !== 'CANCELLED' && result.transitionPath[0] !== 'REFUND_PENDING') {
+    block = {
+      code: 'CANCELLATION_NOT_ALLOWED',
+      message: 'Gunakan Dispute Center untuk transaksi yang sudah terkirim',
+      details: { path: result.transitionPath },
+    };
+  }
+  return { result, paymentCaptured, block };
+}
+
 /**
  * Evaluates the matrix and applies the cancellation inside the caller's DB transaction.
  * Before payment → CANCELLED. After payment → REFUND_PENDING + settlement journal + refunds (+ traveler
@@ -74,34 +139,8 @@ function penaltyUser(tx: TxRow, actor: Actor): { userId: string; role: 'BUYER' |
 export async function cancelInTx(deps: AppDeps, db: TxSql, tx: TxRow, input: CancelInput): Promise<CancelOutcome> {
   const now = deps.clock.now();
   await setDbActor(db, input.actor, input.actorId);
-  const [captured] = await db<{ n: number }[]>`
-    SELECT count(*)::int AS n FROM payments WHERE transaction_id = ${tx.id} AND status IN ('SECURED','PARTIALLY_REFUNDED')`;
-  if (tx.status === 'AWAITING_PAYMENT' && (captured?.n ?? 0) > 0) {
-    // Waiting for a SUPPLEMENTAL top-up after an approved price increase: §4 has no refund edge from
-    // AWAITING_PAYMENT; letting the top-up expire triggers the no-fault full refund automatically.
-    throw new AppError(422, 'CANCELLATION_NOT_ALLOWED', 'Pembayaran tambahan sedang menunggu; biarkan kedaluwarsa untuk refund penuh otomatis', {
-      stage: 'AFTER_PAYMENT',
-    });
-  }
-  const paymentCaptured = (captured?.n ?? 0) > 0 && !['REQUEST_CREATED', 'MATCHED', 'AWAITING_PAYMENT'].includes(tx.status);
-  const matrix = await deps.config.get('cancellation.matrix');
-  const lines = await paidLines(db, tx);
-  const result: CancellationResult = evaluateCancellation(
-    { status: tx.status, actor: input.actor, ...(input.cause ? { cause: input.cause } : {}), quoteLines: lines, paymentCaptured },
-    matrix,
-  );
-  if (!result.allowed) {
-    throw new AppError(422, 'CANCELLATION_NOT_ALLOWED', result.reason ?? 'Pembatalan tidak diizinkan pada tahap ini', {
-      stage: result.stage,
-      reasonCode: result.reasonCode,
-      hint: result.stage && ['AFTER_PURCHASE', 'DURING_TRAVEL', 'AFTER_ARRIVAL'].includes(result.stage) ? 'Gunakan Dispute Center' : undefined,
-    });
-  }
-  if (result.requiresAdminApproval && !(input.actor === 'ADMIN' && input.adminApprovalRecorded)) {
-    throw new AppError(422, 'ADMIN_APPROVAL_REQUIRED', 'Pembatalan pada tahap ini memerlukan persetujuan admin; hubungi Pusat Bantuan', {
-      stage: result.stage,
-    });
-  }
+  const { result, block } = await evaluateCancellationFor(deps, db, tx, input);
+  if (block) throw new AppError(422, block.code, block.message, block.details);
   const target = result.transitionPath[0] as TransactionStatus;
   if (target !== 'CANCELLED' && target !== 'REFUND_PENDING') {
     throw new AppError(422, 'CANCELLATION_NOT_ALLOWED', 'Gunakan Dispute Center untuk transaksi yang sudah terkirim', { path: result.transitionPath });
@@ -240,18 +279,65 @@ export async function cancelInTx(deps: AppDeps, db: TxSql, tx: TxRow, input: Can
   };
 }
 
+function assertCause(cause: string | undefined, tx: TxRow) {
+  if (cause && !/^[A-Z][A-Z0-9_]{2,63}$/.test(cause)) throw Errors.validation({ cause: 'UPPER_SNAKE code' });
+  // PRICE_CHANGE_REJECTED is only reachable through the price-confirmation REJECT action (no-fault refund).
+  if (cause === 'PRICE_CHANGE_REJECTED' && tx.status !== 'PRICE_CHANGE_PENDING') {
+    throw Errors.unprocessable('CAUSE_NOT_APPLICABLE', 'Alasan ini hanya berlaku saat konfirmasi harga');
+  }
+}
+
+/** The cause POST /cancel applies for the caller when none is given (buyer during a price confirmation = rejection). */
+function effectiveCause(cause: string | undefined, tx: TxRow, role: PartyRole): string | undefined {
+  return cause ?? (tx.status === 'PRICE_CHANGE_PENDING' && role === 'BUYER' ? 'PRICE_CHANGE_REJECTED' : undefined);
+}
+
+/**
+ * GET /transactions/{id}/cancel/preview — what POST /cancel would do for the caller right now (matrix outcome,
+ * refund per line, traveler compensation, trust penalty). No writes, no locks.
+ */
+export async function previewCancellation(deps: AppDeps, auth: AuthContext, id: string, q: { cause?: string | undefined }) {
+  const { tx, role } = await requireParty(deps.sql, id, auth);
+  assertCause(q.cause, tx);
+  const cause = effectiveCause(q.cause, tx, role);
+  const { result: r, paymentCaptured, block } = await evaluateCancellationFor(deps, deps.sql, tx, { actor: role, cause });
+  return {
+    transactionId: tx.id,
+    status: tx.status,
+    actor: role,
+    cause: cause ?? null,
+    allowed: r.allowed,
+    stage: r.stage,
+    reasonCode: r.reasonCode,
+    reason: r.reason,
+    paymentCaptured,
+    paidIdr: r.paidIdr,
+    refundIdr: r.refundIdr,
+    refundByLine: { ...r.refundByLine },
+    retainedByLine: { ...r.retainedByLine },
+    travelerCompensationIdr: r.travelerCompensationIdr,
+    platformRetainedIdr: r.platformRetainedIdr,
+    paymentFeeRetainedIdr: r.paymentFeeRetainedIdr,
+    serviceTaxRetainedIdr: r.serviceTaxRetainedIdr,
+    customsRetainedIdr: r.customsRetainedIdr,
+    creditRestoredIdr: r.creditRestoredIdr,
+    discountReversedIdr: r.discountReversedIdr,
+    trustPenalty: r.trustPenalty,
+    penalizedActor: r.penalizedActor,
+    requiresAdminApproval: r.requiresAdminApproval,
+    fsmPermitsActor: r.fsmPermitsActor,
+    transitionPath: [...r.transitionPath],
+    canCancel: block === null,
+    blockedBy: block ? { code: block.code, message: block.message } : null,
+  };
+}
+
 /** POST /transactions/{id}/cancel — actor = caller's role. */
 export async function cancelTransaction(deps: AppDeps, auth: AuthContext, id: string, body: { reason: string; cause?: string | undefined }): Promise<CancelOutcome> {
-  if (body.cause && !/^[A-Z][A-Z0-9_]{2,63}$/.test(body.cause)) throw Errors.validation({ cause: 'UPPER_SNAKE code' });
-  if (body.cause === 'PRICE_CHANGE_REJECTED') {
-    // Only reachable through the price-confirmation REJECT action (no-fault refund).
-    const { tx } = await requireParty(deps.sql, id, auth);
-    if (tx.status !== 'PRICE_CHANGE_PENDING') throw Errors.unprocessable('CAUSE_NOT_APPLICABLE', 'Alasan ini hanya berlaku saat konfirmasi harga');
-  }
+  if (body.cause) assertCause(body.cause, (await requireParty(deps.sql, id, auth)).tx);
   const out = await deps.sql.begin(async (db) => {
     const { tx, role } = await requireParty(db, id, auth, { forUpdate: true });
-    const cause = body.cause ?? (tx.status === 'PRICE_CHANGE_PENDING' && role === 'BUYER' ? 'PRICE_CHANGE_REJECTED' : undefined);
-    return cancelInTx(deps, db, tx, { actor: role, actorId: auth.userId, reason: body.reason, cause });
+    return cancelInTx(deps, db, tx, { actor: role, actorId: auth.userId, reason: body.reason, cause: effectiveCause(body.cause, tx, role) });
   });
   if (out.refunds.length) await processRefunds(deps, { transactionId: id });
   return out;

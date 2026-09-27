@@ -46,7 +46,14 @@ export const KycSubmissionBody = z
       idFront: z.string().uuid().openapi({ description: 'File id (purpose KYC) of the KTP / passport photo page' }),
       idBack: z.string().uuid().optional(),
       selfie: z.string().uuid(),
-      liveness: z.string().uuid().optional(),
+      liveness: z.string().uuid().optional().openapi({ description: 'Legacy single liveness capture (file id, purpose KYC). Prefer livenessFileIds.' }),
+      livenessFileId: z.string().uuid().optional().openapi({ description: 'Alias of `liveness` (legacy single liveness capture)' }),
+      livenessFileIds: z
+        .array(z.string().uuid())
+        .min(1)
+        .max(5)
+        .optional()
+        .openapi({ description: '1–5 liveness captures (file ids, purpose KYC, READY, owned by the caller), in capture order. May be combined with the legacy single field (deduplicated; max 5 in total).' }),
     }),
   })
   .openapi('KycSubmissionInput');

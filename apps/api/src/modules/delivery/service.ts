@@ -45,10 +45,23 @@ export async function liveDelivery(db: Db, transactionId: string, forUpdate = fa
   return rows[0] ? camel<DeliveryRow>(rows[0]) : null;
 }
 
-/** Public delivery view — never exposes PIN/QR hashes or the encrypted address. */
-export function deliveryView(d: DeliveryRow | null, role: 'BUYER' | 'TRAVELER') {
+const PIN_REVEALABLE_TX_STATUSES = ['PURCHASED', 'TRAVELING', 'ARRIVED', 'CUSTOMS_PROCESS', 'READY_FOR_HANDOVER'];
+
+/**
+ * Public delivery view — never exposes PIN/QR hashes or the encrypted address. With `txStatus`, the buyer's view
+ * carries `pinAvailable` (a PIN/QR can be revealed now via GET /delivery/pin).
+ */
+export function deliveryView(d: DeliveryRow | null, role: 'BUYER' | 'TRAVELER', txStatus?: string) {
   if (!d) return null;
+  const pinAvailable =
+    role === 'BUYER' && txStatus !== undefined
+      ? {
+          pinAvailable:
+            d.method === 'MEETUP' && d.status !== 'DELIVERED' && !d.pinLockedAt && PIN_REVEALABLE_TX_STATUSES.includes(txStatus),
+        }
+      : {};
   return {
+    ...pinAvailable,
     id: d.id,
     method: d.method,
     status: d.status,

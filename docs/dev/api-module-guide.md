@@ -33,7 +33,8 @@ test/helpers.ts          createTestContext() — DB terisolasi per file test, pr
 - Status entitas lain (trip, dispute, payment, refund, payout, price confirmation, KYC, quote, fx lock) juga FSM — gunakan fungsi/transisi DB yang tersedia (`transition_trip`, `transition_dispute`, `status_transitions`, trigger FSM) dan engine core untuk guard.
 - Audit: `await audit(tx, {...})` untuk setiap aksi finansial/konfigurasi/role/trust/KYC/admin — **statement terakhir sebelum commit**. Jangan menaruh PII mentah di audit.
 - Notifikasi: jangan kirim email/push langsung dari service. Tulis event outbox (`emitEvent(tx, ...)`) di transaksi yang sama; grup engagement berlangganan event dan mengirim in-app/push/email.
-- Mutasi finansial: `middleware: [requireAuth, requireIdempotency]` + header `Idempotency-Key`.
+- Mutasi finansial: `middleware: [requireAuth, requireIdempotency]` + `request: { headers: IdempotencyHeader }` (dari `lib/openapi.ts`) — wajib, dicek `test/openapi-contract.test.ts`.
+- OpenAPI: `operationId` otomatis `method + PascalCase(path)` (`assignOperationIds` di `app.ts`; boleh diisi eksplisit, harus unik); tanpa emoji di `summary`/`description`. URL file yang dikembalikan selalu absolut (`fileContentUrl(API_BASE_URL, id)`).
 - PII: enkripsi dengan `deps.crypto.encrypt(value, aad)` (AAD = `"<table>.<col>:<id>"`), cari/dedupe dengan `deps.crypto.hashIdentifier(kind, normalized)`.
 - Waktu: selalu `deps.clock.now()` (bukan `new Date()`) agar test deterministik.
 - Konfigurasi bisnis: `await deps.config.get('pricing.platform_fee')` — jangan hard-code angka.
@@ -59,6 +60,7 @@ Base `/v1`. 🔒 = butuh auth, 💰 = butuh `Idempotency-Key`, (Kn) = KYC level 
 - `GET /me` 🔒 · `PATCH /me` 🔒 {displayName, locale, transactionEmail, countryCode} · `POST /me/mode` 🔒 {mode}
 - `POST /me/devices` 🔒 {platform, pushToken, appVersion, fingerprint} · `DELETE /me/devices/{id}` 🔒
 - `GET /me/consents` 🔒 · `POST /me/consents` 🔒 {type, version, granted}
+- `GET /legal/documents` · `GET /legal/documents/{type}` · `GET /consents/requirements` (publik; token opsional)
 - `POST /files/uploads` 🔒 {purpose, contentType, sizeBytes, sha256?} → {fileId, upload{url,method,headers}, expiresAt} · `POST /files/{id}/complete` 🔒 (magic-bytes check, scan, sha256) · `GET /files/{id}/url` 🔒
 - `GET /kyc/status` 🔒 · `POST /kyc/submissions` 🔒 (K2) · `GET/POST /kyc/payout-accounts` 🔒 (K3) · `DELETE /kyc/payout-accounts/{id}` · `POST /kyc/payout-accounts/{id}/default`
 - `POST /privacy/export` 🔒 · `GET /privacy/requests` 🔒 · `POST /privacy/delete-account` 🔒 · `POST /privacy/cancel-deletion` 🔒
@@ -83,13 +85,13 @@ Base `/v1`. 🔒 = butuh auth, 💰 = butuh `Idempotency-Key`, (Kn) = KYC level 
 - dev: `GET /dev/mock-checkout/{ref}` (halaman simulasi) · `POST /dev/mock-checkout/{ref}/pay`
 - Traveler: `POST /transactions/{id}/price-check` · `POST /transactions/{id}/price-confirmations/{pcId}/clarify` · `POST /transactions/{id}/purchase-proof` · `POST /transactions/{id}/status` {to} · `POST /transactions/{id}/customs-declaration` · `POST /transactions/{id}/delivery` · `POST /transactions/{id}/delivery/verify` {pin|qrToken} · `POST /transactions/{id}/delivery/shipped` · `POST /transactions/{id}/delivery/delivered`
 - Buyer: `POST /transactions/{id}/price-confirmations/{pcId}/respond` 💰 {action APPROVE|REJECT|CLARIFY} · `GET /transactions/{id}/delivery/pin` · `POST /transactions/{id}/confirm-receipt` 💰
-- `POST /transactions/{id}/cancel` 🔒💰 {reason, cause?} · `GET /transactions/{id}/refunds` 🔒 · `POST /refunds/{id}/destination` 🔒 (rekening buyer bila kanal tidak mendukung refund)
+- `GET /transactions/{id}/cancel/preview?cause=` 🔒 (tanpa efek samping) · `POST /transactions/{id}/cancel` 🔒💰 {reason, cause?} · `GET /transactions/{id}/refunds` 🔒 · `POST /refunds/{id}/destination` 🔒 (rekening buyer bila kanal tidak mendukung refund)
 - `GET /payouts/mine` 🔒 · `GET /credits/balance` dibaca dari `credit_entries` (endpoint milik engagement)
 - Jobs: kedaluwarsa quote/FX lock/payment, price confirmation, auto-confirm, COMPLETED + payout, proses refund & payout, rekonsiliasi.
 
 ### engagement (notifikasi, chat, rating, dispute, referral & credit, promo sisi user, support/FAQ, analytics, trust score)
 - `GET /notifications` 🔒 · `GET /notifications/unread-count` 🔒 · `POST /notifications/{id}/read` · `POST /notifications/read-all` · `GET/PUT /notifications/preferences` 🔒
-- `GET /conversations` 🔒 · `GET /conversations/{id}/messages` 🔒 · `POST /conversations/{id}/messages` 🔒 · `POST /conversations/{id}/read` 🔒
+- `GET /conversations` 🔒 · `GET /conversations/{id}` 🔒 · `GET /transactions/{id}/conversation` 🔒 (lazy create) · `GET /conversations/{id}/messages` 🔒 · `POST /conversations/{id}/messages` 🔒 · `POST /conversations/{id}/read` 🔒
 - `POST /transactions/{id}/ratings` 🔒 · `GET /users/{id}/rating-summary` (publik)
 - `POST /transactions/{id}/disputes` 🔒 · `GET /disputes/mine` 🔒 · `GET /disputes/{id}` 🔒 · `POST /disputes/{id}/evidence` 🔒 · `POST /disputes/{id}/appeal` 🔒 · `POST /disputes/{id}/withdraw` 🔒
 - `GET /referrals/me` 🔒 · `POST /referrals/apply` 🔒 {code} · `GET /credits` 🔒 (saldo, riwayat, akan kedaluwarsa)

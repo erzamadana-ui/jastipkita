@@ -1,0 +1,47 @@
+{
+  "name": "@jastipkita/admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "JastipKita Admin — static back-office SPA (Vite + React) for the /v1/admin/* API. Not indexed; MFA-gated.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "screenshots": "playwright test e2e/screenshots.spec.ts",
+    "gen:api": "openapi-typescript ../../docs/api/openapi.json -o src/api/schema.d.ts && node scripts/extract-form-schemas.mjs"
+  },
+  "dependencies": {
+    "@jastipkita/core": "workspace:*",
+    "@jastipkita/design-tokens": "workspace:*",
+    "@tanstack/react-query": "^5.104.0",
+    "openapi-fetch": "^0.17.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^22.20.4",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.1.1",
+    "openapi-typescript": "^7.13.0",
+    "qrcode": "^1.5.4",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "engines": {
+    "node": ">=22.22.0"
+  }
+}

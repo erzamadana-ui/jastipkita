@@ -5,6 +5,7 @@
  */
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 import type { AppDeps } from '../../context';
+import { sha256Hex, timingSafeEqualStr } from '../../lib/crypto';
 
 export type OAuthProvider = 'GOOGLE' | 'APPLE';
 
@@ -68,7 +69,23 @@ export class OAuthVerificationError extends Error {
 
 const truthy = (v: unknown) => v === true || v === 'true';
 
-export async function verifyIdToken(deps: AppDeps, provider: OAuthProvider, token: string, nonce?: string): Promise<VerifiedIdentity> {
+export interface NonceCheck {
+  /** Expected `nonce` claim, compared verbatim (Google; Apple clients that send the already-hashed value). */
+  nonce?: string | undefined;
+  /**
+   * Sign in with Apple: the raw nonce the app generated. Apple puts SHA-256(rawNonce) as lowercase hex into the
+   * identity token's `nonce` claim; the claim must be present and equal (constant-time).
+   */
+  rawNonce?: string | undefined;
+}
+
+/** SHA-256 hex (lowercase) of the raw nonce — what Apple embeds in the identity token `nonce` claim. */
+export async function appleNonceClaim(rawNonce: string): Promise<string> {
+  return sha256Hex(rawNonce);
+}
+
+export async function verifyIdToken(deps: AppDeps, provider: OAuthProvider, token: string, check: NonceCheck = {}): Promise<VerifiedIdentity> {
+  const { nonce, rawNonce } = check;
   const audiences = provider === 'GOOGLE' ? deps.env.GOOGLE_CLIENT_IDS : deps.env.APPLE_CLIENT_IDS;
   if (!audiences.length) throw new OAuthVerificationError('NOT_CONFIGURED');
   let payload: JWTPayload;
@@ -93,7 +110,14 @@ export async function verifyIdToken(deps: AppDeps, provider: OAuthProvider, toke
     throw new OAuthVerificationError('SIGNATURE_INVALID');
   }
   if (typeof payload.sub !== 'string' || !payload.sub) throw new OAuthVerificationError('CLAIMS_INVALID');
-  if (nonce !== undefined && payload.nonce !== nonce) throw new OAuthVerificationError('NONCE_MISMATCH');
+  const claim = typeof payload.nonce === 'string' ? payload.nonce : null;
+  if (rawNonce !== undefined) {
+    const expected = await appleNonceClaim(rawNonce);
+    if (claim === null || !timingSafeEqualStr(claim.toLowerCase(), expected)) throw new OAuthVerificationError('NONCE_MISMATCH');
+    if (nonce !== undefined && !timingSafeEqualStr(nonce.toLowerCase(), expected)) throw new OAuthVerificationError('NONCE_MISMATCH');
+  } else if (nonce !== undefined && (claim === null || !timingSafeEqualStr(claim, nonce))) {
+    throw new OAuthVerificationError('NONCE_MISMATCH');
+  }
   const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : null;
   return {
     provider,

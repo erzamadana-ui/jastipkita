@@ -163,7 +163,18 @@ export interface KycCheckResult {
 export interface KycProvider {
   readonly mode: ProviderMode;
   readonly name: string;
-  verify(input: { submissionId: string; documentType: string; documentFileKey: string; selfieFileKey?: string; livenessFileKey?: string }): Promise<KycCheckResult>;
+  /**
+   * `livenessFileKey` = first liveness capture (kept for providers that accept one); `livenessFileKeys` = all captures
+   * (1–5, capture order) for providers that score a multi-frame / active liveness sequence.
+   */
+  verify(input: {
+    submissionId: string;
+    documentType: string;
+    documentFileKey: string;
+    selfieFileKey?: string;
+    livenessFileKey?: string;
+    livenessFileKeys?: string[];
+  }): Promise<KycCheckResult>;
 }
 
 // ------------------------------------------------------------------ insurance

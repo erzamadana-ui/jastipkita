@@ -210,15 +210,6 @@ export const IdParam = z.object({
   id: z.string().uuid().openapi({ param: { name: 'id', in: 'path' }, example: '0b7f6d7e-5a3b-4a51-9c61-6f2d1c0e9a11' }),
 });
 
-/** Local Idempotency-Key header (see transactions/schemas.ts for why lib/openapi's copy is not used). */
-export const AdminIdemHeader = z.object({
-  'idempotency-key': z
-    .string()
-    .min(8)
-    .max(255)
-    .openapi({ param: { name: 'idempotency-key', in: 'header' }, description: 'Idempotency-Key (UUID) — required for financial admin actions', example: '6f1f3b0e-0a0b-4c55-9d8b-2a2f7e5d1c11' }),
-});
-
 export const ReasonBody = z.object({ reason: z.string().trim().min(5).max(1000).openapi({ description: 'Wajib — dicatat di audit log', example: 'Verifikasi manual oleh tim Risk' }) });
 
 export const PageQuery = z.object({

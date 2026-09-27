@@ -20,7 +20,7 @@ import { closePendingOffers, offerEventPayload } from './lifecycle';
 import * as repo from './repository';
 import type { OfferRow, OfferStatus } from './repository';
 
-type Deps = Pick<AppDeps, 'sql' | 'config' | 'clock' | 'logger' | 'providers'>;
+type Deps = Pick<AppDeps, 'sql' | 'config' | 'clock' | 'logger' | 'providers' | 'env'>;
 
 /** Assumption (no business config key yet): offers/invites expire after 48 h (or with the request). */
 export const OFFER_TTL_HOURS = 48;

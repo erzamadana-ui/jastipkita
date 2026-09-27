@@ -13,6 +13,7 @@
 import { appealDeadline, canTransition, disputeFsm, type DisputeResolution, type DisputeStatus } from '@jastipkita/core';
 import type { TxSql } from '../../../db/sql';
 import { AppError, Errors } from '../../../lib/errors';
+import { fileContentUrl } from '../../../lib/openapi';
 import { emitEvent } from '../../../services/outbox';
 import * as drepo from '../../disputes/repository';
 import { transactionBuckets } from '../../ledger/service';
@@ -132,7 +133,8 @@ export async function disputeDetail(ctx: AdminCtx, id: string) {
       party: e.party,
       type: e.type,
       fileId: e.file_id,
-      fileUrlEndpoint: e.file_id ? `/v1/files/${e.file_id}/url` : null,
+      fileUrlEndpoint: e.file_id ? `${ctx.deps.env.API_BASE_URL.replace(/\/+$/, '')}/v1/files/${e.file_id}/url` : null,
+      contentUrl: e.file_id ? fileContentUrl(ctx.deps.env.API_BASE_URL, e.file_id) : null,
       messageId: e.message_id,
       note: e.note,
       submittedBy: e.submitted_by,

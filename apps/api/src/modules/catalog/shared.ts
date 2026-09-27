@@ -122,6 +122,20 @@ export function trustBadge(kycLevel: number): { tier: TrustBadgeTier; label: str
   return { tier: 'BASIC', label: 'Akun Dasar' };
 }
 
+export type TrustTierCode = 'EXCELLENT' | 'GOOD' | 'FAIR' | 'LOW';
+
+/**
+ * Trust Score tier (0–100) shown next to the score on public profiles. Ranges mirror the design tokens
+ * (`packages/design-tokens` trustTier: low 0–39, fair 40–69, good 70–84, excellent 85–100) and the app labels.
+ */
+export function trustTier(score: number): { tier: TrustTierCode; label: string; labelEn: string } {
+  const s = Math.max(0, Math.min(100, Math.round(Number.isFinite(score) ? score : 0)));
+  if (s >= 85) return { tier: 'EXCELLENT', label: 'Sangat tepercaya', labelEn: 'Excellent' };
+  if (s >= 70) return { tier: 'GOOD', label: 'Baik', labelEn: 'Good' };
+  if (s >= 40) return { tier: 'FAIR', label: 'Cukup', labelEn: 'Fair' };
+  return { tier: 'LOW', label: 'Rendah', labelEn: 'Low' };
+}
+
 export function requireAuthContext(c: Context<AppEnv>): AuthContext {
   const a = c.get('auth');
   if (!a) throw Errors.unauthorized();

@@ -1,12 +1,12 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../context';
-import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../lib/openapi';
+import { bearer, createRouter, errorResponses, IdempotencyHeader, jsonBody, jsonContent } from '../../lib/openapi';
 import { getAuth, requireAuth, requireKycLevel } from '../../middleware/auth';
 import { requireIdempotency } from '../../middleware/idempotency';
 import { rateLimit } from '../../middleware/rate-limit';
 import { paymentsForTx, paymentView } from '../payments/repository';
 import { requireParty } from '../transactions/common';
-import { PaymentSchema, QuoteSchema, TxIdParam, IdemHeader } from '../transactions/schemas';
+import { PaymentSchema, QuoteSchema, TxIdParam } from '../transactions/schemas';
 import { checkout, createQuote } from './service';
 
 const QuoteBody = z
@@ -61,10 +61,10 @@ export function registerCheckoutRoutes(app: App) {
       method: 'post',
       path: '/v1/transactions/{id}/checkout',
       tags: ['Checkout'],
-      summary: 'Start SafePay checkout for the active quote (💰 Idempotency-Key, KYC ≥ 2)',
+      summary: 'Start SafePay checkout for the active quote (Idempotency-Key required, KYC ≥ 2)',
       security: bearer,
       middleware: [requireAuth, requireKycLevel(2), requireIdempotency, rateLimit({ name: 'money.checkout', limit: 10, windowSec: 60, key: 'user' })] as const,
-      request: { params: TxIdParam, headers: IdemHeader, ...jsonBody(CheckoutBody) },
+      request: { params: TxIdParam, headers: IdempotencyHeader, ...jsonBody(CheckoutBody) },
       responses: { 201: jsonContent(CheckoutResult, 'Payment created'), ...errorResponses },
     }),
     async (c) => c.json(await checkout(c.get('deps'), getAuth(c), c.req.valid('param').id, c.req.valid('json')), 201),

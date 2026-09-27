@@ -405,12 +405,12 @@ async function verifyEmail(deps: AppDeps, tx: TxSql, ch: repo.OtpRow, email: str
 export async function oauthLogin(
   deps: AppDeps,
   provider: OAuthProvider,
-  input: { token: string; nonce?: string | undefined; fullName?: { givenName?: string | undefined; familyName?: string | undefined } | undefined } & SignupBody,
+  input: { token: string; nonce?: string | undefined; rawNonce?: string | undefined; fullName?: { givenName?: string | undefined; familyName?: string | undefined } | undefined } & SignupBody,
   ctx: AuthCallCtx,
 ): Promise<LoginResult> {
   let id: VerifiedIdentity;
   try {
-    id = await verifyIdToken(deps, provider, input.token, input.nonce);
+    id = await verifyIdToken(deps, provider, input.token, { nonce: input.nonce, rawNonce: provider === 'APPLE' ? input.rawNonce : undefined });
   } catch (err) {
     const reason = err instanceof OAuthVerificationError ? err.reason : 'SIGNATURE_INVALID';
     await securityEvent(deps, deps.sql, { type: 'LOGIN_FAILED', req: ctx.req, meta: { method: provider, reason } });

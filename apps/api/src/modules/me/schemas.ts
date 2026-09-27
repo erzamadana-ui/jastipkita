@@ -85,7 +85,7 @@ export const CONSENT_TYPES = ['TOS', 'PRIVACY', 'KYC', 'MARKETING', 'COOKIES', '
 export const ConsentInputSchema = z
   .object({
     type: z.enum(CONSENT_TYPES),
-    version: z.string().regex(/^[0-9A-Za-z._-]{1,40}$/).openapi({ example: '2026-09' }),
+    version: z.string().regex(/^[0-9A-Za-z._-]{1,40}$/).openapi({ example: '0.1-template', description: 'A version from GET /v1/consents/requirements (acceptedVersions)' }),
     granted: z.boolean().default(true),
   })
   .openapi('ConsentInput');

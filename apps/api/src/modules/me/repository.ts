@@ -128,17 +128,29 @@ export async function unlinkDevice(deps: AppDeps, db: Db, userId: string, device
 
 // ------------------------------------------------------------------ consents
 export const SIGNUP_REQUIRED_CONSENTS = ['TOS', 'PRIVACY'] as const;
+/** Optional at signup (asked, may be declined). */
+export const SIGNUP_OPTIONAL_CONSENTS = ['MARKETING'] as const;
+/** Required before POST /kyc/submissions (explicit, separate consent for identity & biometric data). */
+export const KYC_REQUIRED_CONSENTS = ['KYC'] as const;
+
+/**
+ * Consent versions accepted by POST /me/consents (and signup): every published, non-retired legal document version of
+ * the type, newest first. Empty = the type has no published document yet → any version string is accepted.
+ * GET /v1/consents/requirements exposes exactly this list so clients always submit an accepted version.
+ */
+export async function acceptedConsentVersions(db: Db, type: string): Promise<string[]> {
+  const rows = await db<{ version: string }[]>`
+    SELECT version FROM legal_documents WHERE type = ${type} AND published_at IS NOT NULL AND retired_at IS NULL
+     GROUP BY version ORDER BY max(published_at) DESC, version DESC`;
+  return rows.map((r) => r.version);
+}
 
 /** A version is acceptable if it is a published, non-retired legal document version (when any exist for the type). */
 export async function assertConsentVersion(db: Db, type: string, version: string): Promise<void> {
   if (!['TOS', 'PRIVACY', 'KYC', 'MARKETING', 'COOKIES', 'TRAVELER_AGREEMENT', 'PAYMENT_TERMS'].includes(type)) return;
-  const rows = await db<{ version: string }[]>`
-    SELECT DISTINCT version FROM legal_documents WHERE type = ${type} AND published_at IS NOT NULL AND retired_at IS NULL`;
-  if (rows.length && !rows.some((r) => r.version === version)) {
-    throw Errors.unprocessable('CONSENT_VERSION_INVALID', 'Versi dokumen persetujuan tidak berlaku', {
-      type,
-      allowedVersions: rows.map((r) => r.version),
-    });
+  const allowedVersions = await acceptedConsentVersions(db, type);
+  if (allowedVersions.length && !allowedVersions.includes(version)) {
+    throw Errors.unprocessable('CONSENT_VERSION_INVALID', 'Versi dokumen persetujuan tidak berlaku', { type, allowedVersions });
   }
 }
 

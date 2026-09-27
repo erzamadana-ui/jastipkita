@@ -56,8 +56,8 @@ export function registerAuth(app: App) {
       tags,
       summary: 'Verify a one-time code',
       description:
-        'LOGIN → {tokens, user, isNewUser}; a new account requires `consents` (TOS + PRIVACY). VERIFY_PHONE (🔒) raises the account to level 2; ' +
-        'VERIFY_EMAIL (🔒) sets the transaction e-mail. 5 wrong attempts lock the challenge.',
+        'LOGIN → {tokens, user, isNewUser}; a new account requires `consents` (TOS + PRIVACY). VERIFY_PHONE (bearer auth) raises the account to level 2; ' +
+        'VERIFY_EMAIL (bearer auth) sets the transaction e-mail. 5 wrong attempts lock the challenge.',
       middleware: [rateLimit({ name: 'auth.otp.verify', limit: 60, windowSec: 60, key: 'ip' }), optionalAuth] as const,
       request: jsonBody(OtpVerifyBody),
       responses: { 200: jsonContent(OtpVerifyResponse), ...errorResponses },

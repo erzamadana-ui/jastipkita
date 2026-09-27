@@ -53,6 +53,8 @@ describe('POST /v1/requests/{id}/offers (traveler)', () => {
     // 10% of ≈Rp680k = 68k → within bounds (min 25k)
     expect(ok.body).toMatchObject({ status: 'PENDING', initiatedBy: 'TRAVELER', traveler: { displayName: 'Budi S.' }, allowedActions: ['WITHDRAW'] });
     expect(ok.body.travelerFeeIdr).toBeGreaterThan(60_000);
+    // public profile carries the Trust Score and its tier (contract fix: consistent everywhere)
+    expect(ok.body.traveler).toMatchObject({ trustScore: expect.any(Number), trustTier: { tier: expect.stringMatching(/^(EXCELLENT|GOOD|FAIR|LOW)$/) }, kycLevel: expect.any(Number) });
     expect(new Date(ok.body.expiresAt).getTime() - NOW.getTime()).toBe(48 * 3_600_000);
     const ev = await outboxEvents(t, 'offer.created', ok.body.id);
     expect(ev[0]!.payload).toMatchObject({ offerId: ok.body.id, requestId: request.id, tripId: trip.id, travelerId: traveler.id, initiatedBy: 'TRAVELER' });

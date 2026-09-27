@@ -15,14 +15,17 @@ All endpoints are under `/v1`, JSON camelCase, errors `{ error: { code, message,
 | `POST /auth/otp/request` | public (LOGIN) / 🔒 (VERIFY_*) | `{channel SMS\|WHATSAPP\|EMAIL, destination, purpose LOGIN\|VERIFY_PHONE\|VERIFY_EMAIL, locale?}` → `{challengeId, expiresAt, resendAvailableAt, devCode?}` |
 | `POST /auth/otp/verify` | public / 🔒 | `{challengeId, code, device?, consents?}` → LOGIN `{purpose, verified, tokens, user, isNewUser}`; VERIFY_* `{purpose, verified, user}` |
 | `POST /auth/google` | public | `{idToken, nonce?, device?, consents?}` → `{tokens, user, isNewUser}` |
-| `POST /auth/apple` | public | `{identityToken, nonce?, fullName?, device?, consents?}` → `{tokens, user, isNewUser}` |
+| `POST /auth/apple` | public | `{identityToken, rawNonce?, nonce?, fullName?, device?, consents?}` → `{tokens, user, isNewUser}` (see *Apple nonce*) |
 | `POST /auth/refresh` | public | `{refreshToken}` → `{tokens}` (rotation) |
 | `POST /auth/logout` · `GET /auth/sessions` · `DELETE /auth/sessions/{id}` | 🔒 | |
 | `POST /auth/mfa/totp/enroll` | 🔒 admin (any role) | secret returned once |
 | `POST /auth/mfa/totp/confirm` · `POST /auth/mfa/verify` | 🔒 | step-up token with `mfa_at` |
 | `GET /me` · `PATCH /me` · `POST /me/mode` | 🔒 | |
 | `GET/POST /me/devices` · `DELETE /me/devices/{id}` | 🔒 | |
-| `GET/POST /me/consents` | 🔒 | append-only |
+| `GET/POST /me/consents` | 🔒 | append-only; `version` must be one of `GET /consents/requirements` `acceptedVersions` (422 `CONSENT_VERSION_INVALID {allowedVersions}`) |
+| `GET /legal/documents?locale&type` | public | current published version per type & locale: `{type, version, locale, title, summary, effectiveAt, publishedAt, slug, url, contentUrl, isTemplate, consentType}` (`Cache-Control: public, max-age=300`) |
+| `GET /legal/documents/{type}?locale&version` | public | `{type}` = code (`TOS`) or slug (`terms-of-service`); markdown `bodyMd`, `retiredAt`, `requestedLocale` (falls back to `id`); `404 LEGAL_DOCUMENT_NOT_FOUND` |
+| `GET /consents/requirements?locale` | public / 🔒 optional | `{signup: {required: [TOS, PRIVACY], optional: [MARKETING]}, kyc: {required: [KYC]}}` — each `{type, version, acceptedVersions, versionEnforced, title, summary, url, documentUrl}`; with a token also `granted, grantedVersion, upToDate` and `satisfied` per stage |
 | `POST /files/uploads` · `POST /files/{id}/complete` · `GET /files/{id}` · `GET /files/{id}/url` · `GET /files/{id}/content` | 🔒 | |
 | `GET /kyc/status` | 🔒 | |
 | `POST /kyc/submissions` | 🔒 K2 | |
@@ -86,7 +89,11 @@ sequenceDiagram
 * Google: JWKS `https://www.googleapis.com/oauth2/v3/certs`, `iss` ∈ {`accounts.google.com`, `https://accounts.google.com`},
   `aud` ∈ `GOOGLE_CLIENT_IDS`, **`email_verified` required** (`401 OAUTH_EMAIL_UNVERIFIED`).
 * Apple: JWKS `https://appleid.apple.com/auth/keys`, `iss = https://appleid.apple.com`, `aud` ∈ `APPLE_CLIENT_IDS`.
-  Private-relay e-mails are accepted. `fullName` is sent by Apple only on the first authorization and is stored
+  Private-relay e-mails are accepted.
+* **Apple nonce** (replay protection): the app generates a random `rawNonce` (≥ 16 chars), passes `SHA-256(rawNonce)` as lowercase hex
+  to `ASAuthorizationAppleIDRequest.nonce`, and sends `rawNonce` to `POST /auth/apple`. The API requires the identity token's `nonce`
+  claim to equal `sha256hex(rawNonce)` (constant-time) — missing/mismatching claim → `401 OAUTH_TOKEN_INVALID {reason: NONCE_MISMATCH}`.
+  The legacy `nonce` field (compared verbatim with the claim) still works; when both are sent they must agree. `fullName` is sent by Apple only on the first authorization and is stored
   only then (or if the stored name is empty).
 * Failures → `401 OAUTH_TOKEN_INVALID {reason: AUDIENCE_MISMATCH | TOKEN_EXPIRED | ISSUER_MISMATCH | SIGNATURE_INVALID | NONCE_MISMATCH | CLAIMS_INVALID}`
   + `LOGIN_FAILED` security event; JWKS outage → `503 OAUTH_UNAVAILABLE`; no client ids configured → `503 OAUTH_NOT_CONFIGURED`.
@@ -105,6 +112,16 @@ signups from the IP (HMAC) in 24 h (`USER_REGISTERED` security events), and re-r
 deleted account (`email_suppressions`) → `assessRisk('USER', …)` from `@jastipkita/core` with `risk.thresholds`
 → `recordRiskAssessment` (risk_assessments + risk_reviews for non-ALLOW). **BLOCK** → `403 SIGNUP_BLOCKED`
 (assessment recorded against a throwaway subject id, `SIGNUP_BLOCKED` HIGH event); REVIEW/HOLD are allowed and recorded.
+
+### Legal documents & consent versions
+
+`legal_documents` holds the versioned texts (published = immutable evidence). `db/seeds/0200_legal_documents.sql` is **generated** from
+`docs/legal/*.md` by `apps/api/scripts/gen-legal-seed.ts` (`--check` in CI; `legal.test.ts` fails when stale): 10 documents (incl.
+`COMMUNITY_GUIDELINES`, migration 0070), version `0.1-template`, locale `id`, published `2026-09-27T00:00:00Z`, TEMPLATE banner kept verbatim.
+Consent validation (`me/repository acceptedConsentVersions`) accepts every published, non-retired version of the type — the same list
+`GET /consents/requirements` returns — so an app that shows `version` and submits it never hits `CONSENT_VERSION_INVALID`.
+Because the templates are published, **only `0.1-template` is accepted** for TOS/PRIVACY/KYC/MARKETING/COOKIES/TRAVELER_AGREEMENT/PAYMENT_TERMS
+until Compliance publishes a reviewed version (admin `POST /v1/admin/legal-documents` → publish; `retirePrevious` retires the template).
 
 ## 3. Sessions & MFA
 
@@ -148,7 +165,9 @@ Security events written: `LOGIN_SUCCESS`, `LOGIN_FAILED`, `USER_REGISTERED`, `SI
    Envelope format: `"JKE1" | u16 len | wrappedDEK | iv | ciphertext‖tag`; per-file random DEK, wrapped by the
    active KEK (`deps.crypto`, key id recorded → rotation re-wraps only the DEK); AAD `files.object:<fileId>`.
 4. Download: `GET /files/{id}/url` → presigned GET (5 min) for plain files; for encrypted files
-   `{url: /v1/files/{id}/content, requiresAuth: true}` — streamed & decrypted by the API (`no-store`).
+   `{url: ${API_BASE_URL}/v1/files/{id}/content, requiresAuth: true}` — streamed & decrypted by the API (`no-store`).
+   **Every file URL the API returns is absolute** (`url`, `contentUrl`, `avatarUrl`, `imageUrl`: presigned storage URLs or
+   `${API_BASE_URL}/v1/files/{id}/content`, which needs the bearer token and applies the access rules below).
 
 Access: KYC → permission `kyc.review` only (not the owner; views audited `kyc.document_viewed`); TRIP_DOC → owner
 or `trips.verify`; EXPORT → owner only; AVATAR → any signed-in user; RECEIPT/PRODUCT_PHOTO/DELIVERY_PROOF/CHAT/EVIDENCE
@@ -183,7 +202,10 @@ and audits. It runs inline (phone verify, KYC approval, payout verification) and
 `trip.verified`, `trip.status_changed` (to = VERIFIED) and `payout_account.verified`.
 
 Submission (`POST /kyc/submissions`, K2, KYC consent required): `{idType KTP|PASSPORT, idNumber, fullName,
-dateOfBirth, nationality?, documents:{idFront, idBack?, selfie, liveness?}}` (file ids, purpose KYC, READY).
+dateOfBirth, nationality?, documents:{idFront, idBack?, selfie, livenessFileIds?: string[1..5], liveness? | livenessFileId? (legacy single)}}`
+(file ids, purpose KYC, READY). Every liveness capture is validated like the other documents (owner, purpose KYC, scan CLEAN, encrypted →
+`422 KYC_DOCUMENTS_INVALID {missing}`); legacy + array are merged and de-duplicated (max 5 in total). Each capture becomes a `LIVENESS`
+`kyc_documents` row and the provider receives all of them (`livenessFileKeys`, capture order; `livenessFileKey` = the first).
 ID number / name / DOB → AES-GCM (AAD `identity_records.<col>:<id>`); `id_number_hash = HMAC("kyc_id:<type>:<nat>:<number>")`
 (UNIQUE — one document = one account). A hash owned by another account → `409 IDENTITY_ALREADY_REGISTERED`,
 risk assessment (`sharedIdentityHashAccounts` → REVIEW) and `KYC_DUPLICATE_IDENTITY` (HIGH); no submission row.

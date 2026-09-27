@@ -87,7 +87,10 @@ export async function insertMessage(
   return row!;
 }
 
-export function listConversations(db: Db, userId: string, opts: { cursor: Cursor | null; limit: number }) {
+export type ConversationListRow = Awaited<ReturnType<typeof listConversations>>[number];
+
+/** Conversations of `userId` (participant), newest activity first; `onlyId` narrows to one conversation. */
+export function listConversations(db: Db, userId: string, opts: { cursor: Cursor | null; limit: number; onlyId?: string }) {
   return db<
     (ConversationRow & {
       sort_at: string;
@@ -126,6 +129,7 @@ export function listConversations(db: Db, userId: string, opts: { cursor: Cursor
         SELECT id, type, body, meta, moderation_status, sender_id, created_at FROM messages
          WHERE conversation_id = c.id AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1) lm ON true
      WHERE (c.buyer_id = ${userId} OR c.traveler_id = ${userId})
+       ${opts.onlyId ? db`AND c.id = ${opts.onlyId}::uuid` : db``}
        ${opts.cursor ? db`AND (coalesce(c.last_message_at, c.created_at), c.id) < (${opts.cursor.t}::timestamptz, ${opts.cursor.id}::uuid)` : db``}
      ORDER BY coalesce(c.last_message_at, c.created_at) DESC, c.id DESC
      LIMIT ${opts.limit}`;

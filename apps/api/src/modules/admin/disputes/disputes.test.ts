@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestContext, type TestContext } from '../../../../test/helpers';
-import { call, type Parties, txStatus } from '../../transactions/test-fixtures';
+import { call, createFile, type Parties, txStatus } from '../../transactions/test-fixtures';
 import { type Admin, as, auditRows, createAdmin, idem, ledgerCheck, purchasedTx } from '../test-support';
 
 let t: TestContext;
@@ -34,7 +34,10 @@ const resolve = (who: Admin, id: string, body: Record<string, unknown>, headers:
 
 describe('dispute queue & review', () => {
   it('permission: MARKETING / SUPPORT have no disputes.manage; queue shows SLA state; detail shows escrow + allowed actions', async () => {
-    const { disputeId, tx } = await disputed();
+    const { disputeId, tx, p } = await disputed();
+    const photo = await createFile(t, p.buyer.id, 'EVIDENCE');
+    const addEv = await call(t, p.buyer, 'POST', `/v1/disputes/${disputeId}/evidence`, { type: 'PHOTO', fileId: photo, note: 'Foto figur patah' });
+    expect(addEv.status, JSON.stringify(addEv.body)).toBe(201);
     expect((await as(t, marketing, 'GET', '/v1/admin/disputes')).status).toBe(403);
     expect((await as(t, support, 'GET', '/v1/admin/disputes')).status).toBe(403);
     const q = await as(t, ops, 'GET', '/v1/admin/disputes?assignee=none');
@@ -44,6 +47,11 @@ describe('dispute queue & review', () => {
     const detail = await as(t, ops, 'GET', `/v1/admin/disputes/${disputeId}`);
     expect(detail.body).toMatchObject({ transaction: { id: tx.id, preDisputeStatus: 'PURCHASED' }, allowedActions: ['REQUEST_EVIDENCE', 'START_REVIEW', 'CLOSE'] });
     expect(detail.body.transaction.escrowHeldIdr).toBeGreaterThan(0);
+    // file URLs are absolute (contract fix)
+    expect(detail.body.evidence.find((e: any) => e.fileId === photo)).toMatchObject({
+      fileUrlEndpoint: `http://api.test/v1/files/${photo}/url`,
+      contentUrl: `http://api.test/v1/files/${photo}/content`,
+    });
 
     const assign = await as(t, ops, 'POST', `/v1/admin/disputes/${disputeId}/assign`, { assigneeId: support.id });
     expect(assign.body.error.code).toBe('ASSIGNEE_NOT_ALLOWED');

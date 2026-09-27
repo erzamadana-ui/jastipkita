@@ -28,7 +28,7 @@ describe('OTP login / sign-up', () => {
     const ver = await otpVerify(t, {
       challengeId: req.body.challengeId,
       code: req.body.devCode,
-      consents: [...CONSENTS, { type: 'MARKETING', version: '2026-09', granted: false }],
+      consents: [...CONSENTS, { type: 'MARKETING', version: '0.1-template', granted: false }],
       device: { platform: 'ANDROID', fingerprint: 'fp-android-0001-abcdef', appVersion: '1.0.0' },
     });
     expect(ver.status).toBe(200);

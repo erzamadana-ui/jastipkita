@@ -11,10 +11,11 @@ All endpoints are under `/v1`, JSON camelCase, IDR integers, ISO-8601 UTC. 🔒 
 
 | Endpoint | Who | Notes |
 |---|---|---|
-| `GET /transactions?role=buyer\|traveler&status=A,B&limit&cursor` | 🔒 party | `{data[], nextCursor}`; traveler rows carry `purchaseGate` |
-| `GET /transactions/{id}` | 🔒 party | item, public profiles, active quote + 11 lines, payments (checkout URL buyer-only), price confirmations, purchase proof (no fraud data), customs declaration, delivery (**never the PIN**), refunds, payout (traveler), `purchaseGate` (traveler), `allowedActions` |
+| `GET /transactions?role=buyer\|traveler&status=A,B&limit&cursor` | 🔒 party | `{data: TransactionSummary[], nextCursor}` — number, status, `item {productName, imageUrl, …}`, `counterparty {id, role, displayName, avatarUrl}`, `totalIdr`, `updatedAt`; traveler rows carry `purchaseGate` |
+| `GET /transactions/{id}` | 🔒 party | `TransactionDetail` (fully typed, see §1.1): item, public profiles, trip route, `purchaseCeilingIdr`, active quote + 11 lines + `paymentOptions`, payments (checkout URL buyer-only), price confirmations, purchase proof (+ its files, no fraud data), customs declaration, delivery (**never the PIN**; buyer `pinAvailable`), refunds, payout (traveler), `conversationId`, `purchaseGate` (traveler), `allowedActions` |
+| `GET /transactions/{id}/cancel/preview?cause=` | 🔒 party | `CancellationPreview`: exactly what `POST /cancel` would do for the caller now (`evaluateCancellation` + the same guards) — `allowed`, `stage`, `reason`, `refundIdr`, `refundByLine`, `retainedByLine`, `travelerCompensationIdr`, `trustPenalty`, `requiresAdminApproval`, `canCancel`, `blockedBy {code, message}`. No writes, no locks |
 | `GET /transactions/{id}/timeline` | 🔒 party | `transaction_events` (actor type, reason, safe meta) |
-| `POST /transactions/{id}/quote` | 🔒 buyer, MATCHED | `{channel?: VA\|QRIS\|EWALLET\|CARD, promoCode?, useCredit?}` → `201 Quote` (lines, `estimateBadges`, `fx{spotRate, markupBps, lockedRate, lockedAt, expiresAt}`, customs, restricted, limits, promotion, credit `withdrawable:false`) |
+| `POST /transactions/{id}/quote` | 🔒 buyer, MATCHED | `{channel?: VA\|QRIS\|EWALLET\|CARD, promoCode?, useCredit?}` → `201 Quote` (lines, `paymentOptions[]`, `estimateBadges`, `fx{spotRate, markupBps, lockedRate, lockedAt, expiresAt}`, customs, restricted, limits, promotion, credit `withdrawable:false`) |
 | `POST /transactions/{id}/checkout` | 🔒💰 K2 buyer | `{quoteId, channel?, acknowledgeRestricted?}` → `201 {paymentId, checkoutUrl, expiresAt, amountIdr, provider, providerEnv, sandbox}` |
 | `GET /transactions/{id}/payment` | 🔒 party | `{data: Payment[], current}` |
 | `POST /webhooks/payments/{xendit\|mock}` | provider | raw JSON; `x-callback-token`; `200 {status: PROCESSED\|DUPLICATE\|IGNORED, eventId, outcome}`, `401` unverified, `500` retry |
@@ -31,10 +32,36 @@ All endpoints are under `/v1`, JSON camelCase, IDR integers, ISO-8601 UTC. 🔒 
 | `POST /transactions/{id}/delivery/shipped` | 🔒 traveler | `{trackingNumber, courierName?}` → OUT_FOR_DELIVERY (idempotent) |
 | `POST /transactions/{id}/delivery/delivered` | 🔒 traveler | `{proofFileIds[]}` → DELIVERED (idempotent) |
 | `POST /transactions/{id}/confirm-receipt` | 🔒💰 buyer | DELIVERED → BUYER_CONFIRMED → COMPLETED (release + payout); idempotent |
-| `POST /transactions/{id}/cancel` | 🔒💰 party | `{reason, cause?}` → `{status, cancellation{stage, refundIdr, travelerCompensationIdr, …, trustPenalty}, refunds[]}`; `422 CANCELLATION_NOT_ALLOWED` (e.g. "Barang sudah dibeli; gunakan Dispute Center"), `422 ADMIN_APPROVAL_REQUIRED` |
+| `POST /transactions/{id}/cancel` | 🔒💰 party | preview first with `GET …/cancel/preview`; `{reason, cause?}` → `{status, cancellation{stage, refundIdr, travelerCompensationIdr, …, trustPenalty}, refunds[]}`; `422 CANCELLATION_NOT_ALLOWED` (e.g. "Barang sudah dibeli; gunakan Dispute Center"), `422 ADMIN_APPROVAL_REQUIRED` |
 | `GET /transactions/{id}/refunds` | 🔒 party | method, status, `destinationRequired`, masked destination |
 | `POST /refunds/{id}/destination` | 🔒 buyer of the refund | `{bankCode, accountNumber, accountHolderName}` (provider-validated, encrypted) → `{accountMask: "****1234", validationStatus}` |
 | `GET /payouts/mine` | 🔒 traveler | `{data[], nextCursor, summary{scheduledIdr, paidIdr, heldIdr, processingIdr, failedIdr}}` — destination masked |
+
+### 1.1 Transaction detail contract (`TransactionDetail`)
+
+| Field | Content |
+|---|---|
+| `item` | `productName, productUrl, merchantName, merchantCountry, categoryCode, hsCode, variant, quantity, unitPriceMinor, currency` (+ deprecated alias `priceCurrency`), `imageUrl` (first request image, absolute), `maxBudgetIdr` (buyer only) |
+| `buyer` / `traveler` | `TransactionParty`: `id, displayName` (**first name + last initial**), `avatarUrl` (absolute, or null), `trustScore` 0–100, `trustTier {tier: EXCELLENT\|GOOD\|FAIR\|LOW, label, labelEn}`, `trustBadge`, `kycLevel`, `identityVerified`, `ratingSummary {asTraveler, asBuyer: {average, count}}`, `memberSince` (+ deprecated `rating`) |
+| `trip` | `TripRoute`: `id, status, originCountry, originCity, destinationCountry, destinationCity, departureDate, arrivalDate` |
+| `purchaseCeilingIdr` · `autoConfirmAt` · `deliveryMethod` | ceiling set at PURCHASE_APPROVED (deprecated object form `purchaseCeiling {minor, idr}` kept) |
+| `quote` | `Quote` incl. 11 `lines` and `paymentOptions` |
+| `priceConfirmations[]` | typed `PriceConfirmation` (original/actual minor + IDR, supplemental, window, round) |
+| `purchaseProof` | `PurchaseProof`: merchant, price, time, file ids + `files[] {id, kind RECEIPT\|PRODUCT_PHOTO\|VIDEO, mime, sizeBytes, contentUrl}` — only the files the proof references; serial number for the buyer once DELIVERED; never fraud data |
+| `delivery` | `Delivery`: method/status/courier/tracking/meetup/proof ids; `pin {locked, attemptsRemaining, revealEndpoint (buyer)}`; buyer only: `pinAvailable` (a PIN/QR can be revealed now). Never the PIN, QR token or hashes |
+| `payout` | traveler only (null for the buyer): `id, number, status, amountIdr, netIdr, holdReason, scheduledAt, paidAt` |
+| `conversationId` | chat of this transaction (null until created; `GET /transactions/{id}/conversation` creates it lazily) |
+| `purchaseGate` · `allowedActions` | unchanged |
+
+### 1.2 Payment options in the quote
+
+`paymentOptions[]` = one entry per channel configured in `pricing.payment_fees` (display order VA, QRIS, EWALLET, CARD, …):
+`{channel, label, feeIdr, totalIdr, bearer, refundable, minAmountIdr, maxAmountIdr, available, unavailableReason, selected}`.
+The payment fee is the last component of the total, so every option is `(TOTAL − PAYMENT_FEE of the priced channel) + computePaymentFee(channel)` —
+identical to re-quoting with that channel. `refundable: false` for VA and retail outlets (Xendit cannot refund them; refunds are paid out to a
+buyer bank account, `destinationRequired`), `maxAmountIdr` = per-transaction channel cap (QRIS Rp10.000.000, VA Rp50.000.000);
+`available: false` + `unavailableReason ABOVE_CHANNEL_MAX|BELOW_CHANNEL_MIN` when the total is outside it. Checkout still requires a quote priced
+for the chosen channel (`CHANNEL_MISMATCH` otherwise) — re-quote with `channel` to switch. Quotes created before this change return `[]`.
 
 `allowedActions` values: `QUOTE, CHECKOUT, PAY, CANCEL, PRICE_CHECK, RESPOND_PRICE_CONFIRMATION, REJECT_PRICE_CONFIRMATION,
 CLARIFY_PRICE, SUBMIT_PURCHASE_PROOF, UPDATE_STATUS:<to>, SET_DELIVERY, CUSTOMS_DECLARATION, VIEW_HANDOVER_PIN,

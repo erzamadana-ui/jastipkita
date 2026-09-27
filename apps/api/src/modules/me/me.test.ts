@@ -111,9 +111,9 @@ describe('/me', () => {
     const g = await t.request('GET', '/v1/me/consents', { token });
     expect(g.body.requiredAtSignup).toEqual(['TOS', 'PRIVACY']);
     expect(g.body.current.map((c: any) => c.type)).toEqual(['PRIVACY', 'TOS']);
-    expect((await t.request('POST', '/v1/me/consents', { token, body: { type: 'MARKETING', version: '2026-09', granted: true } })).status).toBe(201);
+    expect((await t.request('POST', '/v1/me/consents', { token, body: { type: 'MARKETING', version: '0.1-template', granted: true } })).status).toBe(201);
     t.clock.advance(1000);
-    expect((await t.request('POST', '/v1/me/consents', { token, body: { type: 'MARKETING', version: '2026-09', granted: false } })).status).toBe(201);
+    expect((await t.request('POST', '/v1/me/consents', { token, body: { type: 'MARKETING', version: '0.1-template', granted: false } })).status).toBe(201);
     const after = await t.request('GET', '/v1/me/consents', { token });
     expect(after.body.current.find((c: any) => c.type === 'MARKETING').granted).toBe(false);
     expect(after.body.history.filter((c: any) => c.type === 'MARKETING')).toHaveLength(2);

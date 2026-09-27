@@ -55,7 +55,7 @@ export function registerMe(app: App) {
       method: 'post',
       path: '/v1/me/mode',
       tags,
-      summary: 'Switch active mode (BUYER ↔ TRAVELER)',
+      summary: 'Switch active mode (BUYER or TRAVELER)',
       description: 'Always allowed; traveler capabilities (offers, trips) are gated by KYC level on those endpoints.',
       security: bearer,
       middleware: [requireAuth] as const,

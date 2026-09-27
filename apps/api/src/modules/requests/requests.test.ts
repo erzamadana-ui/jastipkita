@@ -37,8 +37,9 @@ describe('POST /v1/requests', () => {
     });
     expect(res.body.itemValueIdr).toBeGreaterThan(600_000); // ¥5.980 × ~113.7
     expect(res.body.images).toEqual([
-      { fileId: photo, url: null },
-      { fileId: null, url: 'https://image.uniqlo.com/x.jpg' },
+      // file-backed images get absolute API URLs (contract fix: every returned file URL is absolute)
+      { fileId: photo, url: `http://api.test/v1/files/${photo}/content`, contentUrl: `http://api.test/v1/files/${photo}/content` },
+      { fileId: null, url: 'https://image.uniqlo.com/x.jpg', contentUrl: null },
     ]);
     const ev = await outboxEvents(t, 'request.created', res.body.id);
     expect(ev[0]!.payload).toMatchObject({ requestId: res.body.id, buyerId: buyer.id, status: 'DRAFT' });

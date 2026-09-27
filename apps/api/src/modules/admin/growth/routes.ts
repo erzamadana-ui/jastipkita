@@ -1,7 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../../context';
-import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../../lib/openapi';
-import { AdminIdemHeader, AdminLoose, AdminPage, adminCtx, adminGuard, IdParam, ReasonBody, StatusCsvQuery } from '../common';
+import { bearer, createRouter, errorResponses, IdempotencyHeader, jsonBody, jsonContent } from '../../../lib/openapi';
+import { AdminLoose, AdminPage, adminCtx, adminGuard, IdParam, ReasonBody, StatusCsvQuery } from '../common';
 import * as svc from './service';
 
 const promoTags = ['Admin · Promotions'];
@@ -96,7 +96,7 @@ export function registerAdminGrowth(app: App) {
     async (c) => c.json(await svc.holdReferral(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').reason), 200),
   );
   r.openapi(
-    createRoute({ method: 'post', path: '/v1/admin/referrals/{id}/release', tags: refTags, security: bearer, summary: 'Release a QUALIFIED reward → REWARDED + credits (after RISK cleared the review)', middleware: adminGuard(['referrals.manage'], { mfa: true, idempotent: true }), request: { params: IdParam, headers: AdminIdemHeader, ...jsonBody(z.object({ note: z.string().trim().min(5).max(1000) })) }, responses: { 200: jsonContent(AdminLoose), ...errorResponses } }),
+    createRoute({ method: 'post', path: '/v1/admin/referrals/{id}/release', tags: refTags, security: bearer, summary: 'Release a QUALIFIED reward → REWARDED + credits (after RISK cleared the review)', middleware: adminGuard(['referrals.manage'], { mfa: true, idempotent: true }), request: { params: IdParam, headers: IdempotencyHeader, ...jsonBody(z.object({ note: z.string().trim().min(5).max(1000) })) }, responses: { 200: jsonContent(AdminLoose), ...errorResponses } }),
     async (c) => c.json(await svc.releaseReferral(await adminCtx(c), c.req.valid('param').id, c.req.valid('json').note), 200),
   );
   app.route('/', r);

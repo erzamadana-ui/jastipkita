@@ -85,6 +85,14 @@ any non-terminal ──cancel──▶ CANCELLED   (pending offers WITHDRAWN; op
   are locked (`REQUEST_HAS_PENDING_OFFERS`). Optional optimistic lock via `version`.
 - Traveler/listing view never includes `notes`, buyer e-mail/phone/name — only the buyer's public profile (first name +
   initial, badge, rating as buyer, completed count).
+- `images[]` = `{fileId, url, contentUrl}`: `url` is always absolute (merchant image URL, or `${API_BASE_URL}/v1/files/{id}/content`
+  for uploaded photos); `contentUrl` is the API URL for uploaded photos (null for merchant URLs).
+
+### Public profile (`PublicProfile`) — discovery, recommendations, offers, request listings
+`{id, displayName (first name + last initial), trustBadge {tier, label} (from the KYC level), trustScore (0–100), trustTier
+{tier EXCELLENT|GOOD|FAIR|LOW, label, labelEn}, kycLevel, identityVerified, rating {average, count} (role shown), completedTransactions}`.
+Tier bands mirror the design tokens: EXCELLENT 85–100 "Sangat tepercaya", GOOD 70–84 "Baik", FAIR 40–69 "Cukup", LOW 0–39 "Rendah".
+The same score/tier appear in the transaction parties (`TransactionParty`, money API).
 
 ### 2.3 Offers → transaction start (§4 REQUEST_CREATED → MATCHED)
 - Traveler offer (K3): own ACTIVE, not departed trip; same origin/destination country; trip arrives by `neededBy`; category not

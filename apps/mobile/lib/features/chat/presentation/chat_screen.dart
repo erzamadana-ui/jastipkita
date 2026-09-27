@@ -358,7 +358,6 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final jk = context.jk;
     final l10n = context.l10n;
-    final locale = context.localeCode;
     final m = message;
     final at = m.createdAt;
     if (m.isSystem) {

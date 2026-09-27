@@ -3,15 +3,17 @@
  */
 import {
   buildQuote,
+  computePaymentFee,
   computeRateFee,
   convert,
   invertRate,
+  type PaymentFeesConfig,
   type Quote,
   type RiskLevel,
 } from '@jastipkita/core';
 import type { AppDeps, AuthContext } from '../../context';
 import { AppError, Errors } from '../../lib/errors';
-import { CHANNEL_LIMITS } from '../../providers/payment/channels';
+import { CHANNEL_LIMITS, PAYMENT_CHANNELS, channelSupportsProviderRefund } from '../../providers/payment/channels';
 import { audit } from '../../services/audit';
 import { emitEvent } from '../../services/outbox';
 import { createPayment } from '../payments/service';
@@ -26,7 +28,7 @@ import {
   findSpotRate,
   lockFx,
 } from './adapters';
-import { loadQuote, loadRequest, loadTrip, type LoadedQuote, type QuoteMeta } from './repository';
+import { loadQuote, loadRequest, loadTrip, type LoadedQuote, type PaymentOptionView, type QuoteMeta } from './repository';
 
 export interface QuoteRequest {
   channel?: string | undefined;
@@ -45,6 +47,40 @@ const PRICING_KEYS = [
   'fx.lock',
   'limits.transaction',
 ] as const;
+
+/**
+ * Fee & total for every configured payment channel, from the same core engine as the PAYMENT_FEE line: the fee is
+ * the last component of the total, so each option = (TOTAL − PAYMENT_FEE of the priced channel) + that channel's fee.
+ * `refundable` follows the provider capability (VA / retail outlets cannot be refunded by Xendit — refunds go out
+ * as a payout to the buyer's bank account); limits are the per-transaction channel caps (QRIS Rp10.000.000).
+ */
+export function paymentOptionsFor(payableBeforeFeeIdr: number, fees: PaymentFeesConfig, selectedChannel: string): PaymentOptionView[] {
+  // stable display order (jsonb does not keep key order): known channel groups first, then the rest by name
+  const rank = (c: string) => {
+    const i = (PAYMENT_CHANNELS as readonly string[]).indexOf(c);
+    return i === -1 ? PAYMENT_CHANNELS.length : i;
+  };
+  const channels = Object.entries(fees.channels).sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
+  return channels.map(([channel, cfg]) => {
+    const fee = computePaymentFee(payableBeforeFeeIdr, cfg);
+    const totalIdr = payableBeforeFeeIdr + fee.chargedIdr;
+    const lim = CHANNEL_LIMITS[channel];
+    const unavailableReason = lim && totalIdr > lim.maxIdr ? 'ABOVE_CHANNEL_MAX' : lim && totalIdr < lim.minIdr ? 'BELOW_CHANNEL_MIN' : null;
+    return {
+      channel,
+      label: cfg.label,
+      feeIdr: fee.chargedIdr,
+      totalIdr,
+      bearer: cfg.bearer,
+      refundable: channelSupportsProviderRefund(channel),
+      minAmountIdr: lim?.minIdr ?? null,
+      maxAmountIdr: lim?.maxIdr ?? null,
+      available: unavailableReason === null,
+      unavailableReason,
+      selected: channel === selectedChannel,
+    };
+  });
+}
 
 function usdValueString(itemIdrAtSpot: number, usdToIdr: string | null): string | null {
   if (!usdToIdr) return null;
@@ -204,6 +240,7 @@ export async function createQuote(deps: AppDeps, auth: AuthContext, id: string, 
       : null,
     adjustments: quote.adjustments.map((a) => ({ ...a })),
     customsWarnings: customs.warnings.map((w) => ({ ...w })),
+    paymentOptions: await withCore(() => paymentOptionsFor(quote.totalIdr - quote.amounts.PAYMENT_FEE, cfg['pricing.payment_fees'], quote.paymentChannel)),
   };
   const lockCfg = await deps.config.get('fx.lock');
   const expiresAt = fx ? fx.lock.expiresAt : new Date(now.getTime() + lockCfg.lockMinutes * 60_000);
@@ -289,6 +326,7 @@ export function quoteView(q: LoadedQuote) {
     currency: 'IDR' as const,
     totalIdr: q.quote.totalIdr,
     paymentChannel: m.paymentChannel,
+    paymentOptions: (m.paymentOptions ?? []).map((o) => ({ ...o, selected: o.channel === m.paymentChannel })),
     item: { currency: m.itemCurrency, unitPriceMinor: m.unitPriceMinor, quantity: m.quantity, totalMinor: m.itemTotalMinor },
     lines: q.lines.map((l) => ({
       type: l.lineType,

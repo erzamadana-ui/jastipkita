@@ -178,7 +178,7 @@ describe('messages', () => {
     const pending = await insertFile(buyer.id, 'CHAT', 'image/png', 'PENDING');
     let res = await t.request('POST', `/v1/conversations/${convId}/messages`, { token: buyer.accessToken, body: { type: 'IMAGE', fileIds: [mine], body: 'Warna ini ya' } });
     expect(res.status).toBe(201);
-    expect(res.body.attachments).toEqual([{ fileId: mine, mime: 'image/jpeg' }]);
+    expect(res.body.attachments).toEqual([{ fileId: mine, mime: 'image/jpeg', contentUrl: `http://api.test/v1/files/${mine}/content` }]);
     res = await t.request('POST', `/v1/conversations/${convId}/messages`, { token: buyer.accessToken, body: { type: 'IMAGE', fileIds: [others] } });
     expect(res.status).toBe(422);
     expect(res.body.error.code).toBe('FILE_NOT_ALLOWED');

@@ -1,7 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../../context';
-import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../../lib/openapi';
-import { AdminIdemHeader, AdminLoose, AdminPage, adminCtx, adminGuard, IdParam, PageQuery, StatusCsvQuery } from '../common';
+import { bearer, createRouter, errorResponses, IdempotencyHeader, jsonBody, jsonContent } from '../../../lib/openapi';
+import { AdminLoose, AdminPage, adminCtx, adminGuard, IdParam, PageQuery, StatusCsvQuery } from '../common';
 import * as svc from './service';
 
 const tags = ['Admin · Transactions'];
@@ -58,7 +58,7 @@ export function registerAdminTransactions(app: App) {
       method: 'post', path: '/v1/admin/transactions/{id}/cancel', tags, security: bearer,
       summary: 'Admin cancel / refund-pending override through the cancellation matrix (actor ADMIN, approval recorded)',
       middleware: adminGuard(['transactions.override'], { mfa: true, idempotent: true }),
-      request: { params: IdParam, headers: AdminIdemHeader, ...jsonBody(CancelBody) },
+      request: { params: IdParam, headers: IdempotencyHeader, ...jsonBody(CancelBody) },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.adminCancel(await adminCtx(c), c.req.valid('param').id, c.req.valid('json')), 200),
@@ -68,7 +68,7 @@ export function registerAdminTransactions(app: App) {
       method: 'post', path: '/v1/admin/transactions/{id}/refund', tags, security: bearer,
       summary: 'Admin refund (money requestRefund, reason ADMIN) → REFUND_PENDING; above auto-approve → maker-checker',
       middleware: adminGuard(['transactions.override', 'refunds.request'], { mfa: true, idempotent: true }),
-      request: { params: IdParam, headers: AdminIdemHeader, ...jsonBody(RefundBody) },
+      request: { params: IdParam, headers: IdempotencyHeader, ...jsonBody(RefundBody) },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },
     }),
     async (c) => c.json(await svc.adminRefund(await adminCtx(c), c.req.valid('param').id, c.req.valid('json'), c.req.valid('header')['idempotency-key']), 200),

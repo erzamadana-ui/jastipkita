@@ -6,6 +6,7 @@ import { convert, toMinor } from '@jastipkita/core';
 import type { AppDeps, AuthContext } from '../../context';
 import type { Db } from '../../db/sql';
 import { AppError, Errors } from '../../lib/errors';
+import { fileContentUrl } from '../../lib/openapi';
 import { UrlNotAllowedError } from '../../providers/extraction/ssrf';
 import type { ExtractedProduct } from '../../providers/types';
 import { emitEvent } from '../../services/outbox';
@@ -19,7 +20,7 @@ import { getFile } from '../trips/repository';
 import * as repo from './repository';
 import type { RequestRow, RequestStatus, RestrictionClass } from './repository';
 
-type Deps = Pick<AppDeps, 'sql' | 'config' | 'clock' | 'logger' | 'providers'>;
+type Deps = Pick<AppDeps, 'sql' | 'config' | 'clock' | 'logger' | 'providers' | 'env'>;
 
 /** Assumption (no business config key yet): an OPEN request without needed_by expires after 30 days. */
 export const REQUEST_TTL_DAYS = 30;
@@ -129,7 +130,10 @@ export interface RestrictionDto {
 
 export interface RequestImageDto {
   fileId: string | null;
+  /** Absolute: the merchant image URL, or the uploaded file's content URL. */
   url: string | null;
+  /** Absolute API URL for uploaded images (GET /v1/files/{id}/content); null for merchant URLs. */
+  contentUrl: string | null;
 }
 
 export interface RequestOwnerDto {
@@ -232,8 +236,11 @@ async function itemValueIdrOrNull(
   return convert(r.unit_price_minor * r.quantity, ccy, 'IDR', rate);
 }
 
-function imageDtos(rows: repo.ImageRow[] | undefined): RequestImageDto[] {
-  return (rows ?? []).map((i) => ({ fileId: i.file_id, url: i.source_url }));
+function imageDtos(rows: repo.ImageRow[] | undefined, apiBaseUrl: string): RequestImageDto[] {
+  return (rows ?? []).map((i) => {
+    const contentUrl = i.file_id ? fileContentUrl(apiBaseUrl, i.file_id) : null;
+    return { fileId: i.file_id, url: i.source_url ?? contentUrl, contentUrl };
+  });
 }
 
 export async function ownerDto(db: Db, deps: Deps, r: RequestRow): Promise<RequestOwnerDto> {
@@ -263,7 +270,7 @@ export async function ownerDto(db: Db, deps: Deps, r: RequestRow): Promise<Reque
     destinationCity: r.destination_city,
     deliveryPreference: r.delivery_preference,
     restriction: restrictionDto(r),
-    images: imageDtos(images.get(r.id)),
+    images: imageDtos(images.get(r.id), deps.env.API_BASE_URL),
     pendingOffers: pending.get(r.id) ?? 0,
     publishedAt: iso(r.published_at),
     expiresAt: iso(r.expires_at),
@@ -300,7 +307,7 @@ export async function listingDtos(db: Db, deps: Deps, rows: RequestRow[]): Promi
       destinationCity: r.destination_city,
       deliveryPreference: r.delivery_preference,
       restrictionClass: r.restriction_class,
-      images: imageDtos(images.get(r.id)),
+      images: imageDtos(images.get(r.id), deps.env.API_BASE_URL),
       publishedAt: iso(r.published_at),
       expiresAt: iso(r.expires_at),
       buyer: publicProfile(signals.get(r.buyer_id), r.buyer_id, 'BUYER'),

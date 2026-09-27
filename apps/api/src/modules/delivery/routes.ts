@@ -1,10 +1,10 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../context';
-import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../lib/openapi';
+import { bearer, createRouter, errorResponses, IdempotencyHeader, jsonBody, jsonContent } from '../../lib/openapi';
 import { getAuth, requireAuth } from '../../middleware/auth';
 import { requireIdempotency } from '../../middleware/idempotency';
 import { rateLimit } from '../../middleware/rate-limit';
-import { LooseResult, TxIdParam, IdemHeader } from '../transactions/schemas';
+import { LooseResult, TxIdParam } from '../transactions/schemas';
 import { confirmReceipt, markDelivered, markShipped, revealPin, setDelivery, verifyHandover } from './service';
 
 const DeliveryBody = z
@@ -108,10 +108,10 @@ export function registerDeliveryRoutes(app: App) {
       method: 'post',
       path: '/v1/transactions/{id}/confirm-receipt',
       tags: ['Delivery'],
-      summary: 'Buyer confirms receipt (💰) → BUYER_CONFIRMED → COMPLETED (release + payout scheduled)',
+      summary: 'Buyer confirms receipt (Idempotency-Key required) → BUYER_CONFIRMED → COMPLETED (release + payout scheduled)',
       security: bearer,
       middleware: [requireAuth, requireIdempotency] as const,
-      request: { params: TxIdParam, headers: IdemHeader },
+      request: { params: TxIdParam, headers: IdempotencyHeader },
       responses: { 200: jsonContent(LooseResult), ...errorResponses },
     }),
     async (c) => c.json(await confirmReceipt(c.get('deps'), getAuth(c), c.req.valid('param').id), 200),

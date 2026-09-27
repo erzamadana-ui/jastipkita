@@ -28,7 +28,7 @@ async function submitted(idNumber = nik()) {
   const u = await phoneLogin(t);
   const token = u.tokens.accessToken as string;
   t.clock.advance(61_000);
-  await t.request('POST', '/v1/me/consents', { token, body: { type: 'KYC', version: '2026-09' } });
+  await t.request('POST', '/v1/me/consents', { token, body: { type: 'KYC', version: '0.1-template' } });
   const idFront = await uploadFile(t, token, 'KYC', 'image/jpeg', JPEG(300, 3));
   const selfie = await uploadFile(t, token, 'KYC', 'image/jpeg', JPEG(300, 5));
   const res = await t.request('POST', '/v1/kyc/submissions', {

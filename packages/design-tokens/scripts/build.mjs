@@ -428,7 +428,6 @@ function emitDart() {
 import 'dart:ui' as ui show FontFeature;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/physics.dart' show SpringDescription;
 
 /// Raw brand palette. Prefer [JkColors] (semantic, theme-aware) in widgets.
 abstract final class JkPalette {

@@ -50,6 +50,22 @@ export interface QuoteMeta {
   fx: { spotRate: string; lockedRate: string; markupBps: number; source: string | null; rateAsOf: string | null } | null;
   adjustments: unknown[];
   customsWarnings: unknown[];
+  /** Fee & total per configured channel (absent on quotes created before paymentOptions existed). */
+  paymentOptions?: PaymentOptionView[];
+}
+
+export interface PaymentOptionView {
+  channel: string;
+  label: string;
+  feeIdr: number;
+  totalIdr: number;
+  bearer: 'BUYER' | 'PLATFORM';
+  refundable: boolean;
+  minAmountIdr: number | null;
+  maxAmountIdr: number | null;
+  available: boolean;
+  unavailableReason: 'ABOVE_CHANNEL_MAX' | 'BELOW_CHANNEL_MIN' | null;
+  selected: boolean;
 }
 
 export interface QuoteRow {

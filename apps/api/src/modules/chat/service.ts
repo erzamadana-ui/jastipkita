@@ -1,6 +1,7 @@
 import type { AppDeps, AuthContext } from '../../context';
 import type { TxSql } from '../../db/sql';
 import { Errors } from '../../lib/errors';
+import { fileContentUrl } from '../../lib/openapi';
 import { decodeCursor, encodeCursor } from '../../lib/pagination';
 import { emitEvent } from '../../services/outbox';
 import { CHAT_SAFETY_TIP } from '../notifications/templates/labels';
@@ -20,7 +21,7 @@ function visibleBody(m: repo.MessageRow): string | null {
   return m.body;
 }
 
-export function messageDto(m: repo.MessageRow, viewerId: string) {
+export function messageDto(m: repo.MessageRow, viewerId: string, apiBaseUrl: string) {
   const meta: Record<string, unknown> = {};
   for (const k of PUBLIC_META_KEYS) if (m.meta && k in m.meta) meta[k] = m.meta[k];
   return {
@@ -30,7 +31,10 @@ export function messageDto(m: repo.MessageRow, viewerId: string) {
     senderId: m.sender_id,
     mine: m.sender_id === viewerId,
     body: visibleBody(m),
-    attachments: m.moderation_status === 'HIDDEN' ? [] : ((m.attachments ?? []) as { fileId: string; mime: string }[]),
+    attachments:
+      m.moderation_status === 'HIDDEN'
+        ? []
+        : ((m.attachments ?? []) as { fileId: string; mime: string }[]).map((a) => ({ fileId: a.fileId, mime: a.mime, contentUrl: fileContentUrl(apiBaseUrl, a.fileId) })),
     meta,
     moderation: {
       status: m.moderation_status as 'CLEAN' | 'FLAGGED' | 'HIDDEN',
@@ -65,32 +69,65 @@ function parseCursor(raw: string | undefined) {
   return cursor;
 }
 
+function conversationDto(r: repo.ConversationListRow, userId: string) {
+  const iAmBuyer = r.buyer_id === userId;
+  return {
+    id: r.id,
+    status: r.status as 'OPEN' | 'LOCKED' | 'ARCHIVED',
+    myRole: iAmBuyer ? ('BUYER' as const) : ('TRAVELER' as const),
+    counterpart: iAmBuyer
+      ? { id: r.traveler_id, name: publicName(r.traveler_name, 'Traveler'), role: 'TRAVELER' as const }
+      : { id: r.buyer_id, name: publicName(r.buyer_name, 'Penitip'), role: 'BUYER' as const },
+    transaction: r.transaction_id ? { id: r.transaction_id, number: r.tx_number!, status: r.tx_status!, productName: r.product_name } : null,
+    lastMessage: r.last_id
+      ? { id: r.last_id, type: r.last_type!, preview: preview(r.last_type, r.last_body, r.last_moderation, r.last_meta), senderId: r.last_sender, createdAt: r.last_created_at!.toISOString() }
+      : null,
+    unreadCount: r.unread,
+    lastMessageAt: r.last_message_at?.toISOString() ?? null,
+    createdAt: r.created_at.toISOString(),
+  };
+}
+
 export async function listConversations(deps: AppDeps, auth: AuthContext, q: { limit: number; cursor?: string | undefined }) {
   const cursor = parseCursor(q.cursor);
   const rows = await repo.listConversations(deps.sql, auth.userId, { cursor, limit: q.limit + 1 });
   const page = rows.slice(0, q.limit);
   const last = page[page.length - 1];
   return {
-    data: page.map((r) => {
-      const iAmBuyer = r.buyer_id === auth.userId;
-      return {
-        id: r.id,
-        status: r.status as 'OPEN' | 'LOCKED' | 'ARCHIVED',
-        myRole: iAmBuyer ? ('BUYER' as const) : ('TRAVELER' as const),
-        counterpart: iAmBuyer
-          ? { id: r.traveler_id, name: publicName(r.traveler_name, 'Traveler'), role: 'TRAVELER' as const }
-          : { id: r.buyer_id, name: publicName(r.buyer_name, 'Penitip'), role: 'BUYER' as const },
-        transaction: r.transaction_id ? { id: r.transaction_id, number: r.tx_number!, status: r.tx_status!, productName: r.product_name } : null,
-        lastMessage: r.last_id
-          ? { id: r.last_id, type: r.last_type!, preview: preview(r.last_type, r.last_body, r.last_moderation, r.last_meta), senderId: r.last_sender, createdAt: r.last_created_at!.toISOString() }
-          : null,
-        unreadCount: r.unread,
-        lastMessageAt: r.last_message_at?.toISOString() ?? null,
-        createdAt: r.created_at.toISOString(),
-      };
-    }),
+    data: page.map((r) => conversationDto(r, auth.userId)),
     nextCursor: rows.length > q.limit && last ? encodeCursor({ t: last.sort_at, id: last.id }) : null,
   };
+}
+
+/** GET /conversations/{id} — participants only (404 otherwise, no existence leak). */
+export async function getConversation(deps: AppDeps, auth: AuthContext, id: string) {
+  const [row] = await repo.listConversations(deps.sql, auth.userId, { cursor: null, limit: 1, onlyId: id });
+  if (!row) throw Errors.notFound('Percakapan', 'CONVERSATION_NOT_FOUND');
+  return conversationDto(row, auth.userId);
+}
+
+/**
+ * GET /transactions/{id}/conversation — the conversation of a transaction for its parties. Normally created by the
+ * outbox handler at MATCHED; created here (idempotently, same rules) when missing. Transactions that never reached
+ * MATCHED have no traveler conversation → 409 CONVERSATION_NOT_AVAILABLE.
+ */
+export async function conversationForTransaction(deps: AppDeps, auth: AuthContext, transactionId: string) {
+  const [t] = await deps.sql<{ buyer_id: string; traveler_id: string | null; matched: boolean }[]>`
+    SELECT t.buyer_id, t.traveler_id,
+           EXISTS (SELECT 1 FROM transaction_events e WHERE e.transaction_id = t.id AND e.to_status = 'MATCHED') AS matched
+      FROM transactions t WHERE t.id = ${transactionId}`;
+  if (!t || (t.buyer_id !== auth.userId && t.traveler_id !== auth.userId)) throw Errors.notFound('Transaksi', 'TRANSACTION_NOT_FOUND');
+  let conv = await repo.getConversationByTransaction(deps.sql, transactionId);
+  let created = false;
+  if (!conv) {
+    if (!t.traveler_id || !t.matched) {
+      throw Errors.conflict('CONVERSATION_NOT_AVAILABLE', 'Percakapan tersedia setelah traveler dan penitip cocok (MATCHED)');
+    }
+    conv = await deps.sql.begin(async (q) => repo.ensureTransactionConversation(q as unknown as TxSql, transactionId));
+    created = true;
+  }
+  if (!conv) throw Errors.conflict('CONVERSATION_NOT_AVAILABLE', 'Percakapan tersedia setelah traveler dan penitip cocok (MATCHED)');
+  return { conversationId: conv.id, transactionId, created, conversation: await getConversation(deps, auth, conv.id) };
 }
 
 export async function listMessages(deps: AppDeps, auth: AuthContext, conversationId: string, q: { limit: number; cursor?: string | undefined }) {
@@ -100,7 +137,7 @@ export async function listMessages(deps: AppDeps, auth: AuthContext, conversatio
   const page = rows.slice(0, q.limit);
   const last = page[page.length - 1];
   return {
-    data: page.map((m) => messageDto(m, auth.userId)),
+    data: page.map((m) => messageDto(m, auth.userId, deps.env.API_BASE_URL)),
     nextCursor: rows.length > q.limit && last ? encodeCursor({ t: last.cursor_t, id: last.id }) : null,
   };
 }
@@ -190,7 +227,7 @@ export async function sendMessage(deps: AppDeps, auth: AuthContext, conversation
     });
     return msg;
   });
-  return messageDto(row, auth.userId);
+  return messageDto(row, auth.userId, deps.env.API_BASE_URL);
 }
 
 export async function markRead(deps: AppDeps, auth: AuthContext, conversationId: string, messageId?: string) {

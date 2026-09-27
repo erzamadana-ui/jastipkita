@@ -107,6 +107,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
+          # package.json declares pnpm; this job needs no install, so skip the automatic pnpm cache
+          package-manager-cache: false
       - name: PostgreSQL ${{ matrix.pg }} client
         run: bash scripts/ci/install-pg-client.sh ${{ matrix.pg }}
       - name: Provider parity (non-superuser owner, documented Neon bootstrap)
@@ -278,7 +280,7 @@ jobs:
           if [ -f apps/mobile/pubspec.yaml ]; then echo "present=true" >> "$GITHUB_OUTPUT"
           else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice title=mobile::apps/mobile/pubspec.yaml not found — skipped"; fi
       - if: steps.app.outputs.present == 'true'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'

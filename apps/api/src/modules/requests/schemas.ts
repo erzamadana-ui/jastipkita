@@ -114,7 +114,13 @@ export const RequestPatchBody = z
 export const PublishBody = z.object({ acknowledgeRestriction: z.boolean().optional() }).openapi('RequestPublish');
 export const CancelBody = z.object({ reason: z.string().trim().max(500).optional() }).openapi('RequestCancel');
 
-const Image = z.object({ fileId: z.string().uuid().nullable(), url: z.string().nullable() });
+const Image = z
+  .object({
+    fileId: z.string().uuid().nullable(),
+    url: z.string().nullable().openapi({ description: 'Absolute URL: merchant image, or the uploaded file (= contentUrl)' }),
+    contentUrl: z.string().nullable().openapi({ description: 'Absolute API URL of an uploaded image (GET /v1/files/{id}/content, bearer auth); null for merchant URLs' }),
+  })
+  .openapi('RequestImage');
 
 export const RequestOwnerSchema = z
   .object({

@@ -4,6 +4,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { bodyLimit } from 'hono/body-limit';
 import type { AppDeps, AppEnv } from './context';
 import { Errors } from './lib/errors';
+import { assignOperationIds } from './lib/openapi';
 import { errorResponse, requestContext } from './middleware/request';
 import { registerModules } from './modules';
 
@@ -61,6 +62,8 @@ export function createApp(deps: AppDeps) {
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' });
   registerModules(app);
+  // Every operation gets a stable, unique operationId (clients generate code from it).
+  assignOperationIds(app.openAPIRegistry);
 
   app.doc31('/v1/openapi.json', {
     openapi: '3.1.0',

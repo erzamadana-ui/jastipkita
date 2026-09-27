@@ -137,6 +137,8 @@ interface LegalRow {
   title: string;
   body_md: string;
   summary_of_changes: string | null;
+  summary: string | null;
+  effective_at: Date | null;
   published_at: Date | null;
   retired_at: Date | null;
   created_by: string | null;
@@ -154,6 +156,8 @@ function legalDto(l: LegalRow, withBody: boolean) {
     title: l.title,
     ...(withBody ? { bodyMd: l.body_md } : {}),
     summaryOfChanges: l.summary_of_changes,
+    summary: l.summary,
+    effectiveAt: iso(l.effective_at),
     status: l.retired_at ? 'RETIRED' : l.published_at ? 'PUBLISHED' : 'DRAFT',
     current: !!l.is_current,
     publishedAt: iso(l.published_at),
@@ -183,11 +187,15 @@ export async function legalDetail(ctx: AdminCtx, id: string) {
   return legalDto(l, true);
 }
 
-export async function createLegal(ctx: AdminCtx, input: { type: string; version: string; locale: 'id' | 'en'; title: string; bodyMd: string; summaryOfChanges?: string | undefined }) {
+export async function createLegal(
+  ctx: AdminCtx,
+  input: { type: string; version: string; locale: 'id' | 'en'; title: string; bodyMd: string; summaryOfChanges?: string | undefined; summary?: string | undefined; effectiveAt?: string | undefined },
+) {
   const l = await inAdminTx(ctx, async (tx) => {
     const [row] = await tx<LegalRow[]>`
-      INSERT INTO legal_documents (type, version, locale, title, body_md, summary_of_changes, created_by)
-      VALUES (${input.type}, ${input.version}, ${input.locale}, ${input.title}, ${input.bodyMd}, ${input.summaryOfChanges ?? null}, ${ctx.auth.userId})
+      INSERT INTO legal_documents (type, version, locale, title, body_md, summary_of_changes, summary, effective_at, created_by)
+      VALUES (${input.type}, ${input.version}, ${input.locale}, ${input.title}, ${input.bodyMd}, ${input.summaryOfChanges ?? null},
+              ${input.summary ?? null}, ${input.effectiveAt ? new Date(input.effectiveAt) : null}, ${ctx.auth.userId})
       RETURNING *`;
     await adminAudit(tx, ctx, { action: 'legal.document_drafted', entityType: 'legal_document', entityId: row!.id, after: { type: input.type, version: input.version, locale: input.locale } });
     return row!;
@@ -195,7 +203,11 @@ export async function createLegal(ctx: AdminCtx, input: { type: string; version:
   return legalDto(l, true);
 }
 
-export async function updateLegal(ctx: AdminCtx, id: string, patch: { title?: string | undefined; bodyMd?: string | undefined; summaryOfChanges?: string | undefined }) {
+export async function updateLegal(
+  ctx: AdminCtx,
+  id: string,
+  patch: { title?: string | undefined; bodyMd?: string | undefined; summaryOfChanges?: string | undefined; summary?: string | undefined; effectiveAt?: string | null | undefined },
+) {
   const l = await inAdminTx(ctx, async (tx) => {
     const [cur] = await tx<LegalRow[]>`SELECT * FROM legal_documents WHERE id = ${id} FOR UPDATE`;
     if (!cur) throw Errors.notFound('Dokumen legal', 'LEGAL_DOCUMENT_NOT_FOUND');
@@ -204,6 +216,8 @@ export async function updateLegal(ctx: AdminCtx, id: string, patch: { title?: st
     if (patch.title !== undefined) values.title = patch.title;
     if (patch.bodyMd !== undefined) values.body_md = patch.bodyMd;
     if (patch.summaryOfChanges !== undefined) values.summary_of_changes = patch.summaryOfChanges;
+    if (patch.summary !== undefined) values.summary = patch.summary;
+    if (patch.effectiveAt !== undefined) values.effective_at = patch.effectiveAt ? new Date(patch.effectiveAt) : null;
     if (!Object.keys(values).length) throw Errors.validation({ issues: [{ path: '', message: 'tidak ada perubahan' }] });
     const [row] = await tx<LegalRow[]>`UPDATE legal_documents SET ${tx(values as never, ...Object.keys(values))} WHERE id = ${id} RETURNING *`;
     await adminAudit(tx, ctx, { action: 'legal.document_updated', entityType: 'legal_document', entityId: id, meta: { fields: Object.keys(values) } });

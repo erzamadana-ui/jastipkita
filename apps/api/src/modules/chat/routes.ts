@@ -4,7 +4,7 @@ import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../
 import { PageQuery } from '../../lib/pagination';
 import { getAuth, requireAuth } from '../../middleware/auth';
 import { rateLimit } from '../../middleware/rate-limit';
-import { ConversationPage, MarkReadResult, MarkReadSchema, MessagePage, MessageSchema, SendMessageSchema } from './schemas';
+import { ConversationLookupSchema, ConversationPage, ConversationSchema, MarkReadResult, MarkReadSchema, MessagePage, MessageSchema, SendMessageSchema } from './schemas';
 import * as svc from './service';
 
 const tags = ['Chat'];
@@ -25,6 +25,35 @@ export function registerChat(app: App): void {
       responses: { 200: jsonContent(ConversationPage), ...errorResponses },
     }),
     async (c) => c.json(await svc.listConversations(c.get('deps'), getAuth(c), c.req.valid('query')), 200),
+  );
+
+  r.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/conversations/{id}',
+      tags,
+      summary: 'One conversation (participants only; 404 otherwise)',
+      security: bearer,
+      middleware: [requireAuth] as const,
+      request: { params: IdParam },
+      responses: { 200: jsonContent(ConversationSchema), ...errorResponses },
+    }),
+    async (c) => c.json(await svc.getConversation(c.get('deps'), getAuth(c), c.req.valid('param').id), 200),
+  );
+
+  r.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/transactions/{id}/conversation',
+      tags,
+      summary: 'Conversation of a transaction (parties only); created lazily when the transaction reached MATCHED',
+      description: '409 CONVERSATION_NOT_AVAILABLE when the transaction never reached MATCHED (no traveler yet).',
+      security: bearer,
+      middleware: [requireAuth] as const,
+      request: { params: IdParam },
+      responses: { 200: jsonContent(ConversationLookupSchema), ...errorResponses },
+    }),
+    async (c) => c.json(await svc.conversationForTransaction(c.get('deps'), getAuth(c), c.req.valid('param').id), 200),
   );
 
   r.openapi(

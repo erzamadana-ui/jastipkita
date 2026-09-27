@@ -46,7 +46,7 @@ describe('GET /v1/requests/{id}/recommended-travelers', () => {
     );
     expect(first.reasons[0]).toMatch(/^Tiba \d+ hari sebelum batas$/);
     expect(second.reasons).toEqual(expect.arrayContaining(['Beda kota (Surabaya)', 'Belum ada rating', 'Fee Rp150.000 masuk anggaran']));
-    expect(first.trip.traveler).toMatchObject({ displayName: 'Ayu L.', trustBadge: { tier: 'TRAVELER_VERIFIED' } });
+    expect(first.trip.traveler).toMatchObject({ displayName: 'Ayu L.', trustBadge: { tier: 'TRAVELER_VERIFIED' }, trustScore: expect.any(Number), trustTier: { label: expect.any(String) } });
     expect(first.estimatedTravelerFeeIdr).toBeGreaterThanOrEqual(25_000); // PERCENT fee clamped to the Rp25.000 minimum
     expect(Object.keys(first.features).sort()).toEqual(['capacity', 'date', 'history', 'price', 'rating', 'routeExactness', 'trust']);
     expect(tripD.id).toBeTruthy();
@@ -85,7 +85,7 @@ describe('GET /v1/trips/{id}/recommended-requests', () => {
     expect(ids).toEqual([request.id, bandung.id]);
     expect(res.body.data[0].reasons).toEqual(expect.arrayContaining(['Kota tujuan cocok (Jakarta)']));
     expect(res.body.data[1].reasons).toEqual(expect.arrayContaining(['Beda kota (Jakarta)']));
-    expect(res.body.data[0].request.buyer).toMatchObject({ displayName: 'Rina S.' });
+    expect(res.body.data[0].request.buyer).toMatchObject({ displayName: 'Rina S.', trustScore: expect.any(Number), trustTier: { tier: expect.any(String) } });
     expect(JSON.stringify(res.body)).not.toContain(buyer.email);
 
     // trip D excludes FASHION_APPAREL → everything excluded

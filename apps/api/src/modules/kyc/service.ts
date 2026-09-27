@@ -80,7 +80,25 @@ export interface KycSubmitInput {
   fullName: string;
   dateOfBirth: string;
   nationality?: string | undefined;
-  documents: { idFront: string; idBack?: string | undefined; selfie: string; liveness?: string | undefined };
+  documents: {
+    idFront: string;
+    idBack?: string | undefined;
+    selfie: string;
+    liveness?: string | undefined;
+    livenessFileId?: string | undefined;
+    livenessFileIds?: string[] | undefined;
+  };
+}
+
+const MAX_LIVENESS_FILES = 5;
+
+/** Legacy single field(s) first, then the array; duplicates collapse (clients migrating may send both). */
+export function livenessIds(d: KycSubmitInput['documents']): string[] {
+  const ids = [...new Set([d.liveness, d.livenessFileId, ...(d.livenessFileIds ?? [])].filter((x): x is string => !!x))];
+  if (ids.length > MAX_LIVENESS_FILES) {
+    throw Errors.unprocessable('KYC_DOCUMENTS_INVALID', `Maksimal ${MAX_LIVENESS_FILES} rekaman liveness`, { field: 'documents.livenessFileIds', max: MAX_LIVENESS_FILES });
+  }
+  return ids;
 }
 
 const MIN_AGE_YEARS = 17; // ASSUMPTION: KTP eligibility age; confirm the platform minimum age with counsel
@@ -119,12 +137,13 @@ export async function submitKyc(deps: AppDeps, auth: AuthContext, input: KycSubm
   const [country] = await deps.sql`SELECT 1 FROM countries WHERE code = ${nationality}`;
   if (!country) throw Errors.unprocessable('NATIONALITY_INVALID', 'Kode negara tidak dikenal');
 
-  // documents: own, purpose KYC, READY (scanned + encrypted)
+  // documents: own, purpose KYC, READY (scanned + encrypted) — every liveness capture is checked like the others
+  const liveness = livenessIds(input.documents);
   const docs: { type: string; side: 'FRONT' | 'BACK' | 'NA'; fileId: string }[] = [
     { type: input.idType, side: input.idType === 'KTP' ? 'FRONT' : 'NA', fileId: input.documents.idFront },
     ...(input.documents.idBack ? [{ type: input.idType, side: 'BACK' as const, fileId: input.documents.idBack }] : []),
     { type: 'SELFIE', side: 'NA', fileId: input.documents.selfie },
-    ...(input.documents.liveness ? [{ type: 'LIVENESS', side: 'NA' as const, fileId: input.documents.liveness }] : []),
+    ...liveness.map((fileId) => ({ type: 'LIVENESS', side: 'NA' as const, fileId })),
   ];
   if (new Set(docs.map((d) => d.fileId)).size !== docs.length) throw Errors.unprocessable('KYC_DOCUMENTS_INVALID', 'Setiap dokumen harus file yang berbeda');
   const files = await deps.sql<{ id: string; storage_key: string }[]>`
@@ -195,7 +214,7 @@ export async function submitKyc(deps: AppDeps, auth: AuthContext, input: KycSubm
       documentType: input.idType,
       documentFileKey: keyOf(input.documents.idFront),
       selfieFileKey: keyOf(input.documents.selfie),
-      ...(input.documents.liveness ? { livenessFileKey: keyOf(input.documents.liveness) } : {}),
+      ...(liveness.length ? { livenessFileKey: keyOf(liveness[0]!), livenessFileKeys: liveness.map(keyOf) } : {}),
     });
   } catch (err) {
     deps.logger.error('kyc.provider_error', { submissionId, error: err instanceof Error ? err.message : String(err) });

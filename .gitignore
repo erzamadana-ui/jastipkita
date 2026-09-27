@@ -37,3 +37,9 @@ secrets/
 # DevOps additions
 apps/mobile/dart_defines.json
 apps/api/dist-node/
+
+# admin e2e artefacts
+apps/admin/test-results/
+apps/admin/dist-e2e/
+apps/admin/playwright-report/
+apps/web/test-results/

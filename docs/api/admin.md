@@ -22,7 +22,8 @@ than 15 min), `IDEMPOTENCY_KEY_REQUIRED` (400), `MAKER_CHECKER_VIOLATION` (403),
 
 ## 1. Endpoint catalogue (141 operations)
 
-Legend: **M** = fresh MFA (≤ 15 min) required · **I** = `Idempotency-Key` header required · **MC** = maker-checker.
+Legend: **M** = fresh MFA (≤ 15 min) required · **I** = `Idempotency-Key` header required (declared as the `idempotency-key` header parameter in
+OpenAPI for every such operation) · **MC** = maker-checker. Every operation has a stable `operationId` (see `docs/api/CHANGELOG.md`).
 
 ### Dashboard & analytics — `analytics.read`
 | Method & path | Notes |
@@ -75,7 +76,7 @@ event `trip.verified {tripId, travelerId, verifiedBy:'ADMIN'}` → identity job 
 | Method & path | Notes |
 |---|---|
 | `GET /v1/admin/disputes?status&assignee=me\|none\|<id>&sla=BREACHED\|DUE_SOON` | `slaState` ON_TRACK / DUE_SOON / BREACHED |
-| `GET /v1/admin/disputes/{id}` | evidence, timeline, escrow held, pre-dispute status, refunds, `allowedActions` |
+| `GET /v1/admin/disputes/{id}` | evidence (`fileUrlEndpoint` and `contentUrl` are absolute URLs), timeline, escrow held, pre-dispute status, refunds, `allowedActions` |
 | `POST …/{id}/assign` | `{assigneeId?}` (default me; assignee needs disputes.manage) |
 | `POST …/{id}/request-evidence` | `{note, dueHours}` → EVIDENCE_COLLECTION |
 | `POST …/{id}/review` | → UNDER_REVIEW; while the evidence window is open → 422 `EVIDENCE_WINDOW_OPEN` unless `closeEvidenceWindow:true` |
@@ -147,8 +148,11 @@ conversation's transaction (403 `CHAT_ACCESS_SCOPE_REQUIRED` / `CHAT_ACCESS_OUT_
 ### FAQ & legal documents
 `faq.manage`: `GET/POST /v1/admin/faq`, `GET/PATCH/DELETE /v1/admin/faq/{id}` (DELETE drafts only), `POST …/{id}/publish|archive|unpublish`.
 `legal.documents.manage`: `GET /v1/admin/legal-documents?type&locale` (`current` = latest published = what users see),
-`GET …/{id}`, `POST …` (new version), `PATCH …/{id}` (unpublished only), `POST …/{id}/publish` **M** (`retirePrevious` default true; immutable afterwards),
-`POST …/{id}/retire` **M**.
+`GET …/{id}`, `POST …` (new version; optional `summary`, `effectiveAt`), `PATCH …/{id}` (unpublished only; `summary`, `effectiveAt` editable),
+`POST …/{id}/publish` **M** (`retirePrevious` default true; immutable afterwards), `POST …/{id}/retire` **M**. Types include
+`COMMUNITY_GUIDELINES` (migration 0070). The 10 seeded templates (version `0.1-template`, TEMPLATE banner) are what users see and consent to
+until reviewed versions are published — publishing a TOS/PRIVACY/KYC/MARKETING/… version changes the consent version the API accepts
+(`GET /v1/consents/requirements`).
 
 ### Audit & system
 `audit.read`: `GET /v1/admin/audit-logs?actorId&actorType&entityType&entityId&action=finance.*&from&to&limit&cursor` (id cursor, newest first,
@@ -263,7 +267,7 @@ are refused once an active SUPER_ADMIN exists (use the maker-checker flow) unles
   NO_DELETE for the app role by design.
 * OPERATIONS has no `infra.db.read` in the seed (only SUPER_ADMIN). If ops should see the read-only DB center, add
   `('OPERATIONS','infra.db.read')` to `db/scripts/gen-reference-seed.mjs` (the seed deletes unlisted role_permissions, so a migration can't).
-* No public "latest published legal document" endpoint exists yet (`legal_documents.published_at`/`retired_at` are ready) — identity/web team.
+* Public legal endpoints now exist: `GET /v1/legal/documents`, `GET /v1/legal/documents/{type}`, `GET /v1/consents/requirements` (identity API).
 * Other groups adding migrations must regenerate the manifest (`npx tsx scripts/gen-migration-manifest.ts`); `migration-manifest.test.ts`
   fails otherwise, and CI can run `--check`.
 * Business-config cache invalidation is per instance; other instances pick the change up on the cache TTL.

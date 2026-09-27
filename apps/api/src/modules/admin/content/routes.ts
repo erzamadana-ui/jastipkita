@@ -3,12 +3,15 @@ import type { App } from '../../../context';
 import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../../lib/openapi';
 import { AdminLoose, AdminPage, adminCtx, adminGuard, IdParam, ReasonBody } from '../common';
 import * as svc from './service';
+import { LEGAL_TYPES } from '../../legal/catalog';
 
 const faqTags = ['Admin · FAQ'];
 const legalTags = ['Admin · Legal documents'];
 const FaqCategory = z.enum(['GENERAL', 'BUYER', 'TRAVELER', 'PAYMENT', 'CUSTOMS', 'DELIVERY', 'DISPUTE', 'ACCOUNT', 'REFERRAL']);
 const Locale = z.enum(['id', 'en']);
-const LegalType = z.enum(['TOS', 'PRIVACY', 'KYC', 'MARKETING', 'COOKIES', 'TRAVELER_AGREEMENT', 'PAYMENT_TERMS', 'REFUND_POLICY', 'PROHIBITED_ITEMS']);
+const LegalType = z.enum(LEGAL_TYPES);
+const LegalSummary = z.string().trim().max(1000).openapi({ description: 'One-line description shown in the public document list' });
+const EffectiveAt = z.string().datetime({ offset: true }).openapi({ description: 'When this version takes effect (default: when published)' });
 
 const FaqCreate = z
   .object({
@@ -75,13 +78,13 @@ export function registerAdminContent(app: App) {
   r.openapi(
     createRoute({
       method: 'post', path: '/v1/admin/legal-documents', tags: legalTags, security: bearer, summary: 'Create a new version (draft)', middleware: legal,
-      request: jsonBody(z.object({ type: LegalType, version: z.string().regex(/^[0-9A-Za-z._-]{1,40}$/), locale: Locale, title: z.string().trim().min(3).max(200), bodyMd: z.string().trim().min(20).max(200000), summaryOfChanges: z.string().trim().max(5000).optional() }).openapi('AdminLegalDocumentCreate')),
+      request: jsonBody(z.object({ type: LegalType, version: z.string().regex(/^[0-9A-Za-z._-]{1,40}$/), locale: Locale, title: z.string().trim().min(3).max(200), bodyMd: z.string().trim().min(20).max(200000), summaryOfChanges: z.string().trim().max(5000).optional(), summary: LegalSummary.optional(), effectiveAt: EffectiveAt.optional() }).openapi('AdminLegalDocumentCreate')),
       responses: { 201: jsonContent(AdminLoose, 'Created'), ...errorResponses },
     }),
     async (c) => c.json(await svc.createLegal(await adminCtx(c), c.req.valid('json')), 201),
   );
   r.openapi(
-    createRoute({ method: 'patch', path: '/v1/admin/legal-documents/{id}', tags: legalTags, security: bearer, summary: 'Edit an unpublished version', middleware: legal, request: { params: IdParam, ...jsonBody(z.object({ title: z.string().trim().min(3).max(200).optional(), bodyMd: z.string().trim().min(20).max(200000).optional(), summaryOfChanges: z.string().trim().max(5000).optional() })) }, responses: { 200: jsonContent(AdminLoose), ...errorResponses } }),
+    createRoute({ method: 'patch', path: '/v1/admin/legal-documents/{id}', tags: legalTags, security: bearer, summary: 'Edit an unpublished version', middleware: legal, request: { params: IdParam, ...jsonBody(z.object({ title: z.string().trim().min(3).max(200).optional(), bodyMd: z.string().trim().min(20).max(200000).optional(), summaryOfChanges: z.string().trim().max(5000).optional(), summary: LegalSummary.optional(), effectiveAt: EffectiveAt.nullable().optional() })) }, responses: { 200: jsonContent(AdminLoose), ...errorResponses } }),
     async (c) => c.json(await svc.updateLegal(await adminCtx(c), c.req.valid('param').id, c.req.valid('json')), 200),
   );
   r.openapi(
