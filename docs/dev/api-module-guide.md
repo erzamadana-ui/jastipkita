@@ -106,3 +106,37 @@ Dashboard metrik, users (suspend), KYC review, verifikasi trip, transaksi (lihat
 - Test integrasi per endpoint: happy path + auth/permission + validasi + aturan bisnis utama + idempotensi (bila 💰).
 - Tidak ada TODO palsu pada fitur inti. Integrasi sandbox/mock diberi label jelas.
 - `npx tsc --noEmit -p apps/api` bersih; test grup hijau.
+
+## 6. Katalog event outbox (kontrak antar grup)
+Producer menulis event di transaksi DB yang sama (`emitEvent(tx, aggregateType, aggregateId, eventType, payload)`); consumer mendaftar di `jobs/<group>.ts` → `outbox: { 'event.type': [handler] }`. Consumer WAJIB idempotent (pakai `event.eventId`). Payload tidak boleh berisi PII mentah (email/HP/rekening) — kirim id, consumer memuat data yang diperlukan.
+
+| Event | Producer | Payload minimum |
+|---|---|---|
+| `transaction.status_changed` | DB `transition_transaction` | transactionId, number, from, to, version, buyerId, travelerId, actorType, actorId, reason, meta |
+| `trip.status_changed` | DB `transition_trip` | tripId, from, to, … |
+| `dispute.status_changed` | DB `transition_dispute` | disputeId, from, to, … |
+| `config.activated` | DB | key, version |
+| `user.anonymized` | DB `anonymize_user` | userId |
+| `user.registered` | identity | userId, method (GOOGLE/APPLE/EMAIL/PHONE) |
+| `user.phone_verified` | identity | userId |
+| `kyc.submitted` / `kyc.approved` / `kyc.rejected` | identity (approved/rejected juga admin) | userId, submissionId, targetLevel, reason? |
+| `kyc.level_changed` | identity | userId, from, to |
+| `payout_account.verified` | identity | userId, payoutAccountId |
+| `trip.verified` | admin/system | tripId, travelerId |
+| `request.created` | marketplace | requestId, buyerId |
+| `offer.created` / `offer.accepted` / `offer.declined` / `offer.expired` | marketplace | offerId, requestId, tripId, buyerId, travelerId, initiatedBy, transactionId? |
+| `payment.checkout_created` | money | paymentId, transactionId, buyerId, amountIdr, expiresAt |
+| `payment.secured` / `payment.expired` / `payment.failed` | money | paymentId, transactionId, buyerId, travelerId, amountIdr, channel? |
+| `price_confirmation.requested` / `price_confirmation.resolved` | money | priceConfirmationId, transactionId, buyerId, travelerId, originalIdr, actualIdr, expiresAt, status |
+| `purchase.proof_submitted` | money | transactionId, proofId, flagged |
+| `delivery.pin_ready` | money | transactionId, buyerId (PIN TIDAK dikirim di payload/email — hanya di aplikasi) |
+| `refund.requested` / `refund.succeeded` / `refund.failed` | money | refundId, transactionId, buyerId, amountIdr |
+| `payout.scheduled` / `payout.paid` / `payout.failed` / `payout.on_hold` | money | payoutId, travelerId, transactionId, amountIdr |
+| `receipt.final_available` | money | transactionId, buyerId |
+| `dispute.opened` / `dispute.evidence_added` / `dispute.resolved` / `dispute.appealed` | engagement / admin | disputeId, transactionId, buyerId, travelerId, resolution? |
+| `chat.message_created` | engagement | conversationId, messageId, senderId, recipientId, type |
+| `referral.rewarded` | engagement | referralId, userId, amountIdr |
+| `support.ticket_updated` | engagement / admin | ticketId, userId, status |
+| `privacy.export_ready` / `account.deletion_scheduled` | identity | requestId?, userId, effectiveAt? |
+
+Notifikasi (engagement) memetakan event di atas ke template in-app/push/email sesuai daftar lifecycle di brief (§18) dan preferensi user.
