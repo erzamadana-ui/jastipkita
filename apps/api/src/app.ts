@@ -40,7 +40,12 @@ export function createApp(deps: AppDeps) {
     }),
   );
   // JSON bodies are small; file uploads go directly to object storage via presigned URLs.
-  app.use('/v1/*', bodyLimit({ maxSize: 1024 * 1024, onError: () => { throw Errors.badRequest('PAYLOAD_TOO_LARGE', 'Ukuran permintaan terlalu besar'); } }));
+  const jsonLimit = bodyLimit({ maxSize: 1024 * 1024, onError: () => { throw Errors.badRequest('PAYLOAD_TOO_LARGE', 'Ukuran permintaan terlalu besar'); } });
+  app.use('/v1/*', async (c, next) => {
+    // Dev-only object upload (memory storage) enforces its own per-token size limit.
+    if (c.req.path.startsWith('/v1/dev/storage/upload/')) return next();
+    return jsonLimit(c, next);
+  });
 
   app.onError((err, c) => errorResponse(c, err));
   app.notFound((c) => c.json({ error: { code: 'NOT_FOUND', message: 'Endpoint tidak ditemukan', details: {}, requestId: c.get('requestId') } }, 404));

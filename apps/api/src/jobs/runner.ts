@@ -1,5 +1,4 @@
 import type { AppDeps } from '../context';
-import type { Db } from '../db/sql';
 import { adminJobs } from './admin';
 import { engagementJobs } from './engagement';
 import { identityJobs } from './identity';
@@ -7,14 +6,29 @@ import { marketplaceJobs } from './marketplace';
 import { moneyJobs } from './money';
 import type { JobGroup, OutboxEvent, OutboxHandler, QueueHandler, ScheduledJob } from './types';
 
-const GROUPS: JobGroup[] = [identityJobs, marketplaceJobs, moneyJobs, engagementJobs, adminJobs];
+const GROUPS: { name: string; group: JobGroup }[] = [
+  { name: 'identity', group: identityJobs },
+  { name: 'marketplace', group: marketplaceJobs },
+  { name: 'money', group: moneyJobs },
+  { name: 'engagement', group: engagementJobs },
+  { name: 'admin', group: adminJobs },
+];
+
+interface NamedHandler {
+  key: string;
+  fn: OutboxHandler;
+}
 
 function collect() {
-  const outbox = new Map<string, OutboxHandler[]>();
+  const outbox = new Map<string, NamedHandler[]>();
   const scheduled: ScheduledJob[] = [];
   const queues = new Map<string, QueueHandler>();
-  for (const g of GROUPS) {
-    for (const [type, hs] of Object.entries(g.outbox ?? {})) outbox.set(type, [...(outbox.get(type) ?? []), ...hs]);
+  for (const { name, group: g } of GROUPS) {
+    if (!g) throw new Error(`job group ${name} is undefined (circular import?)`);
+    for (const [type, hs] of Object.entries(g.outbox ?? {})) {
+      const named = hs.map((fn, i) => ({ key: `${name}:${type}:${i}`, fn }));
+      outbox.set(type, [...(outbox.get(type) ?? []), ...named]);
+    }
     scheduled.push(...(g.scheduled ?? []));
     for (const [q, h] of Object.entries(g.queues ?? {})) {
       if (queues.has(q)) throw new Error(`duplicate queue handler ${q}`);
@@ -24,13 +38,7 @@ function collect() {
   return { outbox, scheduled, queues };
 }
 
-/** Enqueue an ad-hoc job (same DB transaction as the caller when `db` is a TxSql). */
-export async function enqueueJob(db: Db, queue: string, name: string, payload: Record<string, unknown>, opts: { runAt?: Date; dedupeKey?: string; maxAttempts?: number } = {}) {
-  await db`
-    INSERT INTO jobs (queue, name, payload, run_at, dedupe_key, max_attempts)
-    VALUES (${queue}, ${name}, ${db.json(payload as never)}, coalesce(${opts.runAt ?? null}::timestamptz, now()), ${opts.dedupeKey ?? null}, ${opts.maxAttempts ?? 10})
-    ON CONFLICT DO NOTHING`;
-}
+export { enqueueJob } from './enqueue';
 
 export interface TickResult {
   outboxProcessed: number;
@@ -105,17 +113,32 @@ export async function runWorkerTick(deps: AppDeps, opts: { outboxLimit?: number;
       attempts: e.attempts,
     };
     const handlers = [...(outbox.get(e.event_type) ?? []), ...(outbox.get('*') ?? [])];
-    try {
-      for (const h of handlers) await h(deps, ev);
+    // Each handler runs independently: successes are recorded and skipped on retry, so one failing
+    // consumer neither blocks nor re-triggers the others (at-least-once per handler).
+    const done = new Set(
+      (await sql<{ handler: string }[]>`SELECT handler FROM outbox_handler_runs WHERE event_id = ${e.event_id}`).map((r) => r.handler),
+    );
+    const errors: string[] = [];
+    for (const h of handlers) {
+      if (done.has(h.key)) continue;
+      try {
+        await h.fn(deps, ev);
+        await sql`INSERT INTO outbox_handler_runs (event_id, handler) VALUES (${e.event_id}, ${h.key}) ON CONFLICT DO NOTHING`;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`${h.key}: ${msg}`);
+        logger.error('outbox.handler_failed', { eventType: e.event_type, id: e.id, handler: h.key, error: msg });
+      }
+    }
+    if (errors.length === 0) {
       await sql`UPDATE outbox_events SET published_at = now(), locked_by = NULL, locked_until = NULL, last_error = NULL WHERE id = ${e.id}`;
       res.outboxProcessed++;
-    } catch (err) {
+    } else {
       res.outboxFailed++;
       const backoffSec = Math.min(3600, 2 ** Math.min(e.attempts, 12));
-      logger.error('outbox.handler_failed', { eventType: e.event_type, id: e.id, error: err instanceof Error ? err.message : String(err) });
       await sql`UPDATE outbox_events SET locked_by = NULL, locked_until = NULL,
                   available_at = now() + make_interval(secs => ${backoffSec}),
-                  last_error = ${err instanceof Error ? err.message.slice(0, 2000) : String(err)} WHERE id = ${e.id}`;
+                  last_error = ${errors.join(' | ').slice(0, 2000)} WHERE id = ${e.id}`;
     }
   }
   return res;

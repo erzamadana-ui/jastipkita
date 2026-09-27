@@ -53,10 +53,15 @@ export default async function setup() {
     await admin.end();
   }
   return async () => {
-    // Clean up per-file databases left behind by crashed runs.
+    // Drop only stale per-file databases (> 2h old, e.g. from crashed runs). Never touch DBs of runs
+    // still in progress (parallel vitest processes) — each test file drops its own DB in close().
     const a = postgres(ADMIN_URL, { max: 1, onnotice: () => {} });
     const dbs = await a<{ datname: string }[]>`SELECT datname FROM pg_database WHERE datname LIKE 'jk_t_%'`;
-    for (const d of dbs) await a.unsafe(`DROP DATABASE IF EXISTS "${d.datname}" WITH (FORCE)`).catch(() => {});
+    const cutoff = Date.now() - 2 * 3600_000;
+    for (const d of dbs) {
+      const ts = parseInt(d.datname.split('_')[3] ?? '', 36);
+      if (Number.isFinite(ts) && ts < cutoff) await a.unsafe(`DROP DATABASE IF EXISTS "${d.datname}" WITH (FORCE)`).catch(() => {});
+    }
     await a.end();
   };
 }

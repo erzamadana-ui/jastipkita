@@ -168,3 +168,22 @@ describe('reference data', () => {
     expect([...stages].sort()).toEqual([...CANCELLATION_STAGES].sort());
   });
 });
+
+describe('config keys added in wave A integration', () => {
+  it('accepts defaults for money.policy, marketplace.lifetimes, support.sla', async () => {
+    const { validateBusinessConfig, DEFAULT_BUSINESS_CONFIG } = await import('./index');
+    for (const k of ['money.policy', 'marketplace.lifetimes', 'support.sla'] as const) {
+      expect(validateBusinessConfig(k, DEFAULT_BUSINESS_CONFIG[k]).ok).toBe(true);
+    }
+  });
+  it('rejects invalid values', async () => {
+    const { validateBusinessConfig } = await import('./index');
+    expect(validateBusinessConfig('money.policy', { refundAutoApproveMaxIdr: -1, refundMaxSystemRetries: 3, payoutMaxSystemRetries: 3, payoutDelayHours: 0, pendingPaymentPollMinutes: 15, payoutFeeIdr: 0, payoutMinIdr: 0 }).ok).toBe(false);
+    expect(validateBusinessConfig('money.policy', { refundAutoApproveMaxIdr: 1, refundMaxSystemRetries: 3, payoutMaxSystemRetries: 3, payoutDelayHours: 0, pendingPaymentPollMinutes: 15, payoutFeeIdr: 0, payoutMinIdr: 0 }).ok).toBe(true);
+    expect(validateBusinessConfig('marketplace.lifetimes', { requestExpiryDays: 0, offerExpiryHours: 48, unpublishedTripGraceDays: 0 }).ok).toBe(false);
+    expect(validateBusinessConfig('marketplace.lifetimes', { requestExpiryDays: 30, offerExpiryHours: 9999, unpublishedTripGraceDays: 0 }).ok).toBe(false);
+    expect(validateBusinessConfig('support.sla', { hoursByPriority: { URGENT: 24, HIGH: 12, NORMAL: 24, LOW: 72 } }).ok).toBe(false);
+    expect(validateBusinessConfig('support.sla', { hoursByPriority: { URGENT: 4, HIGH: 12, NORMAL: 24 } }).ok).toBe(false);
+    expect(validateBusinessConfig('referral.traveler', { enabled: true, referrerCreditIdr: 50000, requiredCompletedTransactions: 2, monthlyCapIdr: 250000, creditExpiryDays: 90, withdrawable: false, pendingExpiryDays: 0 }).ok).toBe(false);
+  });
+});

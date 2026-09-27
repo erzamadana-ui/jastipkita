@@ -69,6 +69,9 @@ export const EnvSchema = z
     TWILIO_ACCOUNT_SID: z.string().optional(),
     TWILIO_AUTH_TOKEN: z.string().optional(),
     TWILIO_FROM: z.string().optional(),
+    /** WhatsApp OTP in production needs an approved template (Content SID). */
+    TWILIO_WHATSAPP_FROM: z.string().optional(),
+    TWILIO_WHATSAPP_CONTENT_SID: z.string().optional(),
 
     STORAGE_PROVIDER: z.enum(['memory', 's3']).default('memory'),
     S3_ENDPOINT: z.string().optional(),

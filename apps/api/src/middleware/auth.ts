@@ -14,7 +14,7 @@ export interface AccessTokenClaims {
 const permCache = new Map<string, { at: number; perms: Set<string>; roles: string[] }>();
 const PERM_TTL_MS = 60_000;
 
-async function verifyAccessToken(c: Context<AppEnv>, token: string): Promise<AccessTokenClaims | null> {
+export async function verifyAccessToken(c: Context<AppEnv>, token: string): Promise<AccessTokenClaims | null> {
   const { env } = c.get('deps');
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(env.JWT_SECRET), {
@@ -30,7 +30,7 @@ async function verifyAccessToken(c: Context<AppEnv>, token: string): Promise<Acc
   }
 }
 
-async function loadAuth(c: Context<AppEnv>, claims: AccessTokenClaims): Promise<AuthContext | null> {
+export async function loadAuth(c: Context<AppEnv>, claims: AccessTokenClaims): Promise<AuthContext | null> {
   const { sql } = c.get('deps');
   const rows = await sql<{ id: string; status: AuthContext['status']; kyc_level: number; active_mode: AuthContext['activeMode'] }[]>`
     SELECT u.id, u.status, u.kyc_level, u.active_mode
@@ -86,19 +86,29 @@ export const optionalAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
+/** Builds an auth guard that admits the given account statuses (default: ACTIVE only). */
+export function requireAuthWith(allowed: AuthContext['status'][] = ['ACTIVE']): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const h = c.req.header('authorization');
+    if (!h?.startsWith('Bearer ')) throw Errors.unauthorized();
+    const claims = await verifyAccessToken(c, h.slice(7));
+    if (!claims) throw Errors.unauthorized('Token tidak valid atau kedaluwarsa', 'TOKEN_INVALID');
+    const auth = await loadAuth(c, claims);
+    if (!auth) throw Errors.unauthorized('Sesi berakhir, silakan masuk kembali', 'SESSION_REVOKED');
+    if (!allowed.includes(auth.status)) {
+      if (auth.status === 'SUSPENDED') throw Errors.forbidden('Akun ditangguhkan', 'ACCOUNT_SUSPENDED');
+      throw Errors.forbidden('Akun tidak aktif', 'ACCOUNT_INACTIVE');
+    }
+    c.set('auth', auth);
+    await next();
+  };
+}
+
 /** Requires a valid access token for an ACTIVE user. */
-export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const h = c.req.header('authorization');
-  if (!h?.startsWith('Bearer ')) throw Errors.unauthorized();
-  const claims = await verifyAccessToken(c, h.slice(7));
-  if (!claims) throw Errors.unauthorized('Token tidak valid atau kedaluwarsa', 'TOKEN_INVALID');
-  const auth = await loadAuth(c, claims);
-  if (!auth) throw Errors.unauthorized('Sesi berakhir, silakan masuk kembali', 'SESSION_REVOKED');
-  if (auth.status === 'SUSPENDED') throw Errors.forbidden('Akun ditangguhkan', 'ACCOUNT_SUSPENDED');
-  if (auth.status !== 'ACTIVE') throw Errors.forbidden('Akun tidak aktif', 'ACCOUNT_INACTIVE');
-  c.set('auth', auth);
-  await next();
-};
+export const requireAuth: MiddlewareHandler<AppEnv> = requireAuthWith(['ACTIVE']);
+
+/** Also admits accounts in PENDING_DELETION (so they can cancel deletion / export data). */
+export const requireAuthAllowPendingDeletion: MiddlewareHandler<AppEnv> = requireAuthWith(['ACTIVE', 'PENDING_DELETION']);
 
 export function getAuth(c: Context<AppEnv>): AuthContext {
   const a = c.get('auth');

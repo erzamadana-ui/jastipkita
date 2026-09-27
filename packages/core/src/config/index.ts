@@ -129,6 +129,8 @@ export interface BuyerReferralConfig {
   readonly withdrawable: boolean;
   readonly experiment: ReferralExperimentConfig;
   readonly guardrails: ReferralGuardrailsConfig;
+  /** PENDING referrals without a qualifying transaction expire after N days. */
+  readonly pendingExpiryDays: number;
 }
 
 export interface TravelerReferralConfig {
@@ -138,6 +140,7 @@ export interface TravelerReferralConfig {
   readonly monthlyCapIdr: number;
   readonly creditExpiryDays: number;
   readonly withdrawable: boolean;
+  readonly pendingExpiryDays: number;
 }
 
 export type KycLevelKey = '1' | '2' | '3' | '4' | '5';
@@ -211,6 +214,33 @@ export interface CancellationMatrixRow {
 
 export type CancellationMatrix = readonly CancellationMatrixRow[];
 
+export interface MoneyPolicyConfig {
+  /** Refunds up to this amount are auto-approved; above it need admin approval (maker-checker). */
+  readonly refundAutoApproveMaxIdr: number;
+  /** SYSTEM retry budget (§15.6 RETRY_BUDGET / payouts). */
+  readonly refundMaxSystemRetries: number;
+  readonly payoutMaxSystemRetries: number;
+  /** Delay between COMPLETED and the payout attempt (hours). */
+  readonly payoutDelayHours: number;
+  /** Reconciliation polls the provider for PENDING payments older than this. */
+  readonly pendingPaymentPollMinutes: number;
+  readonly payoutFeeIdr: number;
+  readonly payoutMinIdr: number;
+  readonly note?: string;
+}
+
+export interface MarketplaceLifetimesConfig {
+  readonly requestExpiryDays: number;
+  readonly offerExpiryHours: number;
+  readonly unpublishedTripGraceDays: number;
+}
+
+export const SUPPORT_PRIORITIES = ['URGENT', 'HIGH', 'NORMAL', 'LOW'] as const;
+export type SupportPriority = (typeof SUPPORT_PRIORITIES)[number];
+export interface SupportSlaConfig {
+  readonly hoursByPriority: Readonly<Record<SupportPriority, number>>;
+}
+
 export interface BusinessConfig {
   readonly 'pricing.platform_fee': FeeRateConfig;
   readonly 'pricing.protection_fee': FeeRateConfig;
@@ -231,6 +261,9 @@ export interface BusinessConfig {
   readonly 'trust.weights': TrustWeights;
   readonly trips: TripsConfig;
   readonly 'cancellation.matrix': CancellationMatrix;
+  readonly 'money.policy': MoneyPolicyConfig;
+  readonly 'marketplace.lifetimes': MarketplaceLifetimesConfig;
+  readonly 'support.sla': SupportSlaConfig;
 }
 
 export type BusinessConfigKey = keyof BusinessConfig;
@@ -255,6 +288,9 @@ export const BUSINESS_CONFIG_KEYS: readonly BusinessConfigKey[] = [
   'trust.weights',
   'trips',
   'cancellation.matrix',
+  'money.policy',
+  'marketplace.lifetimes',
+  'support.sla',
 ];
 
 export function isBusinessConfigKey(key: string): key is BusinessConfigKey {
@@ -537,8 +573,10 @@ const VALIDATORS: { readonly [K in BusinessConfigKey]: KeyValidator } = {
       'withdrawable',
       'experiment',
       'guardrails',
+      'pendingExpiryDays',
     ]);
     if (!o) return;
+    c.int(`${p}.pendingExpiryDays`, o.pendingExpiryDays, 1, 730);
     c.bool(`${p}.enabled`, o.enabled);
     c.idr(`${p}.referrerCreditIdr`, o.referrerCreditIdr);
     c.idr(`${p}.refereeCreditIdr`, o.refereeCreditIdr);
@@ -571,8 +609,10 @@ const VALIDATORS: { readonly [K in BusinessConfigKey]: KeyValidator } = {
       'monthlyCapIdr',
       'creditExpiryDays',
       'withdrawable',
+      'pendingExpiryDays',
     ]);
     if (!o) return;
+    c.int(`${p}.pendingExpiryDays`, o.pendingExpiryDays, 1, 730);
     c.bool(`${p}.enabled`, o.enabled);
     c.idr(`${p}.referrerCreditIdr`, o.referrerCreditIdr);
     c.int(`${p}.requiredCompletedTransactions`, o.requiredCompletedTransactions, 1, 1000);
@@ -647,6 +687,38 @@ const VALIDATORS: { readonly [K in BusinessConfigKey]: KeyValidator } = {
     c.bool(`${p}.allowUnverifiedActive`, o.allowUnverifiedActive);
     c.int(`${p}.maxActiveTripsPerTraveler`, o.maxActiveTripsPerTraveler, 1, 100);
     c.num(`${p}.maxCapacityKg`, o.maxCapacityKg, 0, 200, { exclusiveMin: true });
+  },
+  'money.policy': (c, v, p) => {
+    const req = ['refundAutoApproveMaxIdr', 'refundMaxSystemRetries', 'payoutMaxSystemRetries', 'payoutDelayHours', 'pendingPaymentPollMinutes', 'payoutFeeIdr', 'payoutMinIdr'];
+    const o = c.object(p, v, [...req, 'note'], req);
+    if (!o) return;
+    c.idr(`${p}.refundAutoApproveMaxIdr`, o.refundAutoApproveMaxIdr);
+    c.int(`${p}.refundMaxSystemRetries`, o.refundMaxSystemRetries, 0, 20);
+    c.int(`${p}.payoutMaxSystemRetries`, o.payoutMaxSystemRetries, 0, 20);
+    c.int(`${p}.payoutDelayHours`, o.payoutDelayHours, 0, 720);
+    c.int(`${p}.pendingPaymentPollMinutes`, o.pendingPaymentPollMinutes, 1, 1440);
+    c.idr(`${p}.payoutFeeIdr`, o.payoutFeeIdr);
+    c.idr(`${p}.payoutMinIdr`, o.payoutMinIdr);
+    if (o.note !== undefined) c.str(`${p}.note`, o.note);
+  },
+  'marketplace.lifetimes': (c, v, p) => {
+    const o = c.object(p, v, ['requestExpiryDays', 'offerExpiryHours', 'unpublishedTripGraceDays']);
+    if (!o) return;
+    c.int(`${p}.requestExpiryDays`, o.requestExpiryDays, 1, 365);
+    c.int(`${p}.offerExpiryHours`, o.offerExpiryHours, 1, 720);
+    c.int(`${p}.unpublishedTripGraceDays`, o.unpublishedTripGraceDays, 0, 30);
+  },
+  'support.sla': (c, v, p) => {
+    const o = c.object(p, v, ['hoursByPriority']);
+    if (!o) return;
+    const h = c.object(`${p}.hoursByPriority`, o.hoursByPriority, SUPPORT_PRIORITIES);
+    if (!h) return;
+    let prev = 0;
+    for (const pr of SUPPORT_PRIORITIES) {
+      if (!c.int(`${p}.hoursByPriority.${pr}`, h[pr], 1, 720)) continue;
+      if ((h[pr] as number) < prev) c.fail(`${p}.hoursByPriority.${pr}`, 'must be ≥ the SLA of the more urgent priority');
+      prev = h[pr] as number;
+    }
   },
   'cancellation.matrix': (c, v, p) => {
     const rows = c.array(p, v);

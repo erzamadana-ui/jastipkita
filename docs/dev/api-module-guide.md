@@ -139,4 +139,16 @@ Producer menulis event di transaksi DB yang sama (`emitEvent(tx, aggregateType, 
 | `support.ticket_updated` | engagement / admin | ticketId, userId, status |
 | `privacy.export_ready` / `account.deletion_scheduled` | identity | requestId?, userId, effectiveAt? |
 
+| `transaction.cancelled_with_penalty` | money | transactionId, actorType, actorId, trustPenalty, stage |
+| `payment.amount_mismatch` | money | paymentId, transactionId, expectedIdr, receivedIdr |
+| `refund.destination_required` | money | refundId, transactionId, buyerId |
+| `price_confirmation.clarification_requested` | money | priceConfirmationId, transactionId, buyerId, travelerId |
+| `request.published` / `request.cancelled` / `request.expired` / `request.reopened` | marketplace | requestId, buyerId |
+| `offer.withdrawn` | marketplace | offerId, requestId, tripId |
+| `trip.cancelled` | marketplace | tripId, travelerId, openTransactionIds[] — money membatalkan transaksi terbuka per cancellation matrix |
+| `dispute.sla_breached` | engagement | disputeId, stage |
+| `rating.created` | engagement | ratingId, transactionId, rateeId |
+| `credit.cashback_granted` | engagement | userId, amountIdr, promotionId |
+| `risk.review_resolved` | admin | reviewId, subjectType, subjectId, userId?, outcome CLEARED/CONFIRMED_FRAUD |
+
 Notifikasi (engagement) memetakan event di atas ke template in-app/push/email sesuai daftar lifecycle di brief (§18) dan preferensi user.

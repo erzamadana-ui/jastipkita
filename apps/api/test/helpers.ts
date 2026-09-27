@@ -20,6 +20,7 @@ import { resetRateLimits } from '../src/middleware/rate-limit';
 import { clearPermissionCache } from '../src/middleware/auth';
 import { MemoryStorageProvider, MockPaymentProvider, LogEmailProvider, LogPushProvider, LogSmsProvider } from '../src/providers/mock';
 import { issueSession, type IssuedSession } from '../src/services/session';
+import type { Providers } from '../src/providers/types';
 import { drainWorker } from '../src/jobs/runner';
 
 const ADMIN_URL = process.env.TEST_PG_ADMIN_URL ?? 'postgres://postgres@localhost:5432/postgres';
@@ -66,7 +67,7 @@ export interface TestContext {
 
 let counter = 0;
 
-export async function createTestContext(opts: { now?: Date; env?: Record<string, string> } = {}): Promise<TestContext> {
+export async function createTestContext(opts: { now?: Date; env?: Record<string, string>; providers?: Partial<Providers> } = {}): Promise<TestContext> {
   const tpl = process.env.JK_TEST_TEMPLATE;
   if (!tpl) throw new Error('JK_TEST_TEMPLATE not set — run through vitest (globalSetup)');
   const dbName = `jk_t_${process.pid}_${Date.now().toString(36)}_${counter++}`;
@@ -86,7 +87,7 @@ export async function createTestContext(opts: { now?: Date; env?: Record<string,
   const push = new LogPushProvider();
   const sms = new LogSmsProvider();
   const storage = new MemoryStorageProvider(env.API_BASE_URL);
-  const deps = await buildDeps(env, { sql, clock, logger: silentLogger, providers: { payment, email, push, sms, storage } });
+  const deps = await buildDeps(env, { sql, clock, logger: silentLogger, providers: { payment, email, push, sms, storage, ...(opts.providers ?? {}) } });
   const app = createApp(deps);
   resetRateLimits();
   clearPermissionCache();

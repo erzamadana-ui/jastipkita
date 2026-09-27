@@ -2,7 +2,7 @@
  * Mock / log implementations for every provider. Used in development and tests, and as the default
  * until real credentials are configured. Everything here is labelled MOCK — never claim it is live.
  */
-import { randomToken } from '../lib/crypto';
+import { randomToken, timingSafeEqualStr } from '../lib/crypto';
 import type { Logger } from '../lib/logger';
 import type {
   CheckoutSession,
@@ -78,7 +78,7 @@ export class MockPaymentProvider implements PaymentProvider {
   }
 
   async verifyWebhook(headers: Headers): Promise<boolean> {
-    return headers.get('x-callback-token') === MOCK_WEBHOOK_TOKEN;
+    return timingSafeEqualStr(headers.get('x-callback-token') ?? '', MOCK_WEBHOOK_TOKEN);
   }
 
   parseWebhook(rawBody: string): ParsedWebhook {

@@ -53,5 +53,5 @@ export const Uuid = z.string().uuid();
 export const IsoDate = z.string().datetime({ offset: true });
 export const Idr = z.number().int().openapi({ description: 'Rupiah (integer, no decimals)', example: 1250000 });
 export const IdempotencyHeader = z.object({
-  'idempotency-key': z.string().min(8).max(255).openapi({ param: { name: 'Idempotency-Key', in: 'header' }, example: '6f1f3b0e-0a0b-4c55-9d8b-2a2f7e5d1c11' }),
+  'idempotency-key': z.string().min(8).max(255).openapi({ description: 'Unique per logical operation (UUID). Replays return the original response.', example: '6f1f3b0e-0a0b-4c55-9d8b-2a2f7e5d1c11' }),
 });

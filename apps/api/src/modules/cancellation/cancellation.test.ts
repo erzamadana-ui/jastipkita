@@ -1,3 +1,4 @@
+import { DEFAULT_BUSINESS_CONFIG } from '@jastipkita/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestContext, type TestContext } from '../../../test/helpers';
 import { processPayouts, scheduleOwedPayouts } from '../payouts/service';
@@ -233,9 +234,15 @@ describe('refunds', () => {
   });
 
   it('refund above the auto-approve threshold waits for a maker-checker approval', async () => {
-    await t.adminSql`
-      INSERT INTO business_configs (key, version, value, status, change_reason, approved_at)
-      VALUES ('money.policy', 1, '{"refundAutoApproveMaxIdr": 1000}'::jsonb, 'ACTIVE', 'test: low auto-approve limit', now())`;
+    const setPolicy = async (value: Record<string, unknown>, reason: string) => {
+      await t.adminSql`UPDATE business_configs SET status = 'SUPERSEDED', superseded_at = now() WHERE key = 'money.policy' AND status = 'ACTIVE'`;
+      await t.adminSql`
+        INSERT INTO business_configs (key, version, value, status, change_reason, approved_at)
+        SELECT 'money.policy', coalesce(max(version), 0) + 1, ${t.adminSql.json(value as never)}, 'ACTIVE', ${reason}, now()
+          FROM business_configs WHERE key = 'money.policy'`;
+      t.deps.config.invalidate();
+    };
+    await setPolicy({ ...DEFAULT_BUSINESS_CONFIG['money.policy'], refundAutoApproveMaxIdr: 1000 }, 'test: low auto-approve limit');
     try {
       const tx = await createMatchedTx(t, p);
       await quoteAndPay(t, p, tx);
@@ -248,7 +255,7 @@ describe('refunds', () => {
       await processRefunds(t.deps, { transactionId: tx.id });
       expect(await txStatus(t, tx.id)).toBe('REFUNDED');
     } finally {
-      await t.adminSql`UPDATE business_configs SET status = 'SUPERSEDED', superseded_at = now() WHERE key = 'money.policy' AND status = 'ACTIVE'`;
+      await setPolicy({ ...DEFAULT_BUSINESS_CONFIG['money.policy'] }, 'test: restore default policy');
     }
   });
 

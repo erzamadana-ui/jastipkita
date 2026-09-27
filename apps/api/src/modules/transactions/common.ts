@@ -1,3 +1,4 @@
+import { DEFAULT_BUSINESS_CONFIG, type BusinessConfig } from '@jastipkita/core';
 /**
  * Shared helpers for the money module group (transactions, checkout, payments, ledger, refunds, …).
  * Local to the money group — nothing here is imported by other groups except the documented service APIs.
@@ -174,32 +175,12 @@ export async function withCore<T>(fn: () => T | Promise<T>): Promise<T> {
   }
 }
 
-// ------------------------------------------------------------------ money policy (optional config key)
+// ------------------------------------------------------------------ money policy (business_configs `money.policy`)
 
-export interface MoneyPolicy {
-  /** Refunds above this go to PENDING_APPROVAL (maker-checker). ASSUMPTION — tune via business_configs `money.policy`. */
-  refundAutoApproveMaxIdr: number;
-  /** SYSTEM retry budget for refunds (§15.6 RETRY_BUDGET) and payouts. */
-  refundMaxSystemRetries: number;
-  payoutMaxSystemRetries: number;
-  /** Delay between COMPLETED and the payout attempt (hours). */
-  payoutDelayHours: number;
-  /** Reconciliation: poll the provider for PENDING payments older than this. */
-  pendingPaymentPollMinutes: number;
-}
+export type MoneyPolicy = BusinessConfig['money.policy'];
+export const DEFAULT_MONEY_POLICY: MoneyPolicy = DEFAULT_BUSINESS_CONFIG['money.policy'];
 
-export const DEFAULT_MONEY_POLICY: MoneyPolicy = {
-  refundAutoApproveMaxIdr: 10_000_000,
-  refundMaxSystemRetries: 3,
-  payoutMaxSystemRetries: 3,
-  payoutDelayHours: 0,
-  pendingPaymentPollMinutes: 15,
-};
-
-/**
- * Reads the optional ACTIVE business_configs row `money.policy` (not part of core BusinessConfig yet);
- * missing keys fall back to DEFAULT_MONEY_POLICY.
- */
+/** Reads the ACTIVE `money.policy` config (versioned, editable from Admin); missing fields fall back to defaults. */
 export async function moneyPolicy(db: Db): Promise<MoneyPolicy> {
   const [row] = await db<{ value: Partial<MoneyPolicy> }[]>`
     SELECT value FROM business_configs WHERE key = 'money.policy' AND status = 'ACTIVE' ORDER BY version DESC LIMIT 1`;
