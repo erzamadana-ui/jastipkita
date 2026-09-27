@@ -5188,7 +5188,14 @@
               "minor",
               "idr"
             ],
-            "description": "Deprecated: use purchaseCeilingIdr"
+            "description": "Deprecated: use purchaseCeilingIdr / purchaseCeilingMinor"
+          },
+          "purchaseCeilingMinor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Max item spend in the merchant currency (minor units of item.currency) once PURCHASE_APPROVED"
           },
           "purchaseCeilingIdr": {
             "type": [
@@ -5308,6 +5315,7 @@
           "quantity",
           "deliveryMethod",
           "purchaseCeiling",
+          "purchaseCeilingMinor",
           "purchaseCeilingIdr",
           "autoConfirmAt",
           "statusChangedAt",
@@ -5478,7 +5486,14 @@
               "minor",
               "idr"
             ],
-            "description": "Deprecated: use purchaseCeilingIdr"
+            "description": "Deprecated: use purchaseCeilingIdr / purchaseCeilingMinor"
+          },
+          "purchaseCeilingMinor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Max item spend in the merchant currency (minor units of item.currency) once PURCHASE_APPROVED"
           },
           "purchaseCeilingIdr": {
             "type": [
@@ -5590,6 +5605,7 @@
           "quantity",
           "deliveryMethod",
           "purchaseCeiling",
+          "purchaseCeilingMinor",
           "purchaseCeilingIdr",
           "autoConfirmAt",
           "statusChangedAt",

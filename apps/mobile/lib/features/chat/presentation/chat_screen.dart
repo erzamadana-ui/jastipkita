@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +10,7 @@ import '../../../core/format/dates.dart';
 import '../../../core/l10n/l10n.dart';
 import '../../../core/models/engagement.dart';
 import '../../../core/router/deep_links.dart';
+import '../../../widgets/api_image.dart';
 import '../../../widgets/common.dart';
 import '../../../widgets/states.dart';
 import '../../engagement/data/engagement_repository.dart';
@@ -62,18 +62,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _loadConversation() async {
     try {
-      String? cursor;
-      for (var i = 0; i < 5; i++) {
-        final page = await _repo.conversations(cursor: cursor);
-        for (final c in page.items) {
-          if (c.id == widget.conversationId) {
-            if (mounted) setState(() => _conversation = c);
-            return;
-          }
-        }
-        if (!page.hasMore) return;
-        cursor = page.nextCursor;
-      }
+      final conversation = await _repo.conversation(widget.conversationId);
+      if (mounted) setState(() => _conversation = conversation);
     } on Object {
       // Header metadata is optional; messages still load.
     }
@@ -204,17 +194,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _openImage(String fileId) async {
+  /// Attachments carry an absolute `contentUrl` (API-served, bearer attached by [ApiImage]).
+  Future<void> _openImage(ChatAttachment attachment) async {
     try {
-      final url = await ref.read(fileUploadServiceProvider).imageUrl(fileId);
+      final url = attachment.contentUrl ?? await ref.read(fileUploadServiceProvider).imageUrl(attachment.fileId);
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (BuildContext dialogContext) => Dialog(
-          clipBehavior: Clip.antiAlias,
-          child: InteractiveViewer(child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain)),
-        ),
-      );
+      await showApiImageDialog(context, url);
     } on Object catch (e) {
       if (!mounted) return;
       showJkSnack(context, errorMessage(context.l10n, e), error: true);
@@ -352,7 +337,7 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({required this.message, required this.onOpenImage});
 
   final ChatMessage message;
-  final ValueChanged<String> onOpenImage;
+  final ValueChanged<ChatAttachment> onOpenImage;
 
   @override
   Widget build(BuildContext context) {
@@ -415,7 +400,7 @@ class _MessageBubble extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: OutlinedButton.icon(
-              onPressed: () => onOpenImage(a.fileId),
+              onPressed: () => onOpenImage(a),
               icon: const Icon(Icons.image_outlined),
               label: Text(l10n.chatViewPhoto),
             ),

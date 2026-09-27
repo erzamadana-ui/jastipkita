@@ -39,6 +39,10 @@ JkTone _tripTone(BuildContext context, String status) {
 String _route(String originCity, String originCountry, String destinationCity, String destinationCountry) =>
     '$originCity ($originCountry) → $destinationCity ($destinationCountry)';
 
+/// "Tokyo (JP) → Jakarta (ID)" for a transaction's trip (`TransactionDetail.trip`).
+String tripRouteText(TripRoute trip) =>
+    _route(trip.originCity, trip.originCountry, trip.destinationCity, trip.destinationCountry);
+
 /// Trip card (§5.11): route, dates, verified badge, remaining capacity, status, fee, CTA.
 class TripCard extends StatelessWidget {
   const TripCard({super.key, required this.trip, this.onTap, this.ctaLabel, this.onCta});
@@ -242,7 +246,7 @@ class TransactionCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const ProductThumb(),
+              ProductThumb(imageUrl: tx.imageUrl),
               const SizedBox(width: JkSpacing.s3),
               Expanded(
                 child: Column(
@@ -254,6 +258,13 @@ class TransactionCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: JkTypeScale.titleS.copyWith(color: jk.onSurface),
                     ),
+                    if (tx.counterpartyName != null)
+                      Text(
+                        tx.isBuyer ? l10n.checkoutTraveler(tx.counterpartyName!) : l10n.requestBuyer(tx.counterpartyName!),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted),
+                      ),
                     const SizedBox(height: 4),
                     StatusChip(label: Labels.txStatus(l10n, tx.status), tone: jk.statusTone(tx.status)),
                   ],
@@ -333,7 +344,7 @@ class OfferCard extends StatelessWidget {
     final locale = context.localeCode;
     final traveler = offer.traveler;
     final trip = offer.trip;
-    final level = traveler?.impliedKycLevel;
+    final level = traveler?.kycLevel;
     final message = offer.message;
     final expires = offer.expiresAt;
     final rating = traveler?.ratingAverage;
@@ -365,7 +376,7 @@ class OfferCard extends StatelessWidget {
             spacing: JkSpacing.s2,
             runSpacing: JkSpacing.s2,
             children: <Widget>[
-              if (traveler?.trustScore != null) TrustScoreBadge(score: traveler!.trustScore!),
+              if (traveler?.trustScore != null) TrustScoreBadge(score: traveler!.trustScore!, tier: traveler.trustTier),
               if (level != null) KycLevelBadge(level: level),
               if (rating != null)
                 StatusChip(
@@ -433,7 +444,7 @@ class TravelerCard extends StatelessWidget {
     final locale = context.localeCode;
     final trip = recommendation.trip;
     final traveler = trip.traveler;
-    final level = traveler?.impliedKycLevel;
+    final level = traveler?.kycLevel;
     final rating = traveler?.ratingAverage;
     final action = actionLabel;
     final card = JkCard(
@@ -472,7 +483,7 @@ class TravelerCard extends StatelessWidget {
             spacing: JkSpacing.s2,
             runSpacing: JkSpacing.s2,
             children: <Widget>[
-              if (traveler?.trustScore != null) TrustScoreBadge(score: traveler!.trustScore!),
+              if (traveler?.trustScore != null) TrustScoreBadge(score: traveler!.trustScore!, tier: traveler.trustTier),
               if (level != null) KycLevelBadge(level: level, full: level >= 5),
               if (trip.verified) StatusChip(label: l10n.tripVerifiedBadge, tone: jk.status['secured']!, icon: Icons.verified_outlined),
               if (rating != null)

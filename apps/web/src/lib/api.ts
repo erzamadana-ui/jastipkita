@@ -8,7 +8,6 @@
 import { CONFIG } from '../config.ts';
 
 export const API_BASE = CONFIG.apiBaseUrl;
-export const LEGAL_CONSENT_VERSION = '2026-09';
 
 export class ApiError extends Error {
   constructor(

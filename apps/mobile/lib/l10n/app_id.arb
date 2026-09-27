@@ -178,9 +178,6 @@
   "stageAfterPurchase": "Setelah barang dibeli",
   "stageDuringTravel": "Dalam perjalanan",
   "stageAfterArrival": "Setelah tiba",
-  "stageHintBeforePayment": "Belum ada dana yang dibayar. Pembatalan tanpa biaya.",
-  "stageHintAfterPayment": "Barang belum dibeli. Dana di SafePay dikembalikan penuh sesuai kebijakan refund.",
-  "stageHintAfterPurchase": "Barang sudah dibeli. Pembatalan ditinjau tim dan bisa ada kompensasi untuk traveler.",
   "ticketStatusOpen": "Dibuka",
   "ticketStatusPendingUser": "Menunggu balasanmu",
   "ticketStatusInProgress": "Diproses",
@@ -957,6 +954,21 @@
   "segFlying": "Terbang",
   "segArrived": "Tiba",
   "segHandover": "Diterima",
+  "channelFeeFree": "Tanpa biaya",
+  "channelFeePlatform": "Biaya ditanggung JastipKita",
+  "channelNotRefundable": "Refund tidak otomatis: dikirim ke rekening bank yang kamu isi",
+  "channelUnavailable": "Tidak tersedia untuk total ini",
+  "cancelPreviewExact": "Angka ini dihitung server dengan aturan yang sama saat pembatalan diproses.",
+  "cancelBlockedTitle": "Tidak bisa dibatalkan sekarang",
+  "cancelBlockedBody": "Transaksi di tahap ini tidak bisa dibatalkan sendiri. Jika ada masalah, buka sengketa.",
+  "cancelPreviewAdmin": "Pembatalan di tahap ini perlu persetujuan tim JastipKita.",
+  "cancelPreviewNotRefunded": "Tidak dikembalikan",
+  "cancelPreviewCredit": "JastipKita Credit dikembalikan",
+  "cancelPreviewNothingPaid": "Belum ada dana yang dibayar, jadi tidak ada refund atau potongan.",
+  "legalDocumentTitle": "Dokumen legal",
+  "legalTemplateNotice": "Teks ini masih TEMPLATE dan belum final dari tim hukum. Versi yang kamu setujui tercatat dan akan diberitahukan bila berubah.",
+  "legalOpenWeb": "Buka versi web",
+  "legalReadDocument": "Baca dokumen",
   "countdownSemantics": "{label} sisa {minutes} menit {seconds} detik",
   "@countdownSemantics": {
     "description": "Screen-reader text of a countdown chip.",
@@ -1722,6 +1734,69 @@
       "current": {
         "type": "String",
         "example": "Dibeli"
+      }
+    }
+  },
+  "payoutPaidOn": "Dicairkan {date}",
+  "@payoutPaidOn": {
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "12 Okt 2026"
+      }
+    }
+  },
+  "payoutScheduledOn": "Dijadwalkan {date}",
+  "@payoutScheduledOn": {
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "12 Okt 2026"
+      }
+    }
+  },
+  "channelTotal": "Total {amount}",
+  "@channelTotal": {
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "Rp1.368.830"
+      }
+    }
+  },
+  "channelAboveMax": "Tidak tersedia: total melebihi batas {amount}",
+  "@channelAboveMax": {
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "Rp10.000.000"
+      }
+    }
+  },
+  "channelBelowMin": "Tidak tersedia: total di bawah minimum {amount}",
+  "@channelBelowMin": {
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "Rp10.000"
+      }
+    }
+  },
+  "legalVersion": "Versi {version}",
+  "@legalVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "0.1-template"
+      }
+    }
+  },
+  "legalEffective": "berlaku {date}",
+  "@legalEffective": {
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "27 Sep 2026"
       }
     }
   }

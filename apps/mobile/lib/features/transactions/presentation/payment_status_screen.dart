@@ -233,7 +233,7 @@ class _PaymentStatusScreenState extends ConsumerState<PaymentStatusScreen> {
           children: <Widget>[
             IconButton.outlined(
               tooltip: l10n.chatWithCounterpart,
-              onPressed: () => openTransactionChat(context, ref, d.id),
+              onPressed: () => openTransactionChat(context, ref, d.id, conversationId: d.conversationId),
               icon: const Icon(Icons.chat_bubble_outline),
             ),
             const SizedBox(width: JkSpacing.s3),

@@ -54,7 +54,6 @@ Semua nilai **publik** (ikut ter-compile ke APK/IPA) — jangan pernah menaruh s
 | `TERMS_URL`, `PRIVACY_POLICY_URL`, `ACCOUNT_DELETION_URL` | turunan `WEB_BASE_URL` | `/legal/terms-of-service/`, `/legal/privacy-policy/`, `/hapus-akun/` |
 | `SUPPORT_WHATSAPP`, `SUPPORT_EMAIL` | kosong | Kontak CS di layar Bantuan (disembunyikan bila kosong) |
 | `SHOW_SANDBOX_BADGE` | on kecuali production | Badge SANDBOX di Pengaturan (badge per pembayaran/KYC mengikuti flag dari API) |
-| `CONSENT_VERSION` | `2026-09` | Versi dokumen persetujuan; bila API menolak (`CONSENT_VERSION_INVALID`) app memakai `allowedVersions` dari respons |
 | `APP_VERSION` | `0.1.0` | Ditampilkan di Pengaturan |
 
 ## Menjalankan lokal
@@ -133,6 +132,16 @@ Aturan yang ditegakkan di kode:
   per aksi logis, dipakai ulang untuk setiap retry (jaringan/5xx/429/`IDEMPOTENCY_IN_PROGRESS`).
 - **Glass** hanya di lapisan navigasi (tab bar iOS); konten transaksi selalu opak. Reduce-motion dihormati.
 - **Tidak ada optimistic update** untuk aksi finansial.
+- **Kontrak API** (`docs/api/CHANGELOG.md` 2026-09-27): detail transaksi bertipe penuh (pihak "Budi S." + trust
+  tier/KYC dari server, rute trip, `purchaseCeilingIdr`, `payout`, `conversationId`, `delivery.pinAvailable`);
+  pemilih kanal memakai `quote.paymentOptions` (biaya & total per kanal, refundable, `available:false` + alasan);
+  batal selalu didahului `GET /transactions/{id}/cancel/preview`; chat via `GET /transactions/{id}/conversation`.
+- **Persetujuan & dokumen legal** — jenis dan versi persetujuan (signup & KYC) dibaca dari
+  `GET /v1/consents/requirements`, dokumen ditampilkan di app dari `GET /v1/legal/documents/{type}` (label TEMPLATE
+  bila `isTemplate`). Tidak ada versi yang di-hard-code.
+- **URL file absolut** — dipakai apa adanya (tanpa prefiks base URL); file yang dilayani API
+  (`/v1/files/{id}/content`) dimuat dengan bearer lewat `ApiImage`. Sign in with Apple mengirim `rawNonce`
+  (Apple menerima SHA-256-nya); KYC mengirim `livenessFileIds` (1–5).
 - Label **SANDBOX** pada integrasi mock: pembayaran (`sandbox`), ekstraksi AI (`mode != LIVE`), KYC
   (`providerEnv == TEST`), dan **liveness** — `PhotoSequenceLiveness` adalah default *SANDBOX* yang bisa
   diganti SDK liveness sungguhan lewat `livenessProvider` (antarmuka `LivenessProvider`).
@@ -149,7 +158,7 @@ flutter test
 | `test/core/api_exception_test.dart` | parsing envelope error, pemetaan DioException, matriks retry, pesan pengguna |
 | `test/core/idempotency_test.dart` | key sama di setiap retry (unit + lewat HTTP palsu), dilepas setelah jawaban definitif |
 | `test/core/auth_refresh_test.dart` | 401 bersamaan → tepat satu refresh, replay sekali, token ditolak → sesi berakhir |
-| `test/core/models_test.dart` | fixture berbentuk OpenAPI: Quote (11 baris), TransactionDetail, TripPublic, Tokens, Paged |
+| `test/core/models_test.dart` | fixture berbentuk OpenAPI: Quote (11 baris, paymentOptions), TransactionDetail bertipe, CancellationPreview, ConsentRequirements + payload, TripPublic, Tokens, Paged |
 | `test/core/deep_links_test.dart` | normalisasi link & redirect auth dengan target tertunda |
 | `test/widgets/price_breakdown_card_test.dart` | 11 baris urutan tetap, total, pengurangan, estimasi, kedaluwarsa |
 | `test/widgets/safepay_gate_test.dart` | JANGAN BELI di `PAYMENT_SECURED`; tombol beli aktif hanya di `PURCHASE_APPROVED` (19 status) |

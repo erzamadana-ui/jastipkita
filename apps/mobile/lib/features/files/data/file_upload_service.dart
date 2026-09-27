@@ -124,12 +124,13 @@ class FileUploadService {
     return AppConfig.rewriteLoopbackUrl(readString(json, 'url'));
   }
 
-  /// Downloads a text file (e.g. the UU PDP data export). Encrypted files are streamed and
-  /// decrypted by the API (`requiresAuth`), plain ones come from a presigned URL.
+  /// Downloads a text file (e.g. the UU PDP data export). The URL is always absolute: encrypted
+  /// files are streamed and decrypted by the API (`requiresAuth` → bearer attached), plain ones
+  /// come from a presigned URL.
   Future<String> downloadText(String fileId) async {
     final json = await _api.get('/files/$fileId/url');
     final url = readString(json, 'url');
-    if (readBool(json, 'requiresAuth') || url.startsWith('/')) return _api.getText(url);
+    if (readBool(json, 'requiresAuth')) return _api.getText(url);
     return _api.getExternalText(url);
   }
 }

@@ -19,7 +19,8 @@ class TripFee {
   Json toJson() => <String, dynamic>{'type': type, 'value': value};
 }
 
-/// Public profile — first name + initial, badge and rating only (no PII).
+/// Public profile — first name + last initial ("Budi S."), trust and rating only (no PII).
+/// Same shape for discovery (`PublicProfile`) and transaction parties (`TransactionParty`).
 class PublicProfile {
   const PublicProfile({
     required this.id,
@@ -29,27 +30,43 @@ class PublicProfile {
     this.identityVerified = false,
     this.ratingAverage,
     this.ratingCount = 0,
+    this.buyerRatingAverage,
+    this.buyerRatingCount = 0,
     this.completedTransactions = 0,
     this.trustScore,
+    this.trustTier,
+    this.trustTierLabel,
+    this.trustTierLabelEn,
     this.kycLevel,
+    this.avatarUrl,
+    this.memberSince,
   });
 
   factory PublicProfile.fromJson(Json json) {
     final badge = readObjectOrNull(json, 'trustBadge');
-    final rating = readObjectOrNull(json, 'rating');
-    final asTraveler = rating == null ? null : readObjectOrNull(rating, 'asTraveler');
-    final ratingSource = asTraveler ?? rating;
+    final tier = readObjectOrNull(json, 'trustTier');
+    // Transaction parties: `ratingSummary {asTraveler, asBuyer}`; discovery: `rating {average, count}`.
+    final summary = readObjectOrNull(json, 'ratingSummary');
+    final asTraveler = summary == null ? readObjectOrNull(json, 'rating') : readObjectOrNull(summary, 'asTraveler');
+    final asBuyer = summary == null ? null : readObjectOrNull(summary, 'asBuyer');
     return PublicProfile(
       id: readString(json, 'id'),
       displayName: readString(json, 'displayName'),
       badgeTier: badge == null ? null : readStringOrNull(badge, 'tier'),
       badgeLabel: badge == null ? null : readStringOrNull(badge, 'label'),
       identityVerified: readBool(json, 'identityVerified'),
-      ratingAverage: ratingSource == null ? null : readDoubleOrNull(ratingSource, 'average'),
-      ratingCount: ratingSource == null ? 0 : readInt(ratingSource, 'count'),
+      ratingAverage: asTraveler == null ? null : readDoubleOrNull(asTraveler, 'average'),
+      ratingCount: asTraveler == null ? 0 : readInt(asTraveler, 'count'),
+      buyerRatingAverage: asBuyer == null ? null : readDoubleOrNull(asBuyer, 'average'),
+      buyerRatingCount: asBuyer == null ? 0 : readInt(asBuyer, 'count'),
       completedTransactions: readInt(json, 'completedTransactions'),
       trustScore: readIntOrNull(json, 'trustScore'),
+      trustTier: tier == null ? null : readStringOrNull(tier, 'tier'),
+      trustTierLabel: tier == null ? null : readStringOrNull(tier, 'label'),
+      trustTierLabelEn: tier == null ? null : readStringOrNull(tier, 'labelEn'),
       kycLevel: readIntOrNull(json, 'kycLevel'),
+      avatarUrl: readStringOrNull(json, 'avatarUrl'),
+      memberSince: readDate(json, 'memberSince'),
     );
   }
 
@@ -58,28 +75,30 @@ class PublicProfile {
   final String? badgeTier;
   final String? badgeLabel;
   final bool identityVerified;
+
+  /// Rating as a traveler (discovery `rating` or `ratingSummary.asTraveler`).
   final double? ratingAverage;
   final int ratingCount;
+
+  /// Rating as a buyer (transaction parties only).
+  final double? buyerRatingAverage;
+  final int buyerRatingCount;
   final int completedTransactions;
 
-  /// Only present on transaction parties (`GET /transactions/{id}`), not on discovery.
+  /// 0–100, computed by the server; [trustTier] is the server's band (EXCELLENT|GOOD|FAIR|LOW).
   final int? trustScore;
+  final String? trustTier;
+  final String? trustTierLabel;
+  final String? trustTierLabelEn;
   final int? kycLevel;
 
-  /// KYC level implied by the public badge tier when the exact level is not disclosed.
-  int? get impliedKycLevel {
-    if (kycLevel != null) return kycLevel;
-    switch (badgeTier) {
-      case 'TRUSTED_TRAVELER':
-        return 5;
-      case 'TRAVELER_VERIFIED':
-        return 4;
-      case 'IDENTITY_VERIFIED':
-        return 3;
-      default:
-        return null;
-    }
-  }
+  /// Absolute URL (presigned, or `/v1/files/{id}/content` with bearer).
+  final String? avatarUrl;
+  final DateTime? memberSince;
+
+  /// The rating that matters for this party's role in a transaction.
+  (double?, int) ratingAs(String role) =>
+      role == 'BUYER' ? (buyerRatingAverage, buyerRatingCount) : (ratingAverage, ratingCount);
 }
 
 class TripVerification {

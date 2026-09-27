@@ -1,7 +1,7 @@
 ---
 title: Persetujuan Komunikasi Pemasaran
 description: Persetujuan opsional untuk menerima promo dan kabar produk JastipKita, dan cara menariknya.
-version: "0.1-draft"
+version: "0.1-template"
 effectiveDate: "[TANGGAL BERLAKU — diisi saat peluncuran]"
 order: 8
 ---

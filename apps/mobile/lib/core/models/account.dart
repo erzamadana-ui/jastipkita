@@ -165,6 +165,149 @@ class ConsentState {
   List<String> get missingRequired => requiredAtSignup.where((String t) => !isGranted(t)).toList();
 }
 
+/// One consent to collect (`GET /consents/requirements`). The version comes from the server —
+/// the API rejects any other (`422 CONSENT_VERSION_INVALID`).
+class ConsentRequirement {
+  const ConsentRequirement({
+    required this.type,
+    required this.isRequired,
+    this.version,
+    this.acceptedVersions = const <String>[],
+    this.title,
+    this.summary,
+    this.url,
+    this.granted,
+    this.grantedVersion,
+    this.upToDate,
+  });
+
+  factory ConsentRequirement.fromJson(Json json) => ConsentRequirement(
+        type: readString(json, 'type'),
+        isRequired: readBool(json, 'required'),
+        version: readStringOrNull(json, 'version'),
+        acceptedVersions: readStringList(json, 'acceptedVersions'),
+        title: readStringOrNull(json, 'title'),
+        summary: readStringOrNull(json, 'summary'),
+        url: readStringOrNull(json, 'url') ?? readStringOrNull(json, 'documentUrl'),
+        granted: json['granted'] is bool ? json['granted'] as bool : null,
+        grantedVersion: readStringOrNull(json, 'grantedVersion'),
+        upToDate: json['upToDate'] is bool ? json['upToDate'] as bool : null,
+      );
+
+  final String type;
+  final bool isRequired;
+
+  /// Current published version (null when no document is published for the type).
+  final String? version;
+  final List<String> acceptedVersions;
+  final String? title;
+  final String? summary;
+
+  /// Public page of the document.
+  final String? url;
+
+  /// Only when called with a token.
+  final bool? granted;
+  final String? grantedVersion;
+  final bool? upToDate;
+
+  /// The version to send with a decision.
+  String? get versionToSend => version ?? (acceptedVersions.isEmpty ? null : acceptedVersions.first);
+}
+
+class ConsentGroup {
+  const ConsentGroup({
+    this.requiredItems = const <ConsentRequirement>[],
+    this.optionalItems = const <ConsentRequirement>[],
+    this.satisfied,
+  });
+
+  factory ConsentGroup.fromJson(Json json) => ConsentGroup(
+        requiredItems: readList(json, 'required').map(ConsentRequirement.fromJson).toList(),
+        optionalItems: readList(json, 'optional').map(ConsentRequirement.fromJson).toList(),
+        satisfied: json['satisfied'] is bool ? json['satisfied'] as bool : null,
+      );
+
+  final List<ConsentRequirement> requiredItems;
+  final List<ConsentRequirement> optionalItems;
+  final bool? satisfied;
+
+  List<ConsentRequirement> get all => <ConsentRequirement>[...requiredItems, ...optionalItems];
+
+  ConsentRequirement? byType(String type) {
+    for (final r in all) {
+      if (r.type == type) return r;
+    }
+    return null;
+  }
+}
+
+class ConsentRequirements {
+  const ConsentRequirements({required this.signup, required this.kyc, this.locale = 'id'});
+
+  factory ConsentRequirements.fromJson(Json json) => ConsentRequirements(
+        locale: readString(json, 'locale', 'id'),
+        signup: ConsentGroup.fromJson(readObject(json, 'signup')),
+        kyc: ConsentGroup.fromJson(readObject(json, 'kyc')),
+      );
+
+  final String locale;
+  final ConsentGroup signup;
+  final ConsentGroup kyc;
+
+  /// Any consent type the server knows about (signup first, then KYC).
+  ConsentRequirement? byType(String type) => signup.byType(type) ?? kyc.byType(type);
+}
+
+/// `GET /legal/documents` row; [LegalDocument] adds the Markdown body.
+class LegalDocumentSummary {
+  const LegalDocumentSummary({
+    required this.type,
+    required this.version,
+    required this.title,
+    this.locale = 'id',
+    this.summary,
+    this.effectiveAt,
+    this.slug,
+    this.url,
+    this.isTemplate = false,
+  });
+
+  factory LegalDocumentSummary.fromJson(Json json) => LegalDocumentSummary(
+        type: readString(json, 'type'),
+        version: readString(json, 'version'),
+        title: readString(json, 'title'),
+        locale: readString(json, 'locale', 'id'),
+        summary: readStringOrNull(json, 'summary'),
+        effectiveAt: readDate(json, 'effectiveAt'),
+        slug: readStringOrNull(json, 'slug'),
+        url: readStringOrNull(json, 'url'),
+        isTemplate: readBool(json, 'isTemplate'),
+      );
+
+  final String type;
+  final String version;
+  final String title;
+  final String locale;
+  final String? summary;
+  final DateTime? effectiveAt;
+  final String? slug;
+  final String? url;
+
+  /// Seeded template text not yet reviewed by counsel — shown with a notice.
+  final bool isTemplate;
+}
+
+class LegalDocument {
+  const LegalDocument({required this.summary, required this.bodyMd});
+
+  factory LegalDocument.fromJson(Json json) =>
+      LegalDocument(summary: LegalDocumentSummary.fromJson(json), bodyMd: readString(json, 'bodyMd'));
+
+  final LegalDocumentSummary summary;
+  final String bodyMd;
+}
+
 class SessionInfo {
   const SessionInfo({
     required this.id,

@@ -384,7 +384,8 @@ export interface DisputeDetail {
   buyer: Party | null;
   traveler: Party | null;
   conversationId: string | null;
-  evidence: { id: string; party: string; type: string; fileId: string | null; fileUrlEndpoint: string | null; messageId: string | null; note: string | null; submittedBy: string; createdAt: string }[];
+  /** fileUrlEndpoint/contentUrl are absolute API URLs; the UI always fetches bytes by fileId via GET /v1/files/{id}/content (bearer). */
+  evidence: { id: string; party: string; type: string; fileId: string | null; fileUrlEndpoint: string | null; contentUrl?: string | null; messageId: string | null; note: string | null; submittedBy: string; createdAt: string }[];
   timeline: TxEvent[];
   refunds: RefundView[];
   allowedActions: DisputeAction[];
@@ -760,6 +761,10 @@ export interface LegalDocument {
   title: string;
   bodyMd?: string;
   summaryOfChanges: string | null;
+  /** One-line description shown in the public document list (GET /v1/legal/documents). */
+  summary: string | null;
+  /** When this version takes effect; null = at publication (the public API then reports publishedAt). */
+  effectiveAt: string | null;
   status: 'DRAFT' | 'PUBLISHED' | 'RETIRED';
   current: boolean;
   publishedAt: string | null;

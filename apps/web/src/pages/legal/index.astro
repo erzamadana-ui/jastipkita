@@ -25,9 +25,13 @@ const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Legal', path: '/legal/'
       <ul class="legal-list" role="list">
         {docs.map((d) => (
           <li>
-            <a class="card card-link" href={url(`/legal/${d.id}/`)}>
-              <div><h2 class="h-card">{d.data.title}</h2><p class="small muted">{d.data.description}</p></div>
-              <span class="chip">v{d.data.version}</span>
+            <a class="card card-link" href={url(`/legal/${d.id}/`)} data-legal-slug={d.id} data-static-version={d.data.version}>
+              <div>
+                <h2 class="h-card">{d.data.title}</h2>
+                <p class="small muted">{d.data.description}</p>
+                <p class="xsmall muted" data-legal-live hidden>Berlaku sejak <span data-legal-effective></span></p>
+              </div>
+              <span class="chip">v<span data-legal-version>{d.data.version}</span></span>
             </a>
           </li>
         ))}
@@ -35,6 +39,9 @@ const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Legal', path: '/legal/'
     </div>
   </section>
 </Base>
+<script>
+  import '../../scripts/legal-versions.ts';
+</script>
 <style>
   .legal-list { list-style: none; padding: 0; display: grid; gap: 12px; }
   .legal-list a { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 18px 20px; }

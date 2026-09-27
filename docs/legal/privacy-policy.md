@@ -1,7 +1,7 @@
 ---
 title: Kebijakan Privasi
 description: Bagaimana JastipKita mengumpulkan, memakai, membagikan, menyimpan, dan melindungi data pribadi sesuai UU 27/2022 tentang Pelindungan Data Pribadi.
-version: "0.1-draft"
+version: "0.1-template"
 effectiveDate: "[TANGGAL BERLAKU — diisi saat peluncuran]"
 order: 2
 ---

@@ -62,11 +62,11 @@ class ApiClient {
     }
   }
 
-  /// Plain-text GET through the API (bearer attached) — e.g. `/files/{id}/content`.
-  Future<String> getText(String path) async {
-    final relative = path.startsWith('/v1/') ? path.substring(3) : path;
+  /// Plain-text GET of an absolute API URL (bearer attached) — e.g. the
+  /// `${API_BASE_URL}/v1/files/{id}/content` links the API returns. Used as-is, never re-prefixed.
+  Future<String> getText(String url) async {
     try {
-      final response = await dio.get<String>(relative, options: Options(responseType: ResponseType.plain));
+      final response = await dio.get<String>(AppConfig.rewriteLoopbackUrl(url), options: Options(responseType: ResponseType.plain));
       return response.data ?? '';
     } on DioException catch (e) {
       throw ApiException.fromDio(e);

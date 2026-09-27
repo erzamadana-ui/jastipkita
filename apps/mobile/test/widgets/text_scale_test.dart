@@ -33,6 +33,7 @@ void main() {
     'totalIdr': fixtureTotalIdr,
     'securedIdr': fixtureTotalIdr,
     'purchaseGate': purchaseGateJson(canPurchase: false),
+    'counterparty': <String, dynamic>{'id': 'u2', 'role': 'BUYER', 'displayName': 'Rina A.', 'avatarUrl': null},
     'item': <String, dynamic>{
       'productName': 'Onitsuka Tiger Mexico 66 — Kill Bill edition, size 42',
       'categoryCode': 'FASHION',

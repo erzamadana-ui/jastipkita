@@ -43,18 +43,17 @@ class EngagementRepository {
     await _api.post('/conversations/$conversationId/read', body: <String, dynamic>{if (messageId != null) 'messageId': messageId});
   }
 
-  /// Conversation of a transaction (one per transaction, created at MATCHED).
-  Future<Conversation?> conversationForTransaction(String transactionId) async {
-    String? cursor;
-    for (var page = 0; page < 5; page++) {
-      final result = await conversations(cursor: cursor);
-      for (final c in result.items) {
-        if (c.transactionId == transactionId) return c;
-      }
-      if (!result.hasMore) return null;
-      cursor = result.nextCursor;
-    }
-    return null;
+  /// One conversation (participants only; 404 otherwise).
+  Future<Conversation> conversation(String conversationId) async =>
+      Conversation.fromJson(await _api.get('/conversations/$conversationId'));
+
+  /// Conversation of a transaction, created lazily by the API once the transaction reached
+  /// MATCHED (`409 CONVERSATION_NOT_AVAILABLE` before).
+  Future<Conversation> conversationForTransaction(String transactionId) async {
+    final json = await _api.get('/transactions/$transactionId/conversation');
+    final embedded = readObjectOrNull(json, 'conversation');
+    if (embedded != null) return Conversation.fromJson(embedded);
+    return conversation(readString(json, 'conversationId'));
   }
 
   // ---------------------------------------------------------------- notifications

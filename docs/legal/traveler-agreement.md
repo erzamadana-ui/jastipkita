@@ -1,7 +1,7 @@
 ---
 title: Perjanjian Traveler
 description: Kewajiban dan hak Traveler JastipKita — kapan boleh membeli, bukti pembelian, deklarasi bea cukai yang jujur, serah terima, payout, dan pajak.
-version: "0.1-draft"
+version: "0.1-template"
 effectiveDate: "[TANGGAL BERLAKU — diisi saat peluncuran]"
 order: 3
 ---

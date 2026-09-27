@@ -1,7 +1,7 @@
 ---
 title: Pedoman Komunitas
 description: Cara bersikap di JastipKita — jujur, aman, dan saling menghormati — serta konsekuensi pelanggaran.
-version: "0.1-draft"
+version: "0.1-template"
 effectiveDate: "[TANGGAL BERLAKU — diisi saat peluncuran]"
 order: 10
 ---

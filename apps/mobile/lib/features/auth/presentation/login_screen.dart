@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/config/app_config.dart';
 import '../../../core/design/theme.dart';
 import '../../../core/design/tokens.g.dart';
 import '../../../core/l10n/l10n.dart';
@@ -93,7 +92,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           context,
           (consents) => repo.signInWithApple(
             identityToken: credential.identityToken,
-            nonce: credential.nonce,
+            rawNonce: credential.rawNonce,
             givenName: credential.givenName,
             familyName: credential.familyName,
             consents: consents,
@@ -237,8 +236,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             Wrap(
               alignment: WrapAlignment.center,
               children: <Widget>[
-                TextButton(onPressed: () => openLegal(AppConfig.termsUrl), child: Text(l10n.consentReadTerms)),
-                TextButton(onPressed: () => openLegal(AppConfig.privacyUrl), child: Text(l10n.consentReadPrivacy)),
+                TextButton(onPressed: () => openLegalDocument(context, 'TOS'), child: Text(l10n.consentReadTerms)),
+                TextButton(onPressed: () => openLegalDocument(context, 'PRIVACY'), child: Text(l10n.consentReadPrivacy)),
               ],
             ),
           ],

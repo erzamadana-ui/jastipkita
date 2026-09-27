@@ -1,7 +1,7 @@
 ---
 title: Kebijakan Barang Terlarang & Terbatas
 description: Barang yang tidak boleh dititipkan, barang yang dibatasi, dan barang yang wajib dideklarasikan atau memerlukan izin, beserta dasar aturannya.
-version: "0.1-draft"
+version: "0.1-template"
 effectiveDate: "[TANGGAL BERLAKU — diisi saat peluncuran]"
 order: 5
 ---

@@ -1,8 +1,24 @@
 ---
+import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import Icon from '../../components/Icon.astro';
 import { url } from '../../lib/paths.ts';
 import { CONFIG } from '../../config.ts';
+import { LEGAL_SLUGS, SIGNUP_OPTIONAL, SIGNUP_REQUIRED, type LegalType } from '../../lib/legal-catalog.ts';
+
+// Offline fallback for consent versions: read at BUILD time from docs/legal/*.md front-matter (same source the API
+// seeds its published documents from). At runtime GET /v1/consents/requirements always wins when reachable.
+const docs = await getCollection('legal');
+const fallback: Partial<Record<LegalType, { version: string; title: string; url: string }>> = {};
+for (const type of [...SIGNUP_REQUIRED, ...SIGNUP_OPTIONAL]) {
+  const doc = docs.find((d) => d.id === LEGAL_SLUGS[type]);
+  if (!doc) throw new Error(`docs/legal/${LEGAL_SLUGS[type]}.md is missing (needed for signup consents)`);
+  fallback[type] = { version: doc.data.version, title: doc.data.title, url: url(`/legal/${doc.id}/`) };
+}
+const items = [
+  ...SIGNUP_REQUIRED.map((type) => ({ type, required: true, ...fallback[type]! })),
+  ...SIGNUP_OPTIONAL.map((type) => ({ type, required: false, ...fallback[type]! })),
+];
 ---
 <Base title="Masuk" description="Masuk ke akun JastipKita dengan kode sekali pakai (OTP) lewat e-mail atau nomor HP." path="/masuk/" noindex>
   <section class="section-tight">
@@ -37,16 +53,33 @@ import { CONFIG } from '../../config.ts';
             <label for="code">Kode 6 digit</label>
             <input class="input tnum otp-input" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="\d{6}" maxlength="6" required />
           </div>
-          <fieldset id="consents" class="consents" hidden>
-            <legend class="small" style="font-weight:600;margin-bottom:8px">Akun baru — mohon setujui:</legend>
-            <label class="check"><input type="checkbox" name="tos" /><span>Saya menyetujui <a href={url('/legal/terms-of-service/')} target="_blank" rel="noopener">Syarat & Ketentuan</a> (wajib)</span></label>
-            <label class="check"><input type="checkbox" name="privacy" /><span>Saya telah membaca <a href={url('/legal/privacy-policy/')} target="_blank" rel="noopener">Kebijakan Privasi</a> dan menyetujui pemrosesan data saya (wajib)</span></label>
-            <label class="check"><input type="checkbox" name="marketing" /><span>Kirimi saya kabar promo & produk (opsional, bisa dicabut kapan saja) — <a href={url('/legal/marketing-consent/')} target="_blank" rel="noopener">detail</a></span></label>
-          </fieldset>
           <div class="error-text" id="ver-error" role="alert" hidden></div>
           <button class="btn btn-primary btn-block" type="submit" id="ver-btn">Verifikasi & masuk</button>
           <button class="btn btn-ghost btn-block" type="button" id="restart">Ganti e-mail / nomor</button>
         </form>
+
+        <form id="consent-form" class="form-grid" style="margin-top:20px" novalidate hidden>
+          <fieldset class="consents">
+            <legend class="small" style="font-weight:600;margin-bottom:8px">Akun baru — mohon setujui dokumen berikut:</legend>
+            <div id="consent-list" class="consent-list">
+              {items.map((i) => (
+                <label class="check">
+                  <input type="checkbox" data-consent-type={i.type} data-required={i.required ? 'true' : 'false'} />
+                  <span>
+                    {i.required ? 'Saya menyetujui ' : 'Saya bersedia menerima kabar promo & produk sesuai '}
+                    <a href={i.url} target="_blank" rel="noopener">{i.title}</a>
+                    {' '}<span class="xsmall muted" data-consent-version>(versi {i.version})</span>
+                    {i.required ? ' — wajib' : ' — opsional, bisa dicabut kapan saja'}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <p class="xsmall muted" id="consent-source">Versi dokumen dari salinan situs; akan dicocokkan dengan server saat kamu melanjutkan.</p>
+          <div class="error-text" id="consent-error" role="alert" hidden></div>
+          <button class="btn btn-primary btn-block" type="submit" id="consent-btn">Setujui & buat akun</button>
+        </form>
+        <script type="application/json" id="consent-fallback" set:html={JSON.stringify(fallback).replace(/</g, '\\u003c')}></script>
 
         {CONFIG.enableGoogleLogin && CONFIG.googleClientId && (
           <div style="margin-top:20px">
@@ -73,7 +106,8 @@ import { CONFIG } from '../../config.ts';
   .seg input:checked + span { background: var(--jk-color-surface); box-shadow: var(--jk-elevation-level1); color: var(--jk-color-on-surface); font-weight: 600; }
   .seg input:focus-visible + span { outline: 2px solid var(--jk-color-focus-ring); outline-offset: 2px; }
   .otp-input { font-size: 1.5rem; letter-spacing: 0.4em; text-align: center; }
-  .consents { border: 1px solid var(--card-border); border-radius: var(--jk-radius-md); padding: 14px; display: grid; gap: 10px; }
+  .consents { border: 1px solid var(--card-border); border-radius: var(--jk-radius-md); padding: 14px; }
+  .consent-list { display: grid; gap: 10px; }
   .or { display: flex; align-items: center; gap: 12px; color: var(--jk-color-on-surface-muted); font-size: 0.8125rem; margin-bottom: 14px; }
   .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--jk-color-divider); }
 </style>

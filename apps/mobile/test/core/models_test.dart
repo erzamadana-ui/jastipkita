@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jastipkita/core/domain/domain.dart';
+import 'package:jastipkita/core/models/account.dart';
 import 'package:jastipkita/core/models/json.dart';
 import 'package:jastipkita/core/models/marketplace.dart';
 import 'package:jastipkita/core/models/transaction.dart';
 import 'package:jastipkita/core/storage/token_storage.dart';
+import 'package:jastipkita/features/auth/data/auth_repository.dart';
 
 import '../fixtures.dart';
 
@@ -27,6 +29,21 @@ void main() {
       final duty = q.line(PriceLineType.customsDuty);
       expect(duty?.isEstimate, isTrue);
       expect(duty?.ruleRef, 'customs:PASSENGER_GOODS@v3');
+    });
+
+    test('paymentOptions: fee and total per channel, refundability and availability', () {
+      final q = Quote.fromJson(quoteJson());
+      expect(q.paymentOptions.map((PaymentOption o) => o.channel), <String>['VA', 'QRIS', 'EWALLET', 'CARD']);
+      final va = q.paymentOption('VA')!;
+      expect(va.selected, isTrue);
+      expect(va.refundable, isFalse);
+      expect(va.feeIdr, 4440);
+      expect(va.totalIdr, fixtureTotalIdr);
+      final card = q.paymentOption('CARD')!;
+      expect(card.available, isFalse);
+      expect(card.unavailableReason, 'ABOVE_CHANNEL_MAX');
+      expect(card.maxAmountIdr, 1000000);
+      expect(Quote.fromJson(<String, dynamic>{...quoteJson(), 'paymentOptions': <Object>[]}).paymentOptions, isEmpty);
     });
 
     test('orderedLines restores the §10 order whatever order the API sends', () {
@@ -57,6 +74,25 @@ void main() {
       expect(d.can('PRICE_CHECK'), isTrue);
       expect(d.can('SUBMIT_PURCHASE_PROOF'), isFalse);
       expect(d.openPriceConfirmation, isNull);
+    });
+
+    test('typed parties, item, trip, ceiling and conversation', () {
+      final d = TransactionDetail.fromJson(transactionDetailJson());
+      expect(d.item?.currency, 'JPY');
+      expect(d.itemCurrency, 'JPY');
+      expect(d.item?.imageUrl, startsWith('https://'));
+      expect(d.traveler?.displayName, 'Budi S.');
+      expect(d.traveler?.trustScore, 92);
+      expect(d.traveler?.trustTier, 'EXCELLENT');
+      expect(d.traveler?.kycLevel, 4);
+      expect(d.traveler?.ratingAs('TRAVELER'), (4.9, 128));
+      expect(d.buyer?.ratingAs('BUYER'), (4.5, 3));
+      expect(d.trip?.originCity, 'Tokyo');
+      expect(d.trip?.arrivalDate, '2026-10-13');
+      expect(d.purchaseCeilingIdr, 1208611);
+      expect(d.purchaseCeilingMinor, 11000);
+      expect(d.conversationId, isNotNull);
+      expect(d.payout, isNull, reason: 'payout is always null for the buyer and before scheduling');
     });
 
     test('golden rule: the traveler may buy only in PURCHASE_APPROVED and only if the server agrees', () {
@@ -100,8 +136,42 @@ void main() {
     expect(traveler.displayName, 'Budi S.');
     expect(traveler.ratingAverage, 4.9);
     expect(traveler.ratingCount, 128);
-    expect(traveler.impliedKycLevel, 4);
-    expect(traveler.trustScore, isNull, reason: 'discovery responses do not disclose the score');
+    expect(traveler.kycLevel, 4);
+    expect(traveler.trustScore, 92);
+    expect(traveler.trustTier, 'EXCELLENT');
+  });
+
+  test('CancellationPreview (same evaluation as POST /cancel)', () {
+    final p = CancellationPreview.fromJson(cancelPreviewJson());
+    expect(p.canCancel, isTrue);
+    expect(p.stage, 'AFTER_PAYMENT');
+    expect(p.refundIdr, fixtureTotalIdr - 4440);
+    expect(p.notRefundedIdr, 4440);
+    expect(p.creditRestoredIdr, 10000);
+    final blocked = CancellationPreview.fromJson(cancelPreviewJson(canCancel: false));
+    expect(blocked.canCancel, isFalse);
+    expect(blocked.requiresAdminApproval, isTrue);
+    expect(blocked.blockedCode, 'ADMIN_APPROVAL_REQUIRED');
+  });
+
+  test('consent requirements drive the payload (no hard-coded versions)', () {
+    final r = ConsentRequirements.fromJson(consentRequirementsJson());
+    expect(r.signup.requiredItems.map((ConsentRequirement c) => c.type), <String>['TOS', 'PRIVACY']);
+    expect(r.signup.optionalItems.single.type, 'MARKETING');
+    expect(r.kyc.byType('KYC')?.versionToSend, '0.1-template');
+    expect(r.kyc.byType('KYC')?.granted, isFalse);
+    expect(r.byType('MARKETING')?.isRequired, isFalse);
+  });
+
+  test('signup consent payload: published versions, marketing only when ticked', () {
+    final r = ConsentRequirements.fromJson(consentRequirementsJson());
+    final choice = ConsentChoice(group: r.signup, granted: const <String, bool>{'TOS': true, 'PRIVACY': true});
+    expect(choice.toPayload(), <Map<String, dynamic>>[
+      <String, dynamic>{'type': 'TOS', 'version': '0.1-template', 'granted': true},
+      <String, dynamic>{'type': 'PRIVACY', 'version': '0.1-template', 'granted': true},
+      <String, dynamic>{'type': 'MARKETING', 'version': '0.1-template', 'granted': false},
+    ]);
+    expect(choice.toPayload(versionOverride: '0.2').first['version'], '0.2');
   });
 
   test('Tokens (LOGIN / refresh result)', () {

@@ -50,13 +50,19 @@ class Conversation {
 }
 
 class ChatAttachment {
-  const ChatAttachment({required this.fileId, required this.mime});
+  const ChatAttachment({required this.fileId, required this.mime, this.contentUrl});
 
-  factory ChatAttachment.fromJson(Json json) =>
-      ChatAttachment(fileId: readString(json, 'fileId'), mime: readString(json, 'mime'));
+  factory ChatAttachment.fromJson(Json json) => ChatAttachment(
+        fileId: readString(json, 'fileId'),
+        mime: readString(json, 'mime'),
+        contentUrl: readStringOrNull(json, 'contentUrl'),
+      );
 
   final String fileId;
   final String mime;
+
+  /// Absolute URL served by the API (bearer required).
+  final String? contentUrl;
 }
 
 class ChatMessage {

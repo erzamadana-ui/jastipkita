@@ -129,12 +129,17 @@ class RestrictedItemWarning extends StatelessWidget {
                 ),
               ),
               if (needsAck && onAck != null)
-                CheckboxListTile(
-                  value: acknowledged,
-                  onChanged: (bool? v) => onAck(v ?? false),
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: Text(l10n.restrictionAcknowledge, style: JkTypeScale.bodyM.copyWith(color: fg)),
+                // Own transparent Material so the tile's ink/background is not hidden by the
+                // coloured DecoratedBox above (Flutter asserts on this in debug).
+                Material(
+                  type: MaterialType.transparency,
+                  child: CheckboxListTile(
+                    value: acknowledged,
+                    onChanged: (bool? v) => onAck(v ?? false),
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(l10n.restrictionAcknowledge, style: JkTypeScale.bodyM.copyWith(color: fg)),
+                  ),
                 ),
               if (classification == Restriction.prohibited)
                 Text(l10n.restrictionProhibitedAlternative, style: JkTypeScale.bodyS.copyWith(color: fg)),

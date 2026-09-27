@@ -25,7 +25,7 @@ class KycRepository {
     required String idFrontFileId,
     required String selfieFileId,
     String? idBackFileId,
-    String? livenessFileId,
+    List<String> livenessFileIds = const <String>[],
     String? nationality,
   }) async {
     final json = await _api.post(
@@ -40,7 +40,8 @@ class KycRepository {
           'idFront': idFrontFileId,
           if (idBackFileId != null) 'idBack': idBackFileId,
           'selfie': selfieFileId,
-          if (livenessFileId != null) 'liveness': livenessFileId,
+          // 1–5 liveness captures; every one is validated and forwarded to the KYC provider.
+          if (livenessFileIds.isNotEmpty) 'livenessFileIds': livenessFileIds.take(5).toList(),
         },
       },
     );

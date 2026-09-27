@@ -1,7 +1,7 @@
 ---
 title: Persetujuan Pemrosesan Data Verifikasi (KYC)
 description: Persetujuan eksplisit terpisah untuk pemrosesan data identitas dan biometrik (selfie & liveness) dalam verifikasi akun JastipKita.
-version: "0.1-draft"
+version: "0.1-template"
 effectiveDate: "[TANGGAL BERLAKU — diisi saat peluncuran]"
 order: 7
 ---

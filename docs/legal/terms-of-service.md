@@ -1,7 +1,7 @@
 ---
 title: Syarat & Ketentuan Penggunaan
 description: Ketentuan yang mengatur penggunaan platform JastipKita oleh Penitip dan Traveler.
-version: "0.1-draft"
+version: "0.1-template"
 effectiveDate: "[TANGGAL BERLAKU — diisi saat peluncuran]"
 order: 1
 ---

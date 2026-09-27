@@ -710,3 +710,8 @@ hr { border: 0; border-top: 1px solid var(--jk-color-divider); }
 .res-total > span { flex-wrap: wrap; }
 @media (max-width: 480px) { .res-total strong { font-size: 1.25rem; } }
 .country-card .route svg { flex: none; }
+.trust-chip { border-color: transparent; }
+.trust-chip.trust-excellent { background: var(--jk-trust-excellent-bg); color: var(--jk-trust-excellent-fg); }
+.trust-chip.trust-good { background: var(--jk-trust-good-bg); color: var(--jk-trust-good-fg); }
+.trust-chip.trust-fair { background: var(--jk-trust-fair-bg); color: var(--jk-trust-fair-fg); }
+.trust-chip.trust-low { background: var(--jk-trust-low-bg); color: var(--jk-trust-low-fg); }

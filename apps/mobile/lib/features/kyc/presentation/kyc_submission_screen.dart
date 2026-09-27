@@ -2,19 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/config/app_config.dart';
 import '../../../core/design/theme.dart';
 import '../../../core/design/tokens.g.dart';
 import '../../../core/format/dates.dart';
 import '../../../core/l10n/l10n.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../widgets/common.dart';
 import '../../../widgets/jk_button.dart';
 import '../../../widgets/jk_text_field.dart';
 import '../../../widgets/money_text.dart';
 import '../../../widgets/pickers.dart';
 import '../../auth/application/session_controller.dart';
+import '../../auth/data/auth_repository.dart';
 import '../../engagement/data/engagement_repository.dart';
 import '../../files/data/file_upload_service.dart';
+import '../../legal/presentation/legal_document_screen.dart';
 import '../data/kyc_repository.dart';
 import '../data/liveness.dart';
 
@@ -103,7 +105,15 @@ class _KycSubmissionScreenState extends ConsumerState<KycSubmissionScreen> {
     if (_step == 0) {
       setState(() => _busy = true);
       try {
-        await ref.read(kycRepositoryProvider).grantKycConsent(AppConfig.consentVersion);
+        // Exact type + version from `GET /consents/requirements` (kyc.required); the API
+        // rejects any other version with 422 CONSENT_VERSION_INVALID.
+        final requirements = await ref.read(authRepositoryProvider).consentRequirements(locale: context.localeCode);
+        final kycConsent = requirements.kyc.byType('KYC');
+        final version = kycConsent?.versionToSend;
+        if (version == null) throw const ApiException(code: 'CONSENT_VERSION_UNAVAILABLE');
+        if (kycConsent?.granted != true || kycConsent?.upToDate != true) {
+          await ref.read(kycRepositoryProvider).grantKycConsent(version);
+        }
       } on Object catch (e) {
         if (!mounted) return;
         setState(() {
@@ -147,7 +157,7 @@ class _KycSubmissionScreenState extends ConsumerState<KycSubmissionScreen> {
       final frontId = ids[index++];
       final backId = _idBack != null ? ids[index++] : null;
       final selfieId = ids[index++];
-      final livenessId = index < ids.length ? ids[index] : null;
+      final livenessIds = ids.sublist(index);
       await ref.read(kycRepositoryProvider).submit(
             idType: _idType,
             idNumber: _idNumber.text.trim(),
@@ -157,7 +167,7 @@ class _KycSubmissionScreenState extends ConsumerState<KycSubmissionScreen> {
             idFrontFileId: frontId,
             idBackFileId: backId,
             selfieFileId: selfieId,
-            livenessFileId: livenessId,
+            livenessFileIds: livenessIds,
           );
       ref.invalidate(kycStatusProvider);
       await ref.read(sessionControllerProvider.notifier).refreshProfile();
@@ -295,6 +305,14 @@ class _KycSubmissionScreenState extends ConsumerState<KycSubmissionScreen> {
             value: _consent,
             onChanged: (bool? v) => setState(() => _consent = v ?? false),
             title: Text(l10n.kycConsentCheck),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => openLegalDocument(context, 'KYC'),
+              icon: const Icon(Icons.description_outlined, size: 18),
+              label: Text(l10n.legalReadDocument),
+            ),
           ),
         ];
       case 1:

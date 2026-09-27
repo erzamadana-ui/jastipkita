@@ -139,6 +139,18 @@ export function wibDate(d: Date = new Date()): string {
   return new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 10);
 }
 
+/** ISO instant → value for <input type="datetime-local"> expressed in WIB (UTC+7, no DST). */
+export function wibInputFromIso(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? new Date(t + 7 * 3600_000).toISOString().slice(0, 16) : '';
+}
+
+/** <input type="datetime-local"> value read as WIB → ISO-8601 with offset (what the API's datetime({offset}) accepts). */
+export function isoFromWibInput(v: string): string | null {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v) ? `${v}:00+07:00` : null;
+}
+
 export function addDays(ymd: string, days: number): string {
   return new Date(Date.parse(`${ymd}T00:00:00Z`) + days * 86400_000).toISOString().slice(0, 10);
 }

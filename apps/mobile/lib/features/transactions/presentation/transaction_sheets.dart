@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/design/haptics.dart';
 import '../../../core/design/theme.dart';
@@ -9,6 +10,7 @@ import '../../../core/format/money.dart';
 import '../../../core/l10n/l10n.dart';
 import '../../../core/l10n/labels.dart';
 import '../../../core/models/transaction.dart';
+import '../../../core/router/deep_links.dart';
 import '../../../core/storage/settings.dart';
 import '../../../widgets/common.dart';
 import '../../../widgets/countdown_chip.dart';
@@ -208,30 +210,43 @@ class _PriceConfirmationBodyState extends ConsumerState<_PriceConfirmationBody> 
   }
 }
 
-/// Cancellation with a pre-confirmation preview of the matrix stage; the exact refund /
-/// compensation / Trust-Score impact returned by the API is shown afterwards.
+/// Cancellation: `GET /cancel/preview` first, so the buyer/traveler sees the exact refund,
+/// compensation and Trust-Score impact (same evaluation as the real cancel) before confirming.
 Future<void> cancelTransactionFlow(BuildContext context, WidgetRef ref, TransactionDetail detail) async {
   final l10n = context.l10n;
-  final stage = TxStatus.cancellationStage(detail.status);
+  final CancellationPreview preview;
+  try {
+    preview = await ref.read(transactionRepositoryProvider).cancelPreview(detail.id);
+  } on Object catch (e) {
+    if (!context.mounted) return;
+    showJkSnack(context, errorMessage(l10n, e), error: true);
+    return;
+  }
+  if (!context.mounted) return;
+  if (!preview.canCancel) {
+    await _showCancelBlocked(context, detail, preview);
+    return;
+  }
   final reason = TextEditingController();
   final ok = await showJkConfirm(
     context,
     title: l10n.cancelTitle,
-    message: l10n.cancelStageIntro(Labels.cancellationStage(l10n, stage)),
+    message: preview.stage == null ? l10n.cancelPreviewExact : l10n.cancelStageIntro(Labels.cancellationStage(l10n, preview.stage!)),
     confirmLabel: l10n.cancelConfirm,
     destructive: true,
     extra: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        NoticeBox(tone: NoticeTone.warning, message: Labels.cancellationStageHint(l10n, stage)),
+        _CancelPreviewTable(preview: preview),
         const SizedBox(height: JkSpacing.s3),
         JkTextField(label: l10n.cancelReasonLabel, controller: reason, maxLines: 2),
       ],
     ),
   );
   final text = reason.text.trim();
-  reason.dispose();
+  // The dialog may still be animating out with the field attached.
+  Future<void>.delayed(const Duration(seconds: 1), reason.dispose);
   if (!ok) return;
   try {
     final result = await ref.read(transactionRepositoryProvider).cancel(
@@ -275,6 +290,92 @@ Future<void> cancelTransactionFlow(BuildContext context, WidgetRef ref, Transact
   } on Object catch (e) {
     if (!context.mounted) return;
     showJkSnack(context, errorMessage(l10n, e), error: true);
+  }
+}
+
+Future<void> _showCancelBlocked(BuildContext context, TransactionDetail detail, CancellationPreview preview) {
+  final l10n = context.l10n;
+  return showJkBottomSheet<void>(
+    context,
+    title: l10n.cancelBlockedTitle,
+    builder: (BuildContext sheetContext) {
+      final jk = sheetContext.jk;
+      final message = preview.blockedMessage ?? preview.reason ?? l10n.cancelBlockedBody;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          NoticeBox(
+            tone: preview.requiresAdminApproval ? NoticeTone.info : NoticeTone.warning,
+            message: preview.requiresAdminApproval ? '${l10n.cancelPreviewAdmin} $message' : message,
+          ),
+          if (preview.allowed) ...<Widget>[
+            const SizedBox(height: JkSpacing.s3),
+            _CancelPreviewTable(preview: preview),
+          ],
+          if (detail.can('OPEN_DISPUTE')) ...<Widget>[
+            const SizedBox(height: JkSpacing.s4),
+            JkButton(
+              label: l10n.disputeOpen,
+              icon: Icons.report_gmailerrorred_outlined,
+              variant: JkButtonVariant.secondary,
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                context.push(Routes.openDispute(detail.id));
+              },
+            ),
+          ],
+          const SizedBox(height: JkSpacing.s2),
+          Text(l10n.cancelPreviewExact, style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted)),
+        ],
+      );
+    },
+  );
+}
+
+/// Exact outcome from `CancellationPreview` (money in IDR; nothing estimated on the device).
+class _CancelPreviewTable extends StatelessWidget {
+  const _CancelPreviewTable({required this.preview});
+
+  final CancellationPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final jk = context.jk;
+    final p = preview;
+    final reason = p.reason;
+    final rows = <Widget>[
+      if (p.paymentCaptured) ...<Widget>[
+        LabeledAmount(label: Text(l10n.cancelRefund), amount: MoneyText(p.refundIdr, size: MoneySize.m, emphasized: true)),
+        if (p.notRefundedIdr > 0)
+          LabeledAmount(label: Text(l10n.cancelPreviewNotRefunded), amount: MoneyText(p.notRefundedIdr)),
+      ],
+      if (p.travelerCompensationIdr > 0)
+        LabeledAmount(label: Text(l10n.cancelCompensation), amount: MoneyText(p.travelerCompensationIdr)),
+      if (p.creditRestoredIdr > 0)
+        LabeledAmount(label: Text(l10n.cancelPreviewCredit), amount: MoneyText(p.creditRestoredIdr)),
+      if (p.trustPenalty > 0)
+        LabeledAmount(label: Text(l10n.cancelTrustPenalty), amount: Text('−${p.trustPenalty}')),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (reason != null && reason.isNotEmpty) ...<Widget>[
+          NoticeBox(tone: NoticeTone.warning, message: reason),
+          const SizedBox(height: JkSpacing.s2),
+        ],
+        if (rows.isEmpty)
+          Text(l10n.cancelPreviewNothingPaid, style: JkTypeScale.bodyM.copyWith(color: jk.onSurface))
+        else
+          for (final row in rows) Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: row),
+        if (p.requiresAdminApproval) ...<Widget>[
+          const SizedBox(height: JkSpacing.s2),
+          Text(l10n.cancelPreviewAdmin, style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted)),
+        ],
+      ],
+    );
   }
 }
 

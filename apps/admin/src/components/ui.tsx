@@ -331,7 +331,7 @@ export function Checkbox({ checked, onChange, label, disabled, hint }: { checked
   );
 }
 
-export function Select({ value, onChange, options, placeholder, className, id, ...rest }: { value: string; onChange: (v: string) => void; options: (string | { value: string; label: string })[]; placeholder?: string; className?: string; id?: string; 'aria-label'?: string }) {
+export function Select({ value, onChange, options, placeholder, className, id, ...rest }: { value: string; onChange: (v: string) => void; options: (string | { value: string; label: string })[]; placeholder?: string; className?: string; id?: string; 'aria-label'?: string; disabled?: boolean }) {
   return (
     <select id={id} className={cx('select', className)} value={value} onChange={(e) => onChange(e.target.value)} {...rest}>
       {placeholder !== undefined ? <option value="">{placeholder}</option> : null}

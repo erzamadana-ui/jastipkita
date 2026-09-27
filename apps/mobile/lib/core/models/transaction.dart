@@ -97,6 +97,8 @@ class Quote {
     this.itemUnitPriceMinor,
     this.itemQuantity,
     this.customsDisclaimer,
+    this.paymentOptions = const <PaymentOption>[],
+    this.blocksCheckout = false,
   });
 
   factory Quote.fromJson(Json json) {
@@ -126,6 +128,8 @@ class Quote {
       itemCurrency: readStringOrNull(item, 'currency')?.trim(),
       itemUnitPriceMinor: readIntOrNull(item, 'unitPriceMinor'),
       itemQuantity: readIntOrNull(item, 'quantity'),
+      paymentOptions: readList(json, 'paymentOptions').map(PaymentOption.fromJson).toList(),
+      blocksCheckout: readBool(restricted, 'blocksCheckout'),
     );
   }
 
@@ -148,6 +152,19 @@ class Quote {
   final String? itemCurrency;
   final int? itemUnitPriceMinor;
   final int? itemQuantity;
+
+  /// Fee and total for every configured channel (`[]` for quotes created before the field existed).
+  final List<PaymentOption> paymentOptions;
+
+  /// Restricted-item rules forbid paying for this item (PROHIBITED).
+  final bool blocksCheckout;
+
+  PaymentOption? paymentOption(String? channel) {
+    for (final o in paymentOptions) {
+      if (o.channel == channel) return o;
+    }
+    return null;
+  }
 
   /// Lines in the fixed domain order (§10), regardless of the order the API sent.
   List<PriceLine> get orderedLines {
@@ -177,6 +194,57 @@ class Quote {
     final until = lockedUntil;
     return until == null || nowUtc.isBefore(until);
   }
+}
+
+/// `Quote.paymentOptions[]`: what paying with a channel costs, straight from the pricing engine.
+class PaymentOption {
+  const PaymentOption({
+    required this.channel,
+    required this.label,
+    required this.feeIdr,
+    required this.totalIdr,
+    this.bearer = 'BUYER',
+    this.refundable = true,
+    this.minAmountIdr,
+    this.maxAmountIdr,
+    this.available = true,
+    this.unavailableReason,
+    this.selected = false,
+  });
+
+  factory PaymentOption.fromJson(Json json) => PaymentOption(
+        channel: readString(json, 'channel'),
+        label: readString(json, 'label'),
+        feeIdr: readInt(json, 'feeIdr'),
+        totalIdr: readInt(json, 'totalIdr'),
+        bearer: readString(json, 'bearer', 'BUYER'),
+        refundable: readBool(json, 'refundable', true),
+        minAmountIdr: readIntOrNull(json, 'minAmountIdr'),
+        maxAmountIdr: readIntOrNull(json, 'maxAmountIdr'),
+        available: readBool(json, 'available', true),
+        unavailableReason: readStringOrNull(json, 'unavailableReason'),
+        selected: readBool(json, 'selected'),
+      );
+
+  final String channel;
+
+  /// Server label, e.g. "Virtual Account (BCA, BNI, BRI, Mandiri)".
+  final String label;
+  final int feeIdr;
+  final int totalIdr;
+
+  /// BUYER | PLATFORM — who pays [feeIdr].
+  final String bearer;
+
+  /// False for VA/retail: refunds need a bank account from the buyer.
+  final bool refundable;
+  final int? minAmountIdr;
+  final int? maxAmountIdr;
+  final bool available;
+
+  /// ABOVE_CHANNEL_MAX | BELOW_CHANNEL_MIN.
+  final String? unavailableReason;
+  final bool selected;
 }
 
 class Payment {
@@ -329,8 +397,10 @@ class TxItem {
     this.quantity = 1,
     this.variant,
     this.unitPriceMinor,
-    this.priceCurrency,
+    this.currency,
     this.maxBudgetIdr,
+    this.imageUrl,
+    this.hsCode,
   });
 
   factory TxItem.fromJson(Json json) => TxItem(
@@ -342,8 +412,11 @@ class TxItem {
         quantity: readInt(json, 'quantity', 1),
         variant: readStringOrNull(json, 'variant'),
         unitPriceMinor: readIntOrNull(json, 'unitPriceMinor'),
-        priceCurrency: readStringOrNull(json, 'priceCurrency')?.trim(),
+        // `priceCurrency` is the deprecated alias of `currency`.
+        currency: (readStringOrNull(json, 'currency') ?? readStringOrNull(json, 'priceCurrency'))?.trim(),
         maxBudgetIdr: readIntOrNull(json, 'maxBudgetIdr'),
+        imageUrl: readStringOrNull(json, 'imageUrl'),
+        hsCode: readStringOrNull(json, 'hsCode'),
       );
 
   final String productName;
@@ -354,8 +427,48 @@ class TxItem {
   final int quantity;
   final String? variant;
   final int? unitPriceMinor;
-  final String? priceCurrency;
+  final String? currency;
   final int? maxBudgetIdr;
+
+  /// Absolute URL (presigned, or `/v1/files/{id}/content` with bearer).
+  final String? imageUrl;
+  final String? hsCode;
+}
+
+/// `TransactionDetail.trip` — the traveler's route and dates.
+class TripRoute {
+  const TripRoute({
+    required this.id,
+    required this.originCountry,
+    required this.originCity,
+    required this.destinationCountry,
+    required this.destinationCity,
+    required this.departureDate,
+    required this.arrivalDate,
+    this.status = '',
+  });
+
+  factory TripRoute.fromJson(Json json) => TripRoute(
+        id: readString(json, 'id'),
+        status: readString(json, 'status'),
+        originCountry: readString(json, 'originCountry').trim(),
+        originCity: readString(json, 'originCity'),
+        destinationCountry: readString(json, 'destinationCountry', 'ID').trim(),
+        destinationCity: readString(json, 'destinationCity'),
+        departureDate: readString(json, 'departureDate'),
+        arrivalDate: readString(json, 'arrivalDate'),
+      );
+
+  final String id;
+  final String status;
+  final String originCountry;
+  final String originCity;
+  final String destinationCountry;
+  final String destinationCity;
+
+  /// Calendar dates `YYYY-MM-DD`.
+  final String departureDate;
+  final String arrivalDate;
 }
 
 class PurchaseProof {
@@ -368,7 +481,9 @@ class PurchaseProof {
     this.purchasedAt,
     this.receiptFileId,
     this.productPhotoFileIds = const <String>[],
+    this.videoFileId,
     this.serialNumber,
+    this.files = const <ProofFile>[],
   });
 
   factory PurchaseProof.fromJson(Json json) => PurchaseProof(
@@ -380,7 +495,9 @@ class PurchaseProof {
         purchasedAt: readDate(json, 'purchasedAt'),
         receiptFileId: readStringOrNull(json, 'receiptFileId'),
         productPhotoFileIds: readStringList(json, 'productPhotoFileIds'),
+        videoFileId: readStringOrNull(json, 'videoFileId'),
         serialNumber: readStringOrNull(json, 'serialNumber'),
+        files: readList(json, 'files').map(ProofFile.fromJson).toList(),
       );
 
   final String id;
@@ -391,7 +508,35 @@ class PurchaseProof {
   final DateTime? purchasedAt;
   final String? receiptFileId;
   final List<String> productPhotoFileIds;
+  final String? videoFileId;
   final String? serialNumber;
+
+  /// The proof's own files with absolute `contentUrl`s (bearer required).
+  final List<ProofFile> files;
+
+  List<ProofFile> get images => files.where((ProofFile f) => f.isImage).toList();
+}
+
+class ProofFile {
+  const ProofFile({required this.id, required this.kind, required this.contentUrl, this.mime, this.sizeBytes});
+
+  factory ProofFile.fromJson(Json json) => ProofFile(
+        id: readString(json, 'id'),
+        kind: readString(json, 'kind'),
+        contentUrl: readString(json, 'contentUrl'),
+        mime: readStringOrNull(json, 'mime'),
+        sizeBytes: readIntOrNull(json, 'sizeBytes'),
+      );
+
+  final String id;
+
+  /// RECEIPT | PRODUCT_PHOTO | VIDEO
+  final String kind;
+  final String contentUrl;
+  final String? mime;
+  final int? sizeBytes;
+
+  bool get isImage => kind != 'VIDEO' && (mime == null || mime!.startsWith('image/'));
 }
 
 class DeliveryInfo {
@@ -407,6 +552,8 @@ class DeliveryInfo {
     this.confirmedVia,
     this.pinLocked = false,
     this.pinAttemptsRemaining,
+    this.pinAvailable = false,
+    this.proofFileIds = const <String>[],
   });
 
   factory DeliveryInfo.fromJson(Json json) {
@@ -423,6 +570,8 @@ class DeliveryInfo {
       confirmedVia: readStringOrNull(json, 'confirmedVia'),
       pinLocked: pin != null && readBool(pin, 'locked'),
       pinAttemptsRemaining: pin == null ? null : readIntOrNull(pin, 'attemptsRemaining'),
+      pinAvailable: readBool(json, 'pinAvailable'),
+      proofFileIds: readStringList(json, 'proofFileIds'),
     );
   }
 
@@ -437,6 +586,66 @@ class DeliveryInfo {
   final String? confirmedVia;
   final bool pinLocked;
   final int? pinAttemptsRemaining;
+
+  /// Buyer only: the handover PIN can be revealed (`GET /delivery/pin`).
+  final bool pinAvailable;
+  final List<String> proofFileIds;
+}
+
+/// `TransactionDetail.customsDeclaration`.
+class CustomsDeclarationInfo {
+  const CustomsDeclarationInfo({
+    required this.status,
+    this.totalPaidIdr,
+    this.estimatedTotalIdr,
+    this.paidAt,
+  });
+
+  factory CustomsDeclarationInfo.fromJson(Json json) => CustomsDeclarationInfo(
+        status: readString(json, 'status'),
+        totalPaidIdr: readIntOrNull(json, 'totalPaidIdr'),
+        estimatedTotalIdr: readIntOrNull(json, 'estimatedTotalIdr'),
+        paidAt: readDate(json, 'paidAt'),
+      );
+
+  final String status;
+  final int? totalPaidIdr;
+  final int? estimatedTotalIdr;
+  final DateTime? paidAt;
+}
+
+/// `TransactionDetail.payout` — traveler only (always null for the buyer).
+class TransactionPayout {
+  const TransactionPayout({
+    required this.id,
+    required this.number,
+    required this.status,
+    required this.amountIdr,
+    required this.netIdr,
+    this.holdReason,
+    this.scheduledAt,
+    this.paidAt,
+  });
+
+  factory TransactionPayout.fromJson(Json json) => TransactionPayout(
+        id: readString(json, 'id'),
+        number: readString(json, 'number'),
+        status: readString(json, 'status'),
+        amountIdr: readInt(json, 'amountIdr'),
+        netIdr: readInt(json, 'netIdr'),
+        holdReason: readStringOrNull(json, 'holdReason'),
+        scheduledAt: readDate(json, 'scheduledAt'),
+        paidAt: readDate(json, 'paidAt'),
+      );
+
+  final String id;
+  final String number;
+  final String status;
+  final int amountIdr;
+  final int netIdr;
+  final String? holdReason;
+  final DateTime? scheduledAt;
+  final DateTime? paidAt;
 }
 
 class RefundInfo {
@@ -488,6 +697,10 @@ class TransactionSummary {
     this.productName,
     this.categoryCode,
     this.merchantCountry,
+    this.imageUrl,
+    this.counterpartyName,
+    this.counterpartyAvatarUrl,
+    this.purchaseCeilingIdr,
     this.createdAt,
     this.statusChangedAt,
   });
@@ -495,6 +708,7 @@ class TransactionSummary {
   factory TransactionSummary.fromJson(Json json) {
     final gate = readObjectOrNull(json, 'purchaseGate');
     final item = readObjectOrNull(json, 'item');
+    final counterparty = readObjectOrNull(json, 'counterparty');
     return TransactionSummary(
       id: readString(json, 'id'),
       number: readString(json, 'number'),
@@ -506,6 +720,10 @@ class TransactionSummary {
       productName: item == null ? null : readStringOrNull(item, 'productName'),
       categoryCode: item == null ? null : readStringOrNull(item, 'categoryCode'),
       merchantCountry: item == null ? null : readStringOrNull(item, 'merchantCountry')?.trim(),
+      imageUrl: item == null ? null : readStringOrNull(item, 'imageUrl'),
+      counterpartyName: counterparty == null ? null : readStringOrNull(counterparty, 'displayName'),
+      counterpartyAvatarUrl: counterparty == null ? null : readStringOrNull(counterparty, 'avatarUrl'),
+      purchaseCeilingIdr: readIntOrNull(json, 'purchaseCeilingIdr'),
       createdAt: readDate(json, 'createdAt'),
       statusChangedAt: readDate(json, 'statusChangedAt'),
     );
@@ -521,6 +739,12 @@ class TransactionSummary {
   final String? productName;
   final String? categoryCode;
   final String? merchantCountry;
+  final String? imageUrl;
+
+  /// The other party ("Budi S."); null before a traveler is matched.
+  final String? counterpartyName;
+  final String? counterpartyAvatarUrl;
+  final int? purchaseCeilingIdr;
   final DateTime? createdAt;
   final DateTime? statusChangedAt;
 
@@ -552,8 +776,11 @@ class TransactionDetail {
     this.deliveryMethod,
     this.autoConfirmAt,
     this.createdAt,
-    this.payoutStatus,
-    this.payoutNetIdr,
+    this.statusChangedAt,
+    this.trip,
+    this.payout,
+    this.customsDeclaration,
+    this.conversationId,
   });
 
   factory TransactionDetail.fromJson(Json json) {
@@ -565,14 +792,17 @@ class TransactionDetail {
     final deliveryJson = readObjectOrNull(json, 'delivery');
     final gateJson = readObjectOrNull(json, 'purchaseGate');
     final ceiling = readObjectOrNull(json, 'purchaseCeiling');
-    final payout = readObjectOrNull(json, 'payout');
+    final tripJson = readObjectOrNull(json, 'trip');
+    final payoutJson = readObjectOrNull(json, 'payout');
+    final customsJson = readObjectOrNull(json, 'customsDeclaration');
+    final item = itemJson == null ? null : TxItem.fromJson(itemJson);
     return TransactionDetail(
       id: readString(json, 'id'),
       number: readString(json, 'number'),
       status: readString(json, 'status'),
       role: readString(json, 'role', 'BUYER'),
       allowedActions: readStringList(json, 'allowedActions'),
-      item: itemJson == null ? null : TxItem.fromJson(itemJson),
+      item: item,
       buyer: buyerJson == null ? null : PublicProfile.fromJson(buyerJson),
       traveler: travelerJson == null ? null : PublicProfile.fromJson(travelerJson),
       quote: quoteJson == null ? null : Quote.fromJson(quoteJson),
@@ -584,14 +814,19 @@ class TransactionDetail {
       purchaseGate: gateJson == null ? null : PurchaseGate.fromJson(gateJson),
       totalIdr: readIntOrNull(json, 'totalIdr'),
       securedIdr: readInt(json, 'securedIdr'),
-      itemCurrency: readStringOrNull(json, 'itemCurrency')?.trim(),
+      itemCurrency: (item?.currency ?? readStringOrNull(json, 'itemCurrency'))?.trim(),
+      // The item-currency ceiling only exists in the deprecated `purchaseCeiling.minor`; the proof
+      // form needs it to compare the receipt total in the shop's currency.
       purchaseCeilingMinor: ceiling == null ? null : readIntOrNull(ceiling, 'minor'),
-      purchaseCeilingIdr: ceiling == null ? null : readIntOrNull(ceiling, 'idr'),
+      purchaseCeilingIdr: readIntOrNull(json, 'purchaseCeilingIdr'),
       deliveryMethod: readStringOrNull(json, 'deliveryMethod'),
       autoConfirmAt: readDate(json, 'autoConfirmAt'),
       createdAt: readDate(json, 'createdAt'),
-      payoutStatus: payout == null ? null : readStringOrNull(payout, 'status'),
-      payoutNetIdr: payout == null ? null : readIntOrNull(payout, 'netIdr'),
+      statusChangedAt: readDate(json, 'statusChangedAt'),
+      trip: tripJson == null ? null : TripRoute.fromJson(tripJson),
+      payout: payoutJson == null ? null : TransactionPayout.fromJson(payoutJson),
+      customsDeclaration: customsJson == null ? null : CustomsDeclarationInfo.fromJson(customsJson),
+      conversationId: readStringOrNull(json, 'conversationId'),
     );
   }
 
@@ -618,8 +853,13 @@ class TransactionDetail {
   final String? deliveryMethod;
   final DateTime? autoConfirmAt;
   final DateTime? createdAt;
-  final String? payoutStatus;
-  final int? payoutNetIdr;
+  final DateTime? statusChangedAt;
+  final TripRoute? trip;
+  final TransactionPayout? payout;
+  final CustomsDeclarationInfo? customsDeclaration;
+
+  /// Null until the transaction reached MATCHED (then `GET /transactions/{id}/conversation`).
+  final String? conversationId;
 
   bool get isBuyer => role == 'BUYER';
 
@@ -753,6 +993,88 @@ class CancellationOutcome {
   final int refundIdr;
   final int travelerCompensationIdr;
   final int trustPenalty;
+}
+
+/// `GET /transactions/{id}/cancel/preview` — computed by the same code path as `POST /cancel`.
+class CancellationPreview {
+  const CancellationPreview({
+    required this.allowed,
+    required this.canCancel,
+    this.stage,
+    this.reasonCode,
+    this.reason,
+    this.paymentCaptured = false,
+    this.paidIdr = 0,
+    this.refundIdr = 0,
+    this.travelerCompensationIdr = 0,
+    this.platformRetainedIdr = 0,
+    this.paymentFeeRetainedIdr = 0,
+    this.serviceTaxRetainedIdr = 0,
+    this.customsRetainedIdr = 0,
+    this.creditRestoredIdr = 0,
+    this.discountReversedIdr = 0,
+    this.trustPenalty = 0,
+    this.penalizedActor,
+    this.requiresAdminApproval = false,
+    this.blockedCode,
+    this.blockedMessage,
+  });
+
+  factory CancellationPreview.fromJson(Json json) {
+    final blocked = readObjectOrNull(json, 'blockedBy');
+    return CancellationPreview(
+      allowed: readBool(json, 'allowed'),
+      canCancel: readBool(json, 'canCancel'),
+      stage: readStringOrNull(json, 'stage'),
+      reasonCode: readStringOrNull(json, 'reasonCode'),
+      reason: readStringOrNull(json, 'reason'),
+      paymentCaptured: readBool(json, 'paymentCaptured'),
+      paidIdr: readInt(json, 'paidIdr'),
+      refundIdr: readInt(json, 'refundIdr'),
+      travelerCompensationIdr: readInt(json, 'travelerCompensationIdr'),
+      platformRetainedIdr: readInt(json, 'platformRetainedIdr'),
+      paymentFeeRetainedIdr: readInt(json, 'paymentFeeRetainedIdr'),
+      serviceTaxRetainedIdr: readInt(json, 'serviceTaxRetainedIdr'),
+      customsRetainedIdr: readInt(json, 'customsRetainedIdr'),
+      creditRestoredIdr: readInt(json, 'creditRestoredIdr'),
+      discountReversedIdr: readInt(json, 'discountReversedIdr'),
+      trustPenalty: readInt(json, 'trustPenalty'),
+      penalizedActor: readStringOrNull(json, 'penalizedActor'),
+      requiresAdminApproval: readBool(json, 'requiresAdminApproval'),
+      blockedCode: blocked == null ? null : readStringOrNull(blocked, 'code'),
+      blockedMessage: blocked == null ? null : readStringOrNull(blocked, 'message'),
+    );
+  }
+
+  final bool allowed;
+
+  /// The caller may submit `POST /cancel` now (allowed, FSM permits, no admin approval needed).
+  final bool canCancel;
+  final String? stage;
+  final String? reasonCode;
+
+  /// Server explanation (Indonesian by default, `Accept-Language` aware).
+  final String? reason;
+  final bool paymentCaptured;
+  final int paidIdr;
+  final int refundIdr;
+  final int travelerCompensationIdr;
+  final int platformRetainedIdr;
+  final int paymentFeeRetainedIdr;
+  final int serviceTaxRetainedIdr;
+  final int customsRetainedIdr;
+  final int creditRestoredIdr;
+  final int discountReversedIdr;
+  final int trustPenalty;
+  final String? penalizedActor;
+  final bool requiresAdminApproval;
+
+  /// CANCELLATION_NOT_ALLOWED | ADMIN_APPROVAL_REQUIRED.
+  final String? blockedCode;
+  final String? blockedMessage;
+
+  /// Paid but not refunded (compensation, retained fees, customs already paid, …).
+  int get notRefundedIdr => paidIdr > refundIdr ? paidIdr - refundIdr : 0;
 }
 
 /// Result of money mutations (`MoneyActionResult` is open-ended in the spec).

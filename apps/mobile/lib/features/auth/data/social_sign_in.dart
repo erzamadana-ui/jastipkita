@@ -11,12 +11,13 @@ import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
 
 class AppleCredential {
-  const AppleCredential({required this.identityToken, required this.nonce, this.givenName, this.familyName});
+  const AppleCredential({required this.identityToken, required this.rawNonce, this.givenName, this.familyName});
 
   final String identityToken;
 
-  /// SHA-256 of the raw nonce, exactly as given to Apple (the API compares it to the token claim).
-  final String nonce;
+  /// The random nonce generated on the device. Apple received SHA-256(rawNonce); the API
+  /// verifies `sha256hex(rawNonce)` against the token's `nonce` claim (replay protection).
+  final String rawNonce;
   final String? givenName;
   final String? familyName;
 }
@@ -79,7 +80,7 @@ class SocialSignIn {
       if (token == null || token.isEmpty) throw const ApiException(code: 'APPLE_SIGN_IN_FAILED');
       return AppleCredential(
         identityToken: token,
-        nonce: hashed,
+        rawNonce: rawNonce,
         givenName: credential.givenName,
         familyName: credential.familyName,
       );
@@ -94,7 +95,7 @@ class SocialSignIn {
   }
 
   static String _randomNonce([int length = 32]) {
-    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
     final random = Random.secure();
     return List<String>.generate(length, (int _) => charset[random.nextInt(charset.length)]).join();
   }

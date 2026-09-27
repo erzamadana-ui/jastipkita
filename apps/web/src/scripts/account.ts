@@ -56,7 +56,7 @@ async function load() {
 }
 
 $('#acc-logout')?.addEventListener('click', async () => {
-  try { await api('/v1/auth/logout', { method: 'POST', auth: true, body: {} }); } catch { /* ignore */ }
+  try { await api('/v1/auth/logout', { method: 'POST', auth: true }); } catch { /* ignore */ }
   session.clear();
   location.reload();
 });
@@ -64,7 +64,7 @@ $('#acc-logout')?.addEventListener('click', async () => {
 $('#acc-export')?.addEventListener('click', async () => {
   const msg = $('#acc-export-msg');
   try {
-    await api('/v1/privacy/export', { method: 'POST', auth: true, body: {} });
+    await api('/v1/privacy/export', { method: 'POST', auth: true });
     if (msg) msg.textContent = 'Permintaan diterima. Kami memberi tahu kamu saat file siap (maks. 3×24 jam sesuai UU PDP).';
   } catch (e) {
     if (msg) msg.textContent = describeError(e);
@@ -105,7 +105,7 @@ async function doDelete() {
 
 $('#acc-cancel')?.addEventListener('click', async () => {
   try {
-    await api('/v1/privacy/cancel-deletion', { method: 'POST', auth: true, body: {} });
+    await api('/v1/privacy/cancel-deletion', { method: 'POST', auth: true });
     setPending(null);
   } catch (e) { showError(describeError(e)); }
 });

@@ -85,6 +85,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (!mounted) return;
       setState(() {
         _quote = quote;
+        final priced = quote.paymentChannel;
+        if (priced != null && priced.isNotEmpty) _channel = priced;
         _expired = !quote.isUsable(DateTime.now().toUtc());
         _ack = false;
       });
@@ -119,31 +121,53 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  /// Channel picker. Every option shows its own fee and total from `quote.paymentOptions`
+  /// (computed by the pricing engine); unavailable channels are listed with the reason.
   Future<void> _pickChannel() async {
     final l10n = context.l10n;
-    final current = _quote?.line(PriceLineType.paymentFee)?.amountIdr;
+    final quote = _quote;
+    final options = quote?.paymentOptions ?? const <PaymentOption>[];
+    final current = quote?.line(PriceLineType.paymentFee)?.amountIdr;
     final picked = await showJkBottomSheet<String>(
       context,
       title: l10n.channelTitle,
       builder: (BuildContext sheetContext) {
         final locale = sheetContext.localeCode;
+        final jk = sheetContext.jk;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            for (final c in PaymentChannel.all)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(_channelIcon(c)),
-                title: Text(Labels.paymentChannel(l10n, c)),
-                subtitle: Text(
-                  c == _channel && current != null ? l10n.channelFee(Money.idr(current, locale: locale)) : l10n.channelFeeOnSelect,
+            if (options.isNotEmpty)
+              for (final o in options)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  enabled: o.available,
+                  leading: Icon(_channelIcon(o.channel)),
+                  title: Text(o.label.isEmpty ? Labels.paymentChannel(l10n, o.channel) : o.label),
+                  subtitle: Text(
+                    _optionDetails(l10n, o, locale).join('\n'),
+                    style: JkTypeScale.bodyS.copyWith(color: o.available ? jk.onSurfaceMuted : jk.errorText),
+                  ),
+                  trailing: o.channel == _channel ? Icon(Icons.check_circle, color: jk.secondary) : null,
+                  selected: o.channel == _channel,
+                  onTap: o.available ? () => Navigator.of(sheetContext).pop(o.channel) : null,
+                )
+            else
+              // Quotes created before `paymentOptions` existed: fee known for the priced channel only.
+              for (final c in PaymentChannel.all)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(_channelIcon(c)),
+                  title: Text(Labels.paymentChannel(l10n, c)),
+                  subtitle: Text(
+                    c == _channel && current != null ? l10n.channelFee(Money.idr(current, locale: locale)) : l10n.channelFeeOnSelect,
+                  ),
+                  trailing: c == _channel ? Icon(Icons.check_circle, color: jk.secondary) : null,
+                  selected: c == _channel,
+                  onTap: () => Navigator.of(sheetContext).pop(c),
                 ),
-                trailing: c == _channel ? Icon(Icons.check_circle, color: sheetContext.jk.secondary) : null,
-                selected: c == _channel,
-                onTap: () => Navigator.of(sheetContext).pop(c),
-              ),
             const SizedBox(height: JkSpacing.s2),
-            Text(l10n.channelNote, style: JkTypeScale.bodyS.copyWith(color: sheetContext.jk.onSurfaceMuted)),
+            Text(l10n.channelNote, style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted)),
           ],
         );
       },
@@ -152,6 +176,26 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     JkHaptics.selection(ref.read(settingsProvider).haptics);
     setState(() => _channel = picked);
     await _requote();
+  }
+
+  /// "Biaya Rp4.440 · Total Rp1.368.830", refund note, or why the channel is unavailable.
+  static List<String> _optionDetails(AppLocalizations l10n, PaymentOption o, String locale) {
+    if (!o.available) return <String>[_unavailableText(l10n, o, locale)];
+    final fee = o.bearer == 'PLATFORM'
+        ? l10n.channelFeePlatform
+        : (o.feeIdr == 0 ? l10n.channelFeeFree : l10n.channelFee(Money.idr(o.feeIdr, locale: locale)));
+    return <String>[
+      '$fee · ${l10n.channelTotal(Money.idr(o.totalIdr, locale: locale))}',
+      if (!o.refundable) l10n.channelNotRefundable,
+    ];
+  }
+
+  static String _unavailableText(AppLocalizations l10n, PaymentOption o, String locale) {
+    final max = o.maxAmountIdr;
+    final min = o.minAmountIdr;
+    if (o.unavailableReason == 'ABOVE_CHANNEL_MAX' && max != null) return l10n.channelAboveMax(Money.idr(max, locale: locale));
+    if (o.unavailableReason == 'BELOW_CHANNEL_MIN' && min != null) return l10n.channelBelowMin(Money.idr(min, locale: locale));
+    return l10n.channelUnavailable;
   }
 
   static IconData _channelIcon(String channel) => switch (channel) {
@@ -200,7 +244,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final catalog = ref.watch(catalogProvider).valueOrNull;
     final restricted = quote?.restrictedClassification;
     final needsAck = quote?.restrictedRequiresAck ?? false;
-    final prohibited = Restriction.blocksCheckout(restricted);
+    final prohibited = Restriction.blocksCheckout(restricted) || (quote?.blocksCheckout ?? false);
     final fx = quote?.fx;
     final quoteError = _quoteError;
     final unit = quote?.itemUnitPriceMinor;
@@ -208,7 +252,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final itemSub = unit != null && currency != null
         ? '${quote?.itemQuantity ?? 1} × ${Money.minor(unit, currency, locale: locale, minorUnits: catalog?.minorUnits(currency))}'
         : null;
-    final canPay = quote != null && !_expired && !_quoting && kycOk && !prohibited && (!needsAck || _ack);
+    final option = quote?.paymentOption(_channel);
+    final channelOk = option?.available ?? true;
+    final canPay = quote != null && !_expired && !_quoting && kycOk && !prohibited && channelOk && (!needsAck || _ack);
     final String? disabledReason = quote == null
         ? null
         : _expired
@@ -217,7 +263,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ? l10n.checkoutKycReason
                 : prohibited
                     ? l10n.restrictionProhibitedTitle
-                    : (needsAck && !_ack ? l10n.checkoutAckReason : null);
+                    : !channelOk
+                        ? _unavailableText(l10n, option!, locale)
+                        : (needsAck && !_ack ? l10n.checkoutAckReason : null);
 
     return Scaffold(
       appBar: AppBar(
@@ -241,7 +289,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 JkCard(
                   child: Row(
                     children: <Widget>[
-                      const ProductThumb(icon: Icons.work_outline),
+                      ProductThumb(imageUrl: detail?.item?.imageUrl, icon: Icons.work_outline),
                       const SizedBox(width: JkSpacing.s3),
                       Expanded(
                         child: Column(
@@ -299,7 +347,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     children: <Widget>[
                       Icon(_channelIcon(_channel), color: jk.secondary),
                       const SizedBox(width: JkSpacing.s3),
-                      Expanded(child: Text(Labels.paymentChannel(l10n, _channel), style: JkTypeScale.bodyL.copyWith(color: jk.onSurface))),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              option == null || option.label.isEmpty ? Labels.paymentChannel(l10n, _channel) : option.label,
+                              style: JkTypeScale.bodyL.copyWith(color: jk.onSurface),
+                            ),
+                            if (option != null)
+                              Text(
+                                _optionDetails(l10n, option, locale).join('\n'),
+                                style: JkTypeScale.bodyS.copyWith(color: option.available ? jk.onSurfaceMuted : jk.errorText),
+                              ),
+                          ],
+                        ),
+                      ),
                       Text(l10n.actionChange, style: JkTypeScale.labelL.copyWith(color: jk.link)),
                       const Icon(Icons.chevron_right),
                     ],

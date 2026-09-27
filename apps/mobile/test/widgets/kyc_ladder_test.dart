@@ -41,6 +41,16 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('trust badge uses the server tier when given', (WidgetTester tester) async {
+    usePhoneSurface(tester);
+    await tester.pumpWidget(harness(const TrustScoreBadge(score: 60, tier: 'EXCELLENT', full: true)));
+    await tester.pump();
+    expect(find.text(l10n.trustScoreFull(60, l10n.trustTierExcellent)), findsOneWidget);
+    await tester.pumpWidget(harness(const TrustScoreBadge(score: 60, full: true)));
+    await tester.pump();
+    expect(find.text(l10n.trustScoreFull(60, l10n.trustTierFair)), findsOneWidget);
+  });
+
   testWidgets('KYC level badge', (WidgetTester tester) async {
     usePhoneSurface(tester);
     await tester.pumpWidget(harness(const KycLevelBadge(level: 3)));

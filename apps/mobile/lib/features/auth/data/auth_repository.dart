@@ -9,17 +9,27 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/storage/settings.dart';
 import '../../../core/storage/token_storage.dart';
 
-/// Consent choice collected before an account is created (ToS + Privacy required, marketing
-/// optional). Registration is separate from KYC: this is all a new account needs.
+/// Consent decisions collected before an account is created. Which consents exist and their
+/// versions come from `GET /consents/requirements` (signup: ToS + Privacy required, marketing
+/// optional) — nothing is hard-coded. Registration is separate from KYC.
 class ConsentChoice {
-  const ConsentChoice({required this.marketing});
+  const ConsentChoice({required this.group, required this.granted});
 
-  final bool marketing;
+  final ConsentGroup group;
 
-  List<Json> toPayload(String version) => <Json>[
-        <String, dynamic>{'type': 'TOS', 'version': version, 'granted': true},
-        <String, dynamic>{'type': 'PRIVACY', 'version': version, 'granted': true},
-        <String, dynamic>{'type': 'MARKETING', 'version': version, 'granted': marketing},
+  /// type → granted (what the user ticked; required boxes must be ticked before submitting).
+  final Map<String, bool> granted;
+
+  /// `consents[]` for signup / `POST /me/consents`. [versionOverride] replaces the published
+  /// version after a `CONSENT_VERSION_INVALID {allowedVersions}` answer.
+  List<Json> toPayload({String? versionOverride}) => <Json>[
+        for (final r in group.all)
+          if ((versionOverride ?? r.versionToSend) != null)
+            <String, dynamic>{
+              'type': r.type,
+              'version': versionOverride ?? r.versionToSend,
+              'granted': granted[r.type] ?? false,
+            },
       ];
 }
 
@@ -76,9 +86,10 @@ class AuthRepository {
     return _persist(LoginResult.fromJson(json));
   }
 
+  /// [rawNonce]: the API checks `sha256hex(rawNonce)` against the token's `nonce` claim.
   Future<LoginResult> signInWithApple({
     required String identityToken,
-    String? nonce,
+    required String rawNonce,
     String? givenName,
     String? familyName,
     List<Json>? consents,
@@ -87,7 +98,7 @@ class AuthRepository {
       '/auth/apple',
       body: <String, dynamic>{
         'identityToken': identityToken,
-        if (nonce != null) 'nonce': nonce,
+        'rawNonce': rawNonce,
         if (givenName != null || familyName != null)
           'fullName': <String, dynamic>{
             if (givenName != null) 'givenName': givenName,
@@ -139,6 +150,21 @@ class AuthRepository {
 
   Future<ConsentState> consents() async => ConsentState.fromJson(await _api.get('/me/consents'));
 
+  /// Consent types + exact versions to collect at signup and before KYC (public; with a token
+  /// it also says what is already granted).
+  Future<ConsentRequirements> consentRequirements({String locale = 'id'}) async =>
+      ConsentRequirements.fromJson(await _api.get('/consents/requirements', query: <String, Object?>{'locale': locale}));
+
+  /// Current published legal documents (latest version per type & locale).
+  Future<List<LegalDocumentSummary>> legalDocuments({String locale = 'id', String? type}) async =>
+      readList(await _api.get('/legal/documents', query: <String, Object?>{'locale': locale, 'type': type}), 'data')
+          .map(LegalDocumentSummary.fromJson)
+          .toList();
+
+  /// One legal document with its Markdown body.
+  Future<LegalDocument> legalDocument(String type, {String locale = 'id', String? version}) async =>
+      LegalDocument.fromJson(await _api.get('/legal/documents/$type', query: <String, Object?>{'locale': locale, 'version': version}));
+
   Future<void> recordConsent({required String type, required String version, required bool granted}) async {
     await _api.post('/me/consents', body: <String, dynamic>{'type': type, 'version': version, 'granted': granted});
   }
@@ -172,4 +198,14 @@ class AuthRepository {
 
 final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(ref.watch(apiClientProvider), ref.watch(tokenStoreProvider), ref.watch(installationIdProvider)),
+);
+
+/// Consent requirements per locale (`id` | `en`).
+final consentRequirementsProvider = FutureProvider.autoDispose.family<ConsentRequirements, String>(
+  (ref, locale) => ref.watch(authRepositoryProvider).consentRequirements(locale: locale),
+);
+
+/// Legal document by (type, locale).
+final legalDocumentProvider = FutureProvider.autoDispose.family<LegalDocument, (String, String)>(
+  (ref, key) => ref.watch(authRepositoryProvider).legalDocument(key.$1, locale: key.$2),
 );

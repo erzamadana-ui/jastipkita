@@ -1,3 +1,4 @@
+import '../design/tokens.g.dart';
 import '../domain/domain.dart';
 import 'l10n.dart';
 
@@ -390,11 +391,19 @@ abstract final class Labels {
     }
   }
 
-  static String trustTier(AppLocalizations l10n, int score) {
-    if (score >= 85) return l10n.trustTierExcellent;
-    if (score >= 70) return l10n.trustTierGood;
-    if (score >= 40) return l10n.trustTierFair;
-    return l10n.trustTierLow;
+  /// Tier label. The server's band (`trustTier.tier`) wins; the score thresholds (design tokens)
+  /// are only used for the signed-in user's own score, where no band is sent.
+  static String trustTier(AppLocalizations l10n, int score, {String? tier}) {
+    switch (tier ?? JkStatus.trustTierOf(score).toUpperCase()) {
+      case 'EXCELLENT':
+        return l10n.trustTierExcellent;
+      case 'GOOD':
+        return l10n.trustTierGood;
+      case 'FAIR':
+        return l10n.trustTierFair;
+      default:
+        return l10n.trustTierLow;
+    }
   }
 
   static String cancellationStage(AppLocalizations l10n, String stage) {
@@ -413,19 +422,6 @@ abstract final class Labels {
         return l10n.stageDuringTravel;
       default:
         return l10n.stageAfterArrival;
-    }
-  }
-
-  static String cancellationStageHint(AppLocalizations l10n, String stage) {
-    switch (stage) {
-      case 'BEFORE_MATCH':
-      case 'AFTER_MATCH':
-        return l10n.stageHintBeforePayment;
-      case 'AFTER_PAYMENT':
-      case 'BEFORE_PURCHASE':
-        return l10n.stageHintAfterPayment;
-      default:
-        return l10n.stageHintAfterPurchase;
     }
   }
 

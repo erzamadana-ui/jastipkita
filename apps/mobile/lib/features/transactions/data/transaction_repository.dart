@@ -6,7 +6,7 @@ import '../../../core/models/transaction.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/idempotency.dart';
 
-/// Money API — docs/api/money.md. Every 💰 mutation goes through [FinancialCaller] so a retry
+/// Money API — docs/api/money.md. Every money mutation goes through [FinancialCaller] so a retry
 /// (automatic or "Coba lagi") reuses the same Idempotency-Key.
 class TransactionRepository {
   TransactionRepository(this._api, this._financial);
@@ -219,6 +219,11 @@ class TransactionRepository {
       );
 
   /// 💰 Cancel per the cancellation matrix.
+  /// Exact outcome of cancelling now (same evaluation as `POST /cancel`, no side effects).
+  Future<CancellationPreview> cancelPreview(String id, {String? cause}) async => CancellationPreview.fromJson(
+        await _api.get('/transactions/$id/cancel/preview', query: <String, Object?>{'cause': cause}),
+      );
+
   Future<MoneyActionResult> cancel(String id, {required String reason, String? cause}) => _financial.run<MoneyActionResult>(
         'cancel:$id',
         (String key) async => MoneyActionResult(

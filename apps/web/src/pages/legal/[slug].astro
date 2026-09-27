@@ -10,6 +10,8 @@ export async function getStaticPaths() {
   return docs.map((doc) => ({ params: { slug: doc.id }, props: { doc } }));
 }
 const { doc } = Astro.props;
+// Version/date shown here come from docs/legal front-matter; scripts/legal-versions.ts swaps in the API's latest
+// published version & effective date (GET /v1/legal/documents) when the API is reachable.
 const { Content, headings } = await render(doc);
 const toc = headings.filter((h: { depth: number }) => h.depth === 2 || h.depth === 3);
 const path = `/legal/${doc.id}/`;
@@ -20,7 +22,13 @@ const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Legal', path: '/legal/'
     <div class="container">
       <Breadcrumbs items={crumbs} />
       <h1>{doc.data.title}</h1>
-      <p class="small muted" style="margin-top:10px">Versi {doc.data.version} · Berlaku sejak {doc.data.effectiveDate}</p>
+      <div data-legal-slug={doc.id} data-static-version={doc.data.version}>
+        <p class="small muted" style="margin-top:10px">
+          Versi <span data-legal-version>{doc.data.version}</span> · Berlaku sejak <span data-legal-effective>{doc.data.effectiveDate}</span>
+          <span class="chip chip-success legal-live" data-legal-live hidden>terverifikasi dengan server</span>
+        </p>
+        <p class="note note-warning legal-newer" data-legal-newer hidden><span data-legal-newer-text></span></p>
+      </div>
     </div>
   </section>
   <section class="section-tight" style="padding-top:0">
@@ -43,4 +51,12 @@ const crumbs = [{ name: 'Beranda', path: '/' }, { name: 'Legal', path: '/legal/'
       </div>
     </div>
   </section>
+  <script>
+    import '../../scripts/legal-versions.ts';
+  </script>
 </Base>
+
+<style>
+  .legal-live { margin-left: 6px; vertical-align: 1px; }
+  .legal-newer { margin-top: 12px; max-width: 720px; }
+</style>

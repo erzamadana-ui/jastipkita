@@ -76,28 +76,6 @@ abstract final class TxStatus {
 
   /// Golden rule: a traveler may only buy in PURCHASE_APPROVED.
   static bool travelerMayPurchase(String status) => status == purchaseApproved;
-
-  /// Cancellation-matrix stage for a status (domain §8) — used for the pre-confirmation preview.
-  static String cancellationStage(String status) {
-    switch (status) {
-      case requestCreated:
-        return 'BEFORE_MATCH';
-      case matched:
-      case awaitingPayment:
-        return 'AFTER_MATCH';
-      case paymentSecured:
-      case priceChangePending:
-        return 'AFTER_PAYMENT';
-      case purchaseApproved:
-        return 'BEFORE_PURCHASE';
-      case purchased:
-        return 'AFTER_PURCHASE';
-      case traveling:
-        return 'DURING_TRAVEL';
-      default:
-        return 'AFTER_ARRIVAL';
-    }
-  }
 }
 
 abstract final class TripStatus {

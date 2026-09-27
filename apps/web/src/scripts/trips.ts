@@ -6,8 +6,19 @@ interface Trip {
   id: string; status: string; originCountry: string; originCity: string; destinationCountry: string; destinationCity: string;
   departureDate: string; arrivalDate: string; capacityRemainingKg: number; itemsRemaining: number | null;
   fee: { type: 'FIXED' | 'PERCENT' | 'PER_KG'; value: number; label: string }; excludedCategories: string[]; verified: boolean;
-  traveler: { displayName: string; trustBadge: { tier: string; label: string }; identityVerified: boolean; rating: { average: number | null; count: number }; completedTransactions: number };
+  traveler: {
+    displayName: string;
+    trustBadge: { tier: string; label: string };
+    /** 2026-09-27 contract: Trust Score 0–100 + band, and KYC level (older API builds may omit them). */
+    trustScore?: number;
+    trustTier?: { tier: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'LOW'; label: string; labelEn: string };
+    kycLevel?: number;
+    identityVerified: boolean;
+    rating: { average: number | null; count: number };
+    completedTransactions: number;
+  };
 }
+const TIER_CLASS: Record<string, string> = { EXCELLENT: 'trust-excellent', GOOD: 'trust-good', FAIR: 'trust-fair', LOW: 'trust-low' };
 interface Page { data: Trip[]; nextCursor: string | null }
 
 const form = document.querySelector<HTMLFormElement>('#trip-form');
@@ -39,7 +50,8 @@ function card(t: Trip): string {
     <p class="small muted">Berangkat ${escapeHtml(fmtDate(t.departureDate))} · tiba ${escapeHtml(fmtDate(t.arrivalDate))}</p>
     <div style="display:flex;flex-wrap:wrap;gap:6px">
       ${t.verified ? '<span class="chip chip-success">Trip terverifikasi</span>' : '<span class="chip">Belum terverifikasi</span>'}
-      <span class="chip">${escapeHtml(t.traveler.trustBadge.label)}</span>
+      <span class="chip">${escapeHtml(t.traveler.trustBadge.label)}${t.traveler.kycLevel ? ` · KYC ${t.traveler.kycLevel}` : ''}</span>
+      ${typeof t.traveler.trustScore === 'number' ? `<span class="chip trust-chip ${TIER_CLASS[t.traveler.trustTier?.tier ?? ''] ?? ''}">Trust ${t.traveler.trustScore}${t.traveler.trustTier ? ` · ${escapeHtml(t.traveler.trustTier.label)}` : ''}</span>` : ''}
     </div>
     <p class="small"><strong>${escapeHtml(t.traveler.displayName)}</strong> · ${escapeHtml(rating)} · ${t.traveler.completedTransactions} transaksi selesai</p>
     <div><div class="small" style="display:flex;justify-content:space-between"><span>Sisa kapasitas</span><span class="tnum">${escapeHtml(String(t.capacityRemainingKg))} kg${t.itemsRemaining !== null ? ` · ${t.itemsRemaining} item` : ''}</span></div></div>

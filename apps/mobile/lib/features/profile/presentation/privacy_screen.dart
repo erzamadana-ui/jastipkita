@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/config/app_config.dart';
 import '../../../core/design/theme.dart';
 import '../../../core/design/tokens.g.dart';
 import '../../../core/format/dates.dart';
 import '../../../core/l10n/l10n.dart';
 import '../../../core/l10n/labels.dart';
 import '../../../core/models/account.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../widgets/common.dart';
 import '../../../widgets/jk_button.dart';
 import '../../../widgets/jk_text_field.dart';
@@ -146,7 +146,13 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                   ? null
                   : (bool v) => _run(
                         'marketing',
-                        () => repo.recordConsent(type: 'MARKETING', version: AppConfig.consentVersion, granted: v),
+                        () async {
+                          // Version from `GET /consents/requirements`; the API rejects any other.
+                          final requirements = await repo.consentRequirements(locale: locale);
+                          final version = requirements.byType('MARKETING')?.versionToSend;
+                          if (version == null) throw const ApiException(code: 'CONSENT_VERSION_UNAVAILABLE');
+                          await repo.recordConsent(type: 'MARKETING', version: version, granted: v);
+                        },
                         l10n.consentSaved,
                       ),
               title: Text(l10n.consentMarketing),

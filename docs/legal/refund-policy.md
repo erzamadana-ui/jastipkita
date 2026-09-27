@@ -1,7 +1,7 @@
 ---
 title: Kebijakan Pembatalan & Refund
 description: Kapan titipan bisa dibatalkan, berapa dana yang kembali di setiap tahap, dan bagaimana hasil dispute diselesaikan.
-version: "0.1-draft"
+version: "0.1-template"
 effectiveDate: "[TANGGAL BERLAKU — diisi saat peluncuran]"
 order: 4
 ---

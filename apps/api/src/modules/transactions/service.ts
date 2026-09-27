@@ -125,6 +125,7 @@ function txSummary(tx: TxRow) {
     deliveryMethod: tx.deliveryMethod,
     purchaseCeiling: tx.purchaseCeilingMinor !== null ? { minor: tx.purchaseCeilingMinor, idr: tx.purchaseCeilingIdr } : null,
     purchaseCeilingIdr: tx.purchaseCeilingIdr,
+    purchaseCeilingMinor: tx.purchaseCeilingMinor,
     autoConfirmAt: tx.autoConfirmAt ? new Date(tx.autoConfirmAt).toISOString() : null,
     statusChangedAt: new Date(tx.statusChangedAt).toISOString(),
     createdAt: new Date(tx.createdAt).toISOString(),

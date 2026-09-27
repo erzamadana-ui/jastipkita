@@ -9,9 +9,12 @@ import 'sheets_and_glass.dart';
 
 /// Trust Score chip (§5.9): shield + number, tier tone; tap explains how it is computed.
 class TrustScoreBadge extends StatelessWidget {
-  const TrustScoreBadge({super.key, required this.score, this.full = false, this.interactive = true});
+  const TrustScoreBadge({super.key, required this.score, this.tier, this.full = false, this.interactive = true});
 
   final int score;
+
+  /// Server band (`trustTier.tier`: EXCELLENT|GOOD|FAIR|LOW); null → derived from the score.
+  final String? tier;
   final bool full;
   final bool interactive;
 
@@ -19,9 +22,10 @@ class TrustScoreBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final jk = context.jk;
     final l10n = context.l10n;
-    final tone = jk.trustTone(score);
-    final tier = Labels.trustTier(l10n, score);
-    final text = full ? l10n.trustScoreFull(score, tier) : l10n.trustScoreShort(score);
+    final band = tier;
+    final tone = band == null ? jk.trustTone(score) : (jk.trust[band.toLowerCase()] ?? jk.trustTone(score));
+    final tierLabel = Labels.trustTier(l10n, score, tier: band);
+    final text = full ? l10n.trustScoreFull(score, tierLabel) : l10n.trustScoreShort(score);
     final chip = DecoratedBox(
       decoration: BoxDecoration(color: tone.bg, borderRadius: JkRadii.pillAll),
       child: Padding(
@@ -44,7 +48,7 @@ class TrustScoreBadge extends StatelessWidget {
       ),
     );
     return Semantics(
-      label: l10n.trustScoreSemantics(score, tier),
+      label: l10n.trustScoreSemantics(score, tierLabel),
       button: interactive,
       excludeSemantics: true,
       child: interactive

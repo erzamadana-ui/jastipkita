@@ -99,3 +99,6 @@ setiap lingkungan yang menjalankan seed — termasuk produksi — sehingga pengg
 versi final. Batas nominal kanal (QRIS Rp10.000.000, VA Rp10.000–Rp50.000.000; E-Wallet/Kartu NEEDS_VERIFICATION) dan status refundable per
 kanal berasal dari riset Xendit (`docs/research/02-xendit-integration.md`), bukan kontrak. Rentang tier Trust Score mengikuti design tokens,
 bukan konfigurasi bisnis. `paymentOptions` untuk quote lama bernilai `[]`.*
+
+## 2026-09-28
+- `TransactionDetail.purchaseCeilingMinor` (merchant-currency minor units) added; `purchaseCeiling` remains deprecated but present.

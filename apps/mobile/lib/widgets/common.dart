@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../core/design/theme.dart';
 import '../core/design/tokens.g.dart';
 import '../core/l10n/l10n.dart';
 import '../core/models/account.dart';
+import 'api_image.dart';
 
 /// Opaque card (`surface`, radius lg, 1px border). Transactional content always sits on this,
 /// never on glass.
@@ -163,14 +163,7 @@ class ProductThumb extends StatelessWidget {
     return ExcludeSemantics(
       child: ClipRRect(
         borderRadius: JkRadii.mdAll,
-        child: CachedNetworkImage(
-          imageUrl: url,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          placeholder: (context, url) => placeholder,
-          errorWidget: (context, url, error) => placeholder,
-        ),
+        child: ApiImage(url, width: size, height: size, fallback: placeholder),
       ),
     );
   }

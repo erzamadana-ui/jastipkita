@@ -22,9 +22,6 @@ abstract final class AppConfig {
   static const String appleServiceId = String.fromEnvironment('APPLE_SERVICE_ID');
   static const String appleRedirectUri = String.fromEnvironment('APPLE_REDIRECT_URI');
 
-  /// Version of ToS / Privacy / Marketing consent documents the app displays.
-  static const String consentVersion = String.fromEnvironment('CONSENT_VERSION', defaultValue: '2026-09');
-
   /// Public web origin (legal pages, share links, universal links).
   static const String webBaseUrl =
       String.fromEnvironment('WEB_BASE_URL', defaultValue: 'https://antarkitaindonesia.com/jastipkita');

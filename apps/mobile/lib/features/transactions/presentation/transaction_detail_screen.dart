@@ -14,9 +14,12 @@ import '../../../core/l10n/l10n.dart';
 import '../../../core/l10n/labels.dart';
 import '../../../core/models/marketplace.dart';
 import '../../../core/models/transaction.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/router/deep_links.dart';
 import '../../../core/storage/settings.dart';
+import '../../../widgets/api_image.dart';
 import '../../../widgets/badges.dart';
+import '../../../widgets/cards.dart';
 import '../../../widgets/common.dart';
 import '../../../widgets/countdown_chip.dart';
 import '../../../widgets/jk_button.dart';
@@ -30,17 +33,21 @@ import '../../engagement/data/engagement_repository.dart';
 import '../data/transaction_repository.dart';
 import 'transaction_sheets.dart';
 
-/// Opens the transaction's conversation (one per transaction, created at MATCHED).
-Future<void> openTransactionChat(BuildContext context, WidgetRef ref, String transactionId) async {
+/// Opens the transaction's conversation: straight to [conversationId] when the detail already
+/// has it, otherwise via `GET /transactions/{id}/conversation` (created lazily at MATCHED).
+Future<void> openTransactionChat(BuildContext context, WidgetRef ref, String transactionId, {String? conversationId}) async {
   final l10n = context.l10n;
+  if (conversationId != null) {
+    context.push(Routes.conversation(conversationId));
+    return;
+  }
   try {
     final conversation = await ref.read(engagementRepositoryProvider).conversationForTransaction(transactionId);
     if (!context.mounted) return;
-    if (conversation == null) {
-      showJkSnack(context, l10n.chatNotAvailable);
-      return;
-    }
     context.push(Routes.conversation(conversation.id));
+  } on ApiException catch (e) {
+    if (!context.mounted) return;
+    showJkSnack(context, e.code == 'CONVERSATION_NOT_AVAILABLE' ? l10n.chatNotAvailable : errorMessage(l10n, e), error: true);
   } on Object catch (e) {
     if (!context.mounted) return;
     showJkSnack(context, errorMessage(l10n, e), error: true);
@@ -153,7 +160,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
         actions: <Widget>[
           IconButton(
             tooltip: l10n.chatWithCounterpart,
-            onPressed: () => openTransactionChat(context, ref, widget.transactionId),
+            onPressed: () => openTransactionChat(context, ref, widget.transactionId, conversationId: detail?.conversationId),
             icon: const Icon(Icons.chat_bubble_outline),
           ),
         ],
@@ -285,15 +292,17 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
     final locale = context.localeCode;
     final item = d.item;
     final price = item?.unitPriceMinor;
-    final currency = item?.priceCurrency;
+    final currency = item?.currency;
     final catalog = ref.watch(catalogProvider).valueOrNull;
+    final trip = d.trip;
+    final (double? rating, int ratingCount) = counterpart?.ratingAs(d.isBuyer ? 'TRAVELER' : 'BUYER') ?? (null, 0);
     return JkCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
             children: <Widget>[
-              const ProductThumb(icon: Icons.work_outline),
+              ProductThumb(imageUrl: item?.imageUrl, icon: Icons.work_outline),
               const SizedBox(width: JkSpacing.s3),
               Expanded(
                 child: Column(
@@ -335,14 +344,30 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
               spacing: JkSpacing.s2,
               runSpacing: JkSpacing.s2,
               children: <Widget>[
-                if (counterpart.trustScore != null) TrustScoreBadge(score: counterpart.trustScore!),
-                if (counterpart.impliedKycLevel != null) KycLevelBadge(level: counterpart.impliedKycLevel!),
-                if (counterpart.ratingAverage != null)
+                if (counterpart.trustScore != null) TrustScoreBadge(score: counterpart.trustScore!, tier: counterpart.trustTier),
+                if (counterpart.kycLevel != null) KycLevelBadge(level: counterpart.kycLevel!),
+                if (rating != null)
                   StatusChip(
-                    label: l10n.ratingShort(counterpart.ratingAverage!.toStringAsFixed(1), counterpart.ratingCount),
+                    label: l10n.ratingShort(rating.toStringAsFixed(1), ratingCount),
                     tone: jk.status['open']!,
                     icon: Icons.star_rounded,
                   ),
+              ],
+            ),
+          ],
+          if (trip != null) ...<Widget>[
+            const SizedBox(height: JkSpacing.s3),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(Icons.flight_takeoff, size: 18, color: jk.secondary),
+                const SizedBox(width: JkSpacing.s2),
+                Expanded(
+                  child: Text(
+                    '${tripRouteText(trip)} · ${l10n.tripDates(JkDates.calendarShort(trip.departureDate, locale), JkDates.calendarShort(trip.arrivalDate, locale))}',
+                    style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted),
+                  ),
+                ),
               ],
             ),
           ],
@@ -451,6 +476,25 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
           ],
           const SizedBox(height: JkSpacing.s2),
           Text(l10n.proofPhotos(proof.productPhotoFileIds.length), style: JkTypeScale.bodyS.copyWith(color: context.jk.onSurfaceMuted)),
+          if (proof.images.isNotEmpty) ...<Widget>[
+            const SizedBox(height: JkSpacing.s2),
+            Wrap(
+              spacing: JkSpacing.s2,
+              runSpacing: JkSpacing.s2,
+              children: <Widget>[
+                for (final f in proof.images)
+                  Semantics(
+                    button: true,
+                    label: f.kind == 'RECEIPT' ? l10n.proofReceipt : l10n.proofPhotosLabel,
+                    child: InkWell(
+                      borderRadius: JkRadii.mdAll,
+                      onTap: () => showApiImageDialog(context, f.contentUrl),
+                      child: ProductThumb(imageUrl: f.contentUrl, size: 72, icon: Icons.image_outlined),
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -523,16 +567,15 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
     final haptics = ref.watch(settingsProvider).haptics;
     final quote = d.quote;
     final ceilingMinor = d.purchaseCeilingMinor;
+    final ceilingIdr = d.purchaseCeilingIdr;
     final currency = d.itemCurrency ?? quote?.itemCurrency;
-    final unit = quote?.itemUnitPriceMinor;
     final approvedText = ceilingMinor != null && currency != null
         ? Money.minor(ceilingMinor, currency, locale: locale, minorUnits: catalog?.minorUnits(currency))
-        : (unit != null && currency != null
-            ? Money.minor(unit * (quote?.itemQuantity ?? 1), currency, locale: locale, minorUnits: catalog?.minorUnits(currency))
-            : null);
+        : (ceilingIdr != null ? Money.idr(ceilingIdr, locale: locale) : null);
     final fee = quote?.line(PriceLineType.travelerFee)?.amountIdr;
     final pc = d.openPriceConfirmation;
-    final route = '${catalog?.countryName(d.item?.merchantCountry, locale) ?? d.item?.merchantCountry ?? ''} → Indonesia';
+    final trip = d.trip;
+    final payout = d.payout;
     final statusActions = d.allowedActions.where((String a) => a.startsWith('UPDATE_STATUS:')).map((String a) => a.substring(14)).toList();
     final actionNeeded = d.allowedActions.any((String a) => a != 'CANCEL' && a != 'OPEN_DISPUTE' && a != 'SET_DELIVERY' && a != 'CUSTOMS_DECLARATION');
     return Column(
@@ -548,7 +591,8 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: <Widget>[
                   StatusChip(label: l10n.modeTravelerPill, tone: JkTone(fg: jk.onPrimary, bg: jk.primary, dot: jk.onPrimary), icon: Icons.flight_takeoff),
-                  Text(route.toUpperCase(), style: JkTypeScale.labelM.copyWith(color: jk.onBackgroundMuted, letterSpacing: 1)),
+                  if (trip != null)
+                    Text(tripRouteText(trip).toUpperCase(), style: JkTypeScale.labelM.copyWith(color: jk.onBackgroundMuted, letterSpacing: 1)),
                 ],
               ),
               const SizedBox(height: JkSpacing.s3),
@@ -575,7 +619,8 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: <Widget>[
                             Text(l10n.requestBuyer(d.buyer!.displayName), style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted)),
-                            if (d.buyer!.impliedKycLevel != null) KycLevelBadge(level: d.buyer!.impliedKycLevel!),
+                            if (d.buyer!.kycLevel != null) KycLevelBadge(level: d.buyer!.kycLevel!),
+                            if (d.buyer!.trustScore != null) TrustScoreBadge(score: d.buyer!.trustScore!, tier: d.buyer!.trustTier),
                           ],
                         ),
                       ],
@@ -647,15 +692,27 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
                   const SizedBox(height: JkSpacing.s4),
                   _proofCard(d.purchaseProof!),
                 ],
-                if (d.payoutStatus != null) ...<Widget>[
+                if (payout != null) ...<Widget>[
                   SectionHeader(title: l10n.payoutTitle),
                   JkCard(
-                    child: d.payoutNetIdr == null
-                        ? Text(Labels.payoutStatus(l10n, d.payoutStatus!), style: JkTypeScale.bodyM.copyWith(color: jk.onSurface))
-                        : LabeledAmount(
-                            label: Text(Labels.payoutStatus(l10n, d.payoutStatus!), style: JkTypeScale.bodyM.copyWith(color: jk.onSurface)),
-                            amount: MoneyText(d.payoutNetIdr!, size: MoneySize.m),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        LabeledAmount(
+                          label: Text(Labels.payoutStatus(l10n, payout.status), style: JkTypeScale.bodyM.copyWith(color: jk.onSurface)),
+                          amount: MoneyText(payout.netIdr, size: MoneySize.m, semanticsPrefix: l10n.payoutNet),
+                        ),
+                        if (payout.paidAt != null || payout.scheduledAt != null)
+                          Text(
+                            payout.paidAt != null
+                                ? l10n.payoutPaidOn(JkDates.date(payout.paidAt!, locale))
+                                : l10n.payoutScheduledOn(JkDates.date(payout.scheduledAt!, locale)),
+                            style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted),
                           ),
+                        if (payout.holdReason != null)
+                          Text(payout.holdReason!, style: JkTypeScale.bodyS.copyWith(color: jk.warningText)),
+                      ],
+                    ),
                   ),
                 ],
                 _secondaryActions(d),
@@ -688,7 +745,7 @@ class _TransactionDetailScreenState extends ConsumerState<TransactionDetailScree
             onPressed: _busy == null ? () => _confirmReceipt(d) : null,
           ),
         );
-      } else if (d.can('VIEW_HANDOVER_PIN')) {
+      } else if (d.can('VIEW_HANDOVER_PIN') || (d.delivery?.pinAvailable ?? false)) {
         children.add(JkButton(label: l10n.showHandoverPin, icon: Icons.qr_code_2, onPressed: () => context.push(Routes.handover(d.id))));
       } else if (d.status == TxStatus.completed) {
         children.add(

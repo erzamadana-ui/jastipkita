@@ -1,7 +1,7 @@
 ---
 title: Ketentuan Pembayaran (SafePay)
 description: Cara kerja SafePay, peran mitra payment gateway berizin, biaya, penguncian kurs, penggantian bea & pajak, chargeback, dan payout Traveler.
-version: "0.1-draft"
+version: "0.1-template"
 effectiveDate: "[TANGGAL BERLAKU — diisi saat peluncuran]"
 order: 6
 ---

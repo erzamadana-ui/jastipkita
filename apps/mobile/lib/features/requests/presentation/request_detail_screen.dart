@@ -211,7 +211,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 InitialsAvatar(name: buyer.displayName, size: 36, verified: buyer.identityVerified),
                 const SizedBox(width: JkSpacing.s2),
                 Expanded(child: Text(l10n.requestBuyer(buyer.displayName), style: JkTypeScale.bodyM.copyWith(color: jk.onSurface))),
-                if (buyer.impliedKycLevel != null) KycLevelBadge(level: buyer.impliedKycLevel!),
+                if (buyer.kycLevel != null) KycLevelBadge(level: buyer.kycLevel!),
               ],
             ),
           ],

@@ -1,7 +1,7 @@
 ---
 title: Kebijakan Cookie & Penyimpanan Lokal
 description: Penyimpanan yang dipakai situs JastipKita, mengapa diperlukan, dan bagaimana analitik hanya berjalan setelah persetujuan.
-version: "0.1-draft"
+version: "0.1-template"
 effectiveDate: "[TANGGAL BERLAKU — diisi saat peluncuran]"
 order: 9
 ---
