@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Payment secured</title>
+<link rel="stylesheet" href="mockup.css">
+<style>
+  .hero { text-align: center; padding: 6px 20px 0; }
+  .medal { width: 88px; height: 88px; margin: 6px auto 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--jk-color-safepay-secured); color: var(--jk-color-on-safepay-secured); box-shadow: 0 0 0 10px var(--jk-color-success-container), 0 0 0 11px color-mix(in srgb, var(--jk-color-success) 30%, transparent); }
+  .medal .ic { width: 44px; height: 44px; }
+  .hero h1 { font: 600 24px/32px var(--jk-font-family); letter-spacing: -0.01em; }
+  .hero .amt { font: 600 28px/36px var(--jk-font-family); letter-spacing: -0.01em; margin-top: 2px; }
+  .hero .via { font: 400 12px/18px var(--jk-font-family); color: var(--jk-color-on-background-muted); }
+  .spb { margin-top: 14px; padding: 12px 14px; align-items: center; }
+  .spb .t { font-size: 15px; line-height: 20px; }
+  .spb p { font-size: 12px; line-height: 17px; margin-top: 2px; }
+  .spb .badge-ic { width: 36px; height: 36px; border-radius: 12px; }
+  .txn { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; margin-top: 12px; }
+  .txn .l { font: 400 11px/15px var(--jk-font-family); color: var(--jk-color-on-surface-muted); }
+  .txn .n { font: 600 14px/20px var(--jk-font-family); }
+  .txn .cp { display: inline-flex; align-items: center; gap: 4px; font: 500 12px/16px var(--jk-font-family); color: var(--jk-color-link); }
+  .next { padding: 14px 16px; margin-top: 12px; }
+  .next .h { font: 600 15px/22px var(--jk-font-family); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .next .h a { font: 500 12px/16px var(--jk-font-family); color: var(--jk-color-link); display: inline-flex; align-items: center; gap: 2px; }
+  .btns { display: flex; gap: 10px; }
+  .btns .btn { height: 52px; }
+</style>
+</head>
+<body>
+  <div class="statusbar"><span>9:41</span><span class="sys"><i data-i="signal" class="ic sm"></i><i data-i="wifi" class="ic sm"></i><i data-i="battery-full" class="ic lg"></i></span></div>
+  <div class="navbar" style="background:transparent;border:0">
+    <div class="iconbtn"><i data-i="x" class="ic lg"></i></div>
+    <div class="title"></div>
+    <div class="iconbtn"><i data-i="share-2" class="ic"></i></div>
+  </div>
+
+  <div class="hero">
+    <div class="medal"><i data-i="shield-check" class="ic"></i></div>
+    <h1>Pembayaran aman</h1>
+    <div class="amt tnum">Rp 11.577.140</div>
+    <div class="via">Virtual Account BCA · 27 Sep 2026, 14:32 WIB</div>
+  </div>
+
+  <div class="page">
+    <section class="safepay secured spb" role="status">
+      <div class="badge-ic"><i data-i="shield-check" class="ic"></i></div>
+      <div><div class="k">Payment secured</div><p>Dana ditahan SafePay. Traveler dibayar setelah kamu konfirmasi barang diterima.</p></div>
+    </section>
+
+    <div class="card txn">
+      <div><div class="l">Nomor transaksi</div><div class="n tnum">JK-260927-7QK2MD</div></div>
+      <span class="cp"><i data-i="copy" class="ic sm"></i>Salin</span>
+    </div>
+
+    <div class="card next">
+      <div class="h">Selanjutnya <a>Rincian 11 baris<i data-i="chevron-right" class="ic sm"></i></a></div>
+      <div class="tl">
+        <div class="row done"><span class="node"><i data-i="check" class="ic sm"></i></span><div><div class="lbl">Pembayaran aman</div><div class="meta">Baru saja</div></div></div>
+        <div class="row now ok"><span class="node"></span><div><div class="lbl">Traveler konfirmasi harga aktual</div><div class="meta">Jika harga berubah, kamu punya 15 menit untuk setuju</div></div></div>
+        <div class="row todo"><span class="node"></span><div><div class="lbl">Dibeli + bukti pembelian</div></div></div>
+        <div class="row todo"><span class="node"></span><div><div class="lbl">Serah terima dengan PIN/QR</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actionbar" style="background:var(--jk-color-background);border:0;box-shadow:none">
+    <div class="btns"><div class="btn secondary" style="flex:0 0 52px;width:52px;padding:0"><i data-i="message-circle" class="ic"></i></div><div class="btn primary">Lihat status titipan</div></div>
+  </div>
+  <div class="home-ind"></div>
+</body>
+</html>

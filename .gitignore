@@ -1,0 +1,35 @@
+node_modules/
+dist/
+# design tokens are generated but committed so web/admin/mobile work without a build step
+!packages/design-tokens/dist/
+build/
+.astro/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+!**/.env.example
+.wrangler/
+.dev.vars
+# Flutter
+apps/mobile/.dart_tool/
+apps/mobile/build/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/ios/Pods/
+apps/mobile/android/.gradle/
+apps/mobile/android/local.properties
+apps/mobile/android/key.properties
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+# secrets
+secrets/
+*.pem
+!docs/**/*.pem.example
+.DS_Store

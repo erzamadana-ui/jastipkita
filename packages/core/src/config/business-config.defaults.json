@@ -1,0 +1,551 @@
+{
+  "_meta": {
+    "description": "Default business configuration. Seeded into business_configs (version 1, ACTIVE). Every value is editable from Admin (versioned + audited). Values marked assumption must be validated before production.",
+    "currency": "IDR",
+    "assumptions": [
+      "pricing.payment_fees — asumsi sampai kontrak Xendit ditandatangani",
+      "pricing.service_tax — asumsi PKP; verifikasi konsultan pajak",
+      "limits.transaction — angka awal konservatif, tinjau setelah 90 hari data"
+    ],
+    "matrixMatching": "Baris dicocokkan berurutan: (stage, actor, cause) → (stage, actor) tanpa cause → (stage, ANY)."
+  },
+  "pricing.platform_fee": {
+    "rateBps": 500,
+    "minIdr": 10000,
+    "maxIdr": 750000
+  },
+  "pricing.protection_fee": {
+    "rateBps": 150,
+    "minIdr": 5000,
+    "maxIdr": 300000
+  },
+  "pricing.service_tax": {
+    "enabled": true,
+    "rate": 0.12,
+    "dppFactor": 0.916667,
+    "appliesTo": [
+      "PLATFORM_FEE",
+      "PROTECTION_FEE"
+    ],
+    "label": "PPN atas layanan (12% x DPP 11/12)"
+  },
+  "pricing.fx_markup": {
+    "defaultBps": 150,
+    "perCurrency": {
+      "KRW": 200,
+      "JPY": 150
+    }
+  },
+  "pricing.payment_fees": {
+    "defaultChannel": "VA",
+    "channels": {
+      "VA": {
+        "label": "Virtual Account",
+        "fixedIdr": 4500,
+        "rateBps": 0,
+        "bearer": "BUYER"
+      },
+      "QRIS": {
+        "label": "QRIS",
+        "fixedIdr": 0,
+        "rateBps": 70,
+        "bearer": "BUYER"
+      },
+      "EWALLET": {
+        "label": "E-Wallet",
+        "fixedIdr": 0,
+        "rateBps": 150,
+        "bearer": "BUYER"
+      },
+      "CARD": {
+        "label": "Kartu Kredit/Debit",
+        "fixedIdr": 2000,
+        "rateBps": 290,
+        "bearer": "BUYER"
+      }
+    }
+  },
+  "pricing.traveler_fee_bounds": {
+    "minIdr": 25000,
+    "maxRateBps": 3000
+  },
+  "pricing.minimum_transaction": {
+    "minItemValueIdr": 100000
+  },
+  "fx.lock": {
+    "lockMinutes": 30,
+    "maxRateAgeMinutes": 4320,
+    "provider": "frankfurter",
+    "fallbackProvider": "none",
+    "note": "ECB/Frankfurter tidak terbit akhir pekan & hari libur TARGET; 4320 menit (72 jam) mencegah checkout terblokir Sabtu–Senin. Markup FX menutup risiko pergerakan."
+  },
+  "price_confirmation": {
+    "windowSeconds": 900,
+    "toleranceBps": 200,
+    "toleranceMaxIdr": 50000,
+    "expiredAction": "REJECT"
+  },
+  "delivery": {
+    "autoConfirmHours": 48,
+    "pinLength": 6,
+    "maxPinAttempts": 5,
+    "qrTtlMinutes": 30
+  },
+  "dispute.sla": {
+    "openWindowHoursAfterDelivery": 72,
+    "evidenceHours": 72,
+    "reviewHours": 120,
+    "appealWindowHours": 72
+  },
+  "referral.buyer": {
+    "enabled": true,
+    "referrerCreditIdr": 25000,
+    "refereeCreditIdr": 25000,
+    "minFirstTransactionIdr": 500000,
+    "requiredStatus": "COMPLETED",
+    "monthlyCapIdr": 250000,
+    "creditExpiryDays": 90,
+    "withdrawable": false,
+    "experiment": {
+      "key": "referral_buyer_amount",
+      "enabled": false,
+      "variants": {
+        "A": 15000,
+        "B": 25000,
+        "C": 50000
+      }
+    },
+    "guardrails": {
+      "pauseIfCacAboveLtvRatio": 0.33,
+      "pauseIfFraudRateAbove": 0.05
+    }
+  },
+  "referral.traveler": {
+    "enabled": true,
+    "referrerCreditIdr": 50000,
+    "requiredCompletedTransactions": 2,
+    "monthlyCapIdr": 250000,
+    "creditExpiryDays": 90,
+    "withdrawable": false
+  },
+  "limits.transaction": {
+    "byKycLevel": {
+      "1": 0,
+      "2": 3000000,
+      "3": 15000000,
+      "4": 30000000,
+      "5": 75000000
+    },
+    "travelerByKycLevel": {
+      "1": 0,
+      "2": 0,
+      "3": 5000000,
+      "4": 20000000,
+      "5": 75000000
+    },
+    "newTravelerMaxIdr": 5000000,
+    "newTravelerCompletedThreshold": 3,
+    "trustMultipliers": [
+      {
+        "minScore": 0,
+        "multiplier": 0.5
+      },
+      {
+        "minScore": 40,
+        "multiplier": 1
+      },
+      {
+        "minScore": 70,
+        "multiplier": 1.5
+      },
+      {
+        "minScore": 85,
+        "multiplier": 2
+      }
+    ],
+    "productRiskMultiplier": {
+      "LOW": 1,
+      "MEDIUM": 0.8,
+      "HIGH": 0.5
+    },
+    "countryRiskMultiplier": {
+      "LOW": 1,
+      "MEDIUM": 0.8,
+      "HIGH": 0.5
+    },
+    "monthlyBuyerMaxIdr": 150000000,
+    "monthlyTravelerMaxIdr": 250000000
+  },
+  "risk.thresholds": {
+    "review": 40,
+    "hold": 70,
+    "block": 90
+  },
+  "matching.weights": {
+    "date": 0.2,
+    "rating": 0.15,
+    "trust": 0.2,
+    "price": 0.15,
+    "capacity": 0.1,
+    "history": 0.1,
+    "routeExactness": 0.1
+  },
+  "trust.weights": {
+    "kyc": 20,
+    "completedTransactions": 15,
+    "transactionValue": 8,
+    "accountAge": 7,
+    "onTimeDelivery": 12,
+    "tripVerification": 8,
+    "paymentHistory": 8,
+    "rating": 12,
+    "cancellationPenalty": 10,
+    "disputePenalty": 15,
+    "fraudPenalty": 30
+  },
+  "trips": {
+    "allowUnverifiedActive": false,
+    "maxActiveTripsPerTraveler": 5,
+    "maxCapacityKg": 32
+  },
+  "cancellation.matrix": [
+    {
+      "stage": "BEFORE_MATCH",
+      "actor": "ANY",
+      "allowed": true,
+      "refund": {},
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0
+    },
+    {
+      "stage": "AFTER_MATCH",
+      "actor": "BUYER",
+      "allowed": true,
+      "refund": {},
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 1
+    },
+    {
+      "stage": "AFTER_MATCH",
+      "actor": "TRAVELER",
+      "allowed": true,
+      "refund": {},
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 2
+    },
+    {
+      "stage": "AFTER_PAYMENT",
+      "actor": "BUYER",
+      "cause": "PRICE_CHANGE_REJECTED",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 10000
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0,
+      "note": "Buyer menolak kenaikan harga — tanpa kesalahan buyer"
+    },
+    {
+      "stage": "AFTER_PAYMENT",
+      "actor": "BUYER",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 0
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 2
+    },
+    {
+      "stage": "AFTER_PAYMENT",
+      "actor": "TRAVELER",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 10000
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 5
+    },
+    {
+      "stage": "AFTER_PAYMENT",
+      "actor": "SYSTEM",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 10000
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0,
+      "note": "Price confirmation kedaluwarsa / pembatalan sistem"
+    },
+    {
+      "stage": "AFTER_PAYMENT",
+      "actor": "ADMIN",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 10000
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0,
+      "requiresAdminApproval": true
+    },
+    {
+      "stage": "BEFORE_PURCHASE",
+      "actor": "BUYER",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 9000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 5000,
+        "SERVICE_TAX": 5000,
+        "PAYMENT_FEE": 0
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 1000,
+        "minIdr": 10000
+      },
+      "trustPenalty": 3
+    },
+    {
+      "stage": "BEFORE_PURCHASE",
+      "actor": "TRAVELER",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 10000
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 8
+    },
+    {
+      "stage": "BEFORE_PURCHASE",
+      "actor": "SYSTEM",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 10000
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0
+    },
+    {
+      "stage": "BEFORE_PURCHASE",
+      "actor": "ADMIN",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 10000
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0,
+      "requiresAdminApproval": true
+    },
+    {
+      "stage": "AFTER_PURCHASE",
+      "actor": "BUYER",
+      "allowed": false,
+      "reason": "Barang sudah dibeli; gunakan Dispute Center",
+      "refund": {},
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0
+    },
+    {
+      "stage": "AFTER_PURCHASE",
+      "actor": "TRAVELER",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 10000
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 15,
+      "requiresAdminApproval": true
+    },
+    {
+      "stage": "AFTER_PURCHASE",
+      "actor": "ADMIN",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 10000
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0,
+      "requiresAdminApproval": true
+    },
+    {
+      "stage": "DURING_TRAVEL",
+      "actor": "BUYER",
+      "allowed": false,
+      "reason": "Barang dalam perjalanan; gunakan Dispute Center",
+      "refund": {},
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0
+    },
+    {
+      "stage": "DURING_TRAVEL",
+      "actor": "ADMIN",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 10000,
+        "CUSTOMS_DUTY": 10000,
+        "IMPORT_TAX": 10000,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 10000
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0,
+      "requiresAdminApproval": true
+    },
+    {
+      "stage": "AFTER_ARRIVAL",
+      "actor": "BUYER",
+      "allowed": false,
+      "reason": "Barang sudah tiba; gunakan Dispute Center",
+      "refund": {},
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 0,
+        "minIdr": 0
+      },
+      "trustPenalty": 0
+    },
+    {
+      "stage": "AFTER_ARRIVAL",
+      "actor": "ADMIN",
+      "allowed": true,
+      "refund": {
+        "ITEM_PRICE": 10000,
+        "TRAVELER_FEE": 0,
+        "CUSTOMS_DUTY": 0,
+        "IMPORT_TAX": 0,
+        "PROTECTION_FEE": 10000,
+        "PLATFORM_FEE": 10000,
+        "SERVICE_TAX": 10000,
+        "PAYMENT_FEE": 0
+      },
+      "travelerCompensation": {
+        "rateBpsOfTravelerFee": 10000,
+        "minIdr": 0
+      },
+      "trustPenalty": 0,
+      "requiresAdminApproval": true
+    }
+  ]
+}

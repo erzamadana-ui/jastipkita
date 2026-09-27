@@ -1,0 +1,9 @@
+packages:
+  - "apps/api"
+  - "apps/admin"
+  - "apps/web"
+  - "packages/*"
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - workerd

@@ -1,0 +1,142 @@
+[
+  {
+    "code": "IDR",
+    "minorUnits": 0,
+    "name": "Rupiah",
+    "symbol": "Rp",
+    "ecbReference": true
+  },
+  {
+    "code": "USD",
+    "minorUnits": 2,
+    "name": "US Dollar",
+    "symbol": "$",
+    "ecbReference": true
+  },
+  {
+    "code": "JPY",
+    "minorUnits": 0,
+    "name": "Japanese Yen",
+    "symbol": "¥",
+    "ecbReference": true
+  },
+  {
+    "code": "SGD",
+    "minorUnits": 2,
+    "name": "Singapore Dollar",
+    "symbol": "S$",
+    "ecbReference": true
+  },
+  {
+    "code": "KRW",
+    "minorUnits": 0,
+    "name": "Korean Won",
+    "symbol": "₩",
+    "ecbReference": true
+  },
+  {
+    "code": "MYR",
+    "minorUnits": 2,
+    "name": "Malaysian Ringgit",
+    "symbol": "RM",
+    "ecbReference": true
+  },
+  {
+    "code": "AUD",
+    "minorUnits": 2,
+    "name": "Australian Dollar",
+    "symbol": "A$",
+    "ecbReference": true
+  },
+  {
+    "code": "EUR",
+    "minorUnits": 2,
+    "name": "Euro",
+    "symbol": "€",
+    "ecbReference": true
+  },
+  {
+    "code": "CNY",
+    "minorUnits": 2,
+    "name": "Chinese Yuan",
+    "symbol": "CN¥",
+    "ecbReference": true
+  },
+  {
+    "code": "HKD",
+    "minorUnits": 2,
+    "name": "Hong Kong Dollar",
+    "symbol": "HK$",
+    "ecbReference": true
+  },
+  {
+    "code": "TWD",
+    "minorUnits": 2,
+    "name": "New Taiwan Dollar",
+    "symbol": "NT$",
+    "ecbReference": false
+  },
+  {
+    "code": "THB",
+    "minorUnits": 2,
+    "name": "Thai Baht",
+    "symbol": "฿",
+    "ecbReference": true
+  },
+  {
+    "code": "VND",
+    "minorUnits": 0,
+    "name": "Vietnamese Dong",
+    "symbol": "₫",
+    "ecbReference": false
+  },
+  {
+    "code": "GBP",
+    "minorUnits": 2,
+    "name": "Pound Sterling",
+    "symbol": "£",
+    "ecbReference": true
+  },
+  {
+    "code": "CHF",
+    "minorUnits": 2,
+    "name": "Swiss Franc",
+    "symbol": "CHF",
+    "ecbReference": true
+  },
+  {
+    "code": "AED",
+    "minorUnits": 2,
+    "name": "UAE Dirham",
+    "symbol": "AED",
+    "ecbReference": false
+  },
+  {
+    "code": "SAR",
+    "minorUnits": 2,
+    "name": "Saudi Riyal",
+    "symbol": "SAR",
+    "ecbReference": false
+  },
+  {
+    "code": "TRY",
+    "minorUnits": 2,
+    "name": "Turkish Lira",
+    "symbol": "₺",
+    "ecbReference": true
+  },
+  {
+    "code": "NZD",
+    "minorUnits": 2,
+    "name": "New Zealand Dollar",
+    "symbol": "NZ$",
+    "ecbReference": true
+  },
+  {
+    "code": "CAD",
+    "minorUnits": 2,
+    "name": "Canadian Dollar",
+    "symbol": "C$",
+    "ecbReference": true
+  }
+]

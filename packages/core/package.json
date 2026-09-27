@@ -1,0 +1,20 @@
+{
+  "name": "@jastipkita/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JastipKita pure domain engines (pricing, customs/tax, FX, state machines, matching, trust, fraud, limits, restricted items, cancellation, referral, promotions). No I/O, no runtime dependencies.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  }
+}

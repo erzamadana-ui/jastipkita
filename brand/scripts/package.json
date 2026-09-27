@@ -1,0 +1,22 @@
+{
+  "name": "@jastipkita/brand-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Generators for JastipKita logo SVGs, app icons, splash, social/store graphics, fonts, brand sheet and UI mockups. NOT part of the pnpm workspace — install deps outside the repo (see brand/README.md).",
+  "type": "module",
+  "scripts": {
+    "assets": "node generate-assets.mjs",
+    "assets:no-preview": "node generate-assets.mjs --no-preview",
+    "mockups": "node render-mockups.mjs"
+  },
+  "dependencies": {
+    "@expo-google-fonts/poppins": "0.4.1",
+    "@fontsource/poppins": "5.3.0",
+    "lucide-static": "1.48.0",
+    "opentype.js": "2.0.0",
+    "paper": "0.12.18",
+    "playwright": "1.56.1",
+    "sharp": "0.35.4"
+  },
+  "engines": { "node": ">=22" }
+}

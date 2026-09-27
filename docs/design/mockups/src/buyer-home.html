@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Buyer home</title>
+<link rel="stylesheet" href="mockup.css">
+<style>
+  .hdr { display: flex; align-items: center; justify-content: space-between; padding: 6px 20px 0; }
+  .hdr .hi { font: 400 13px/18px var(--jk-font-family); color: var(--jk-color-on-background-muted); }
+  .hdr .name { font: 600 20px/28px var(--jk-font-family); letter-spacing: -0.01em; }
+  .hdr .left { display: flex; gap: 12px; align-items: center; }
+  .seg { margin: 14px 20px 0; height: 44px; border-radius: 999px; background: var(--jk-color-surface); border: 1px solid var(--jk-color-border); display: flex; padding: 4px; }
+  .seg div { flex: 1; border-radius: 999px; display: flex; align-items: center; justify-content: center; gap: 6px; font: 600 14px/20px var(--jk-font-family); color: var(--jk-color-on-surface-muted); }
+  .seg .on { background: var(--jk-color-primary); color: var(--jk-color-on-primary); }
+  .search { margin: 12px 20px 0; height: 52px; border-radius: var(--jk-radius-md); background: var(--jk-color-surface); border: 1px solid var(--jk-color-outline); display: flex; align-items: center; gap: 10px; padding: 0 6px 0 14px; color: var(--jk-color-on-surface-muted); font-size: 14px; }
+  .search .ph { flex: 1; }
+  .search .cam { width: 40px; height: 40px; border-radius: 12px; background: var(--jk-color-secondary-container); color: var(--jk-color-on-secondary-container); display: flex; align-items: center; justify-content: center; }
+  .qa { display: grid; grid-template-columns: repeat(4, 1fr); margin: 16px 12px 0; }
+  .qa div { display: flex; flex-direction: column; align-items: center; gap: 6px; font: 500 12px/16px var(--jk-font-family); color: var(--jk-color-on-background); text-align: center; }
+  .qa span.b { width: 52px; height: 52px; border-radius: 18px; background: var(--jk-color-surface); border: 1px solid var(--jk-color-border); display: flex; align-items: center; justify-content: center; color: var(--jk-color-secondary); box-shadow: var(--jk-elevation-level1); }
+  .order { padding: 14px 16px 14px; }
+  .order .top { display: flex; gap: 12px; }
+  .order .t { font: 600 15px/21px var(--jk-font-family); }
+  .order .route { font: 400 12px/18px var(--jk-font-family); color: var(--jk-color-on-surface-muted); display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+  .prog { display: flex; gap: 4px; margin: 14px 0 6px; }
+  .prog i { flex: 1; height: 6px; border-radius: 3px; background: var(--jk-color-border); }
+  .prog i.f { background: var(--jk-status-in-transit-dot); }
+  .prog i.h { background: linear-gradient(90deg, var(--jk-status-in-transit-dot) 50%, var(--jk-color-border) 50%); }
+  .steps { display: flex; justify-content: space-between; font: 500 10px/14px var(--jk-font-family); color: var(--jk-color-on-surface-muted); }
+  .steps .cur { color: var(--jk-status-in-transit-fg); font-weight: 600; }
+  .order .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--jk-color-divider); font-size: 12px; }
+  .order .foot b { font-weight: 600; }
+  .trav { display: flex; gap: 12px; margin: 0 -20px; padding: 0 20px 4px; overflow: hidden; }
+  .tc { width: 268px; flex: none; padding: 14px 16px; }
+  .tc .r1 { display: flex; gap: 12px; align-items: center; }
+  .tc .nm { font: 600 15px/20px var(--jk-font-family); display: flex; align-items: center; gap: 4px; }
+  .tc .nm .ic { color: var(--jk-color-secondary); }
+  .tc .rt { font: 400 12px/17px var(--jk-font-family); color: var(--jk-color-on-surface-muted); }
+  .tc .r2 { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .tc .r3 { display: flex; justify-content: space-between; margin-top: 12px; font-size: 12px; color: var(--jk-color-on-surface-muted); }
+  .tc .r3 b { color: var(--jk-color-on-surface); font-weight: 600; }
+  .star { color: var(--jk-color-warning); }
+  .trustline { margin: 14px 20px 0; display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 14px; background: var(--jk-color-success-container); color: var(--jk-color-on-success-container); font: 500 12px/17px var(--jk-font-family); }
+</style>
+</head>
+<body>
+  <div class="statusbar"><span>9:41</span><span class="sys"><i data-i="signal" class="ic sm"></i><i data-i="wifi" class="ic sm"></i><i data-i="battery-full" class="ic lg"></i></span></div>
+
+  <div class="hdr">
+    <div class="left">
+      <div class="avatar" style="background:linear-gradient(135deg,#4D7DFF,#0B1E4A)">RM</div>
+      <div><div class="hi">Selamat pagi,</div><div class="name">Rina Maharani</div></div>
+    </div>
+    <div class="iconbtn filled"><i data-i="bell" class="ic"></i><span class="dot"></span></div>
+  </div>
+
+  <div class="seg" role="tablist" aria-label="Mode akun">
+    <div class="on"><i data-i="shopping-bag" class="ic sm"></i>Penitip</div>
+    <div><i data-i="plane" class="ic sm"></i>Traveler</div>
+  </div>
+
+  <div class="search"><i data-i="link" class="ic"></i><span class="ph">Tempel link atau cari barang…</span><span class="cam"><i data-i="camera" class="ic"></i></span></div>
+
+  <div class="qa">
+    <div><span class="b"><i data-i="link-2" class="ic lg"></i></span>Tempel URL</div>
+    <div><span class="b"><i data-i="scan-line" class="ic lg"></i></span>Foto barang</div>
+    <div><span class="b"><i data-i="search" class="ic lg"></i></span>Cari traveler</div>
+    <div><span class="b"><i data-i="square-pen" class="ic lg"></i></span>Isi manual</div>
+  </div>
+
+  <div class="trustline"><i data-i="shield-check" class="ic"></i><span>Dana kamu ditahan <b>SafePay</b> — traveler baru dibayar setelah barang kamu terima.</span></div>
+
+  <div class="page">
+    <div class="section-h"><h3>Titipan aktif</h3><a>Lihat semua</a></div>
+    <div class="card order">
+      <div class="top">
+        <div class="thumb" style="background:var(--jk-color-secondary-container);color:var(--jk-color-secondary)"><i data-i="footprints" class="ic lg"></i></div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div class="t">Onitsuka Tiger Mexico 66</div><span class="chip transit"><span class="d"></span>Terbang</span></div>
+          <div class="route">Tokyo <i data-i="arrow-right" class="ic sm"></i> Jakarta · Dimas A.</div>
+        </div>
+      </div>
+      <div class="prog"><i class="f"></i><i class="f"></i><i class="h"></i><i></i><i></i></div>
+      <div class="steps"><span>Aman</span><span>Dibeli</span><span class="cur">Terbang</span><span>Tiba</span><span>Serah</span></div>
+      <div class="foot"><span class="muted">JK-260927-7QK2MD</span><span>Tiba <b>± 14 Okt</b></span></div>
+    </div>
+
+    <div class="section-h"><h3>Traveler untuk kamu</h3><a>Semua rute</a></div>
+    <div class="trav">
+      <div class="card tc">
+        <div class="r1"><div class="avatar" style="background:linear-gradient(135deg,#059669,#0B1E4A)">DA</div>
+          <div><div class="nm">Dimas Aditya <i data-i="badge-check" class="ic sm"></i></div><div class="rt">Seoul → Jakarta · 12 Okt</div></div></div>
+        <div class="r2"><span class="chip trust-ex"><i data-i="shield-check" class="ic sm"></i>Trust 92</span><span class="chip kyc5"><i data-i="award" class="ic sm"></i>Trusted Traveler</span></div>
+        <div class="r3"><span><span class="star">★</span> <b>4,9</b> (128)</span><span>Sisa <b>6 kg</b></span><span>Fee mulai <b>Rp 75rb</b></span></div>
+      </div>
+      <div class="card tc">
+        <div class="r1"><div class="avatar" style="background:linear-gradient(135deg,#7C3AED,#0B1E4A)">SL</div>
+          <div><div class="nm">Sari Lestari <i data-i="badge-check" class="ic sm"></i></div><div class="rt">Osaka → Surabaya · 18 Okt</div></div></div>
+        <div class="r2"><span class="chip trust-ex"><i data-i="shield-check" class="ic sm"></i>Trust 88</span><span class="chip kyc4"><i data-i="plane" class="ic sm"></i>Trip terverifikasi</span></div>
+        <div class="r3"><span><span class="star">★</span> <b>4,8</b> (54)</span><span>Sisa <b>9 kg</b></span></div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="tabbar" aria-label="Navigasi utama">
+    <div class="tab on"><i data-i="house" class="ic"></i>Beranda</div>
+    <div class="tab"><i data-i="package" class="ic"></i>Titipan</div>
+    <div class="tab"><i data-i="message-circle" class="ic"></i>Chat</div>
+    <div class="tab"><i data-i="wallet" class="ic"></i>Dompet</div>
+    <div class="tab"><i data-i="user-round" class="ic"></i>Profil</div>
+  </nav>
+  <div class="home-ind"></div>
+</body>
+</html>

@@ -1,0 +1,402 @@
+[
+  {
+    "file": "brand/logo/jastipkita-horizontal.svg",
+    "purpose": "Horizontal lockup — full colour, light backgrounds"
+  },
+  {
+    "file": "brand/logo/jastipkita-vertical.svg",
+    "purpose": "Vertical lockup — full colour, light backgrounds"
+  },
+  {
+    "file": "brand/logo/jastipkita-vertical-tagline.svg",
+    "purpose": "Vertical lockup + tagline — full colour, light backgrounds"
+  },
+  {
+    "file": "brand/logo/jastipkita-symbol.svg",
+    "purpose": "Symbol only (square artboard) — full colour, light backgrounds"
+  },
+  {
+    "file": "brand/logo/jastipkita-horizontal-dark.svg",
+    "purpose": "Horizontal lockup — full colour, dark/navy backgrounds"
+  },
+  {
+    "file": "brand/logo/jastipkita-vertical-dark.svg",
+    "purpose": "Vertical lockup — full colour, dark/navy backgrounds"
+  },
+  {
+    "file": "brand/logo/jastipkita-vertical-tagline-dark.svg",
+    "purpose": "Vertical lockup + tagline — full colour, dark/navy backgrounds"
+  },
+  {
+    "file": "brand/logo/jastipkita-symbol-dark.svg",
+    "purpose": "Symbol only (square artboard) — full colour, dark/navy backgrounds"
+  },
+  {
+    "file": "brand/logo/jastipkita-horizontal-mono-black.svg",
+    "purpose": "Horizontal lockup — one colour black (print, fax, emboss)"
+  },
+  {
+    "file": "brand/logo/jastipkita-vertical-mono-black.svg",
+    "purpose": "Vertical lockup — one colour black (print, fax, emboss)"
+  },
+  {
+    "file": "brand/logo/jastipkita-vertical-tagline-mono-black.svg",
+    "purpose": "Vertical lockup + tagline — one colour black (print, fax, emboss)"
+  },
+  {
+    "file": "brand/logo/jastipkita-symbol-mono-black.svg",
+    "purpose": "Symbol only (square artboard) — one colour black (print, fax, emboss)"
+  },
+  {
+    "file": "brand/logo/jastipkita-horizontal-mono-white.svg",
+    "purpose": "Horizontal lockup — one colour white (photos, dark single-colour)"
+  },
+  {
+    "file": "brand/logo/jastipkita-vertical-mono-white.svg",
+    "purpose": "Vertical lockup — one colour white (photos, dark single-colour)"
+  },
+  {
+    "file": "brand/logo/jastipkita-vertical-tagline-mono-white.svg",
+    "purpose": "Vertical lockup + tagline — one colour white (photos, dark single-colour)"
+  },
+  {
+    "file": "brand/logo/jastipkita-symbol-mono-white.svg",
+    "purpose": "Symbol only (square artboard) — one colour white (photos, dark single-colour)"
+  },
+  {
+    "file": "brand/logo/jastipkita-symbol-favicon.svg",
+    "purpose": "Simplified symbol for ≤ 32 px (no plane, bolder strokes) — light backgrounds"
+  },
+  {
+    "file": "brand/logo/jastipkita-symbol-favicon-dark.svg",
+    "purpose": "Simplified symbol for ≤ 32 px — dark backgrounds"
+  },
+  {
+    "file": "brand/logo/jastipkita-wordmark.svg",
+    "purpose": "Wordmark only (space-constrained headers, footers)"
+  },
+  {
+    "file": "brand/logo/jastipkita-wordmark-dark.svg",
+    "purpose": "Wordmark only — dark backgrounds"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-20x20@2x.png",
+    "purpose": "iOS app icon 40×40 px (iphone 20x20pt @2x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-20x20@3x.png",
+    "purpose": "iOS app icon 60×60 px (iphone 20x20pt @3x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-29x29@1x.png",
+    "purpose": "iOS app icon 29×29 px (iphone 29x29pt @1x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-29x29@2x.png",
+    "purpose": "iOS app icon 58×58 px (iphone 29x29pt @2x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-29x29@3x.png",
+    "purpose": "iOS app icon 87×87 px (iphone 29x29pt @3x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-40x40@2x.png",
+    "purpose": "iOS app icon 80×80 px (iphone 40x40pt @2x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-40x40@3x.png",
+    "purpose": "iOS app icon 120×120 px (iphone 40x40pt @3x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-60x60@2x.png",
+    "purpose": "iOS app icon 120×120 px (iphone 60x60pt @2x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-60x60@3x.png",
+    "purpose": "iOS app icon 180×180 px (iphone 60x60pt @3x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-20x20@1x.png",
+    "purpose": "iOS app icon 20×20 px (ipad 20x20pt @1x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-40x40@1x.png",
+    "purpose": "iOS app icon 40×40 px (ipad 40x40pt @1x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-76x76@1x.png",
+    "purpose": "iOS app icon 76×76 px (ipad 76x76pt @1x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-76x76@2x.png",
+    "purpose": "iOS app icon 152×152 px (ipad 76x76pt @2x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-83.5x83.5@2x.png",
+    "purpose": "iOS app icon 167×167 px (ipad 83.5x83.5pt @2x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Icon-App-1024x1024@1x.png",
+    "purpose": "iOS app icon 1024×1024 px (ios-marketing 1024x1024pt @1x), opaque"
+  },
+  {
+    "file": "brand/app-icon/ios/AppIcon.appiconset/Contents.json",
+    "purpose": "Xcode asset catalog manifest — Flutter default legacy layout (all sizes + ios-marketing 1024)"
+  },
+  {
+    "file": "brand/app-icon/ios/Contents.single-size.json",
+    "purpose": "Optional Xcode 14+ single-size (1024 universal) manifest"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-mdpi/ic_launcher.png",
+    "purpose": "Legacy launcher icon 48 px (mdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-mdpi/ic_launcher_round.png",
+    "purpose": "Legacy round launcher icon 48 px (mdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-mdpi/ic_launcher_foreground.png",
+    "purpose": "Adaptive icon foreground 108 px (mdpi) — symbol within 66dp safe zone"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-mdpi/ic_launcher_monochrome.png",
+    "purpose": "Android 13 themed (monochrome) icon layer 108 px (mdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/drawable-mdpi/ic_stat_jastipkita.png",
+    "purpose": "Notification small icon 24 px (mdpi) — white on transparent"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-hdpi/ic_launcher.png",
+    "purpose": "Legacy launcher icon 72 px (hdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-hdpi/ic_launcher_round.png",
+    "purpose": "Legacy round launcher icon 72 px (hdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-hdpi/ic_launcher_foreground.png",
+    "purpose": "Adaptive icon foreground 162 px (hdpi) — symbol within 66dp safe zone"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-hdpi/ic_launcher_monochrome.png",
+    "purpose": "Android 13 themed (monochrome) icon layer 162 px (hdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/drawable-hdpi/ic_stat_jastipkita.png",
+    "purpose": "Notification small icon 36 px (hdpi) — white on transparent"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xhdpi/ic_launcher.png",
+    "purpose": "Legacy launcher icon 96 px (xhdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xhdpi/ic_launcher_round.png",
+    "purpose": "Legacy round launcher icon 96 px (xhdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xhdpi/ic_launcher_foreground.png",
+    "purpose": "Adaptive icon foreground 216 px (xhdpi) — symbol within 66dp safe zone"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xhdpi/ic_launcher_monochrome.png",
+    "purpose": "Android 13 themed (monochrome) icon layer 216 px (xhdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/drawable-xhdpi/ic_stat_jastipkita.png",
+    "purpose": "Notification small icon 48 px (xhdpi) — white on transparent"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xxhdpi/ic_launcher.png",
+    "purpose": "Legacy launcher icon 144 px (xxhdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xxhdpi/ic_launcher_round.png",
+    "purpose": "Legacy round launcher icon 144 px (xxhdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xxhdpi/ic_launcher_foreground.png",
+    "purpose": "Adaptive icon foreground 324 px (xxhdpi) — symbol within 66dp safe zone"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xxhdpi/ic_launcher_monochrome.png",
+    "purpose": "Android 13 themed (monochrome) icon layer 324 px (xxhdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/drawable-xxhdpi/ic_stat_jastipkita.png",
+    "purpose": "Notification small icon 72 px (xxhdpi) — white on transparent"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xxxhdpi/ic_launcher.png",
+    "purpose": "Legacy launcher icon 192 px (xxxhdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xxxhdpi/ic_launcher_round.png",
+    "purpose": "Legacy round launcher icon 192 px (xxxhdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+    "purpose": "Adaptive icon foreground 432 px (xxxhdpi) — symbol within 66dp safe zone"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-xxxhdpi/ic_launcher_monochrome.png",
+    "purpose": "Android 13 themed (monochrome) icon layer 432 px (xxxhdpi)"
+  },
+  {
+    "file": "brand/app-icon/android/drawable-xxxhdpi/ic_stat_jastipkita.png",
+    "purpose": "Notification small icon 96 px (xxxhdpi) — white on transparent"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-anydpi-v26/ic_launcher.xml",
+    "purpose": "Adaptive icon definition (background + foreground + monochrome)"
+  },
+  {
+    "file": "brand/app-icon/android/mipmap-anydpi-v26/ic_launcher_round.xml",
+    "purpose": "Adaptive round icon definition"
+  },
+  {
+    "file": "brand/app-icon/android/values/ic_launcher_background.xml",
+    "purpose": "Adaptive icon background colour (navy-900)"
+  },
+  {
+    "file": "brand/app-icon/android/playstore-icon-512.png",
+    "purpose": "Google Play store listing icon 512×512 (full bleed, Play applies the mask)"
+  },
+  {
+    "file": "brand/web/icon-192.png",
+    "purpose": "PWA icon 192 px (purpose \"any\", rounded tile)"
+  },
+  {
+    "file": "brand/web/icon-512.png",
+    "purpose": "PWA icon 512 px (purpose \"any\", rounded tile)"
+  },
+  {
+    "file": "brand/web/icon-maskable-512.png",
+    "purpose": "PWA maskable icon 512 px (symbol inside the 80 % safe circle)"
+  },
+  {
+    "file": "brand/web/apple-touch-icon.png",
+    "purpose": "Apple touch icon 180 px (opaque, iOS rounds corners)"
+  },
+  {
+    "file": "brand/web/favicon-16.png",
+    "purpose": "Favicon 16 px"
+  },
+  {
+    "file": "brand/web/favicon-32.png",
+    "purpose": "Favicon 32 px"
+  },
+  {
+    "file": "brand/web/favicon-64.png",
+    "purpose": "Favicon 64 px"
+  },
+  {
+    "file": "brand/web/favicon-256.png",
+    "purpose": "Favicon 256 px"
+  },
+  {
+    "file": "brand/web/favicon-512.png",
+    "purpose": "Favicon 512 px"
+  },
+  {
+    "file": "brand/web/favicon.ico",
+    "purpose": "Multi-size favicon (16/32/48)"
+  },
+  {
+    "file": "brand/web/favicon.svg",
+    "purpose": "Scalable favicon (simplified symbol on navy tile)"
+  },
+  {
+    "file": "brand/web/site.webmanifest",
+    "purpose": "Web app manifest (PWA)"
+  },
+  {
+    "file": "brand/splash/splash-logo-light.png",
+    "purpose": "Splash logo (vertical lockup, light) — 1152² transparent, flutter_native_splash \"image\""
+  },
+  {
+    "file": "brand/splash/splash-logo-dark.png",
+    "purpose": "Splash logo (vertical lockup, dark) — 1152² transparent, flutter_native_splash \"image\""
+  },
+  {
+    "file": "brand/splash/android12-splash-icon.png",
+    "purpose": "Android 12+ splash icon (light) — symbol inside the 768 px safe circle"
+  },
+  {
+    "file": "brand/splash/android12-splash-icon-dark.png",
+    "purpose": "Android 12+ splash icon (dark) — symbol inside the 768 px safe circle"
+  },
+  {
+    "file": "brand/splash/splash-branding.png",
+    "purpose": "Splash bottom branding wordmark (light) — 800×240 (200×60 dp @4x)"
+  },
+  {
+    "file": "brand/splash/splash-branding-dark.png",
+    "purpose": "Splash bottom branding wordmark (dark) — 800×240 (200×60 dp @4x)"
+  },
+  {
+    "file": "brand/social/profile-1080.png",
+    "purpose": "Social profile picture 1080² (circle-crop safe)"
+  },
+  {
+    "file": "brand/social/profile-400.png",
+    "purpose": "Social profile picture 400² (circle-crop safe)"
+  },
+  {
+    "file": "brand/social/og-image-1200x630.png",
+    "purpose": "Open Graph / link preview image 1200×630"
+  },
+  {
+    "file": "brand/social/cover-1500x500.png",
+    "purpose": "Social cover/header 1500×500"
+  },
+  {
+    "file": "brand/store/play-feature-graphic-1024x500.png",
+    "purpose": "Google Play feature graphic 1024×500 (24-bit PNG, no alpha)"
+  },
+  {
+    "file": "brand/store/app-store-icon-1024.png",
+    "purpose": "App Store Connect icon 1024² (no alpha, no rounded corners)"
+  },
+  {
+    "file": "apps/mobile/assets/fonts/Poppins-Regular.ttf",
+    "purpose": "Poppins Regular TTF (Flutter)"
+  },
+  {
+    "file": "apps/mobile/assets/fonts/Poppins-Italic.ttf",
+    "purpose": "Poppins Italic TTF (Flutter)"
+  },
+  {
+    "file": "apps/mobile/assets/fonts/Poppins-Medium.ttf",
+    "purpose": "Poppins Medium TTF (Flutter)"
+  },
+  {
+    "file": "apps/mobile/assets/fonts/Poppins-SemiBold.ttf",
+    "purpose": "Poppins SemiBold TTF (Flutter)"
+  },
+  {
+    "file": "apps/mobile/assets/fonts/Poppins-Bold.ttf",
+    "purpose": "Poppins Bold TTF (Flutter)"
+  },
+  {
+    "file": "apps/web/public/fonts/poppins.css",
+    "purpose": "@font-face declarations for apps/web (latin + latin-ext subsets, woff2)"
+  },
+  {
+    "file": "apps/admin/public/fonts/poppins.css",
+    "purpose": "@font-face declarations for apps/admin (latin + latin-ext subsets, woff2)"
+  },
+  {
+    "file": "brand/fonts/OFL.txt",
+    "purpose": "Poppins licence (SIL Open Font License 1.1)"
+  },
+  {
+    "file": "brand/preview/brand-sheet.png",
+    "purpose": "Contact sheet: all logo variants on light & dark, palette, type specimen, icons"
+  },
+  {
+    "file": "brand/preview/logo-anatomy.png",
+    "purpose": "Logo anatomy, clear-space and minimum-size diagram"
+  }
+]

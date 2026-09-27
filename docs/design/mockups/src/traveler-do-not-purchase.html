@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Traveler — Do Not Purchase gate</title>
+<link rel="stylesheet" href="mockup.css">
+<style>
+  .top { background: var(--jk-color-surface); }
+  .modebar { display: flex; align-items: center; gap: 6px; font: 600 11px/14px var(--jk-font-family); letter-spacing: .08em; text-transform: uppercase; color: var(--jk-color-on-surface-muted); margin: 14px 0 10px; }
+  .modebar .pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 999px; background: var(--jk-color-primary); color: var(--jk-color-on-primary); letter-spacing: .04em; }
+  .req { padding: 12px 16px; margin-top: 12px; }
+  .req .r { display: flex; gap: 12px; align-items: center; }
+  .req .t { font: 600 15px/21px var(--jk-font-family); }
+  .req .s { font: 400 12px/17px var(--jk-font-family); color: var(--jk-color-on-surface-muted); }
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--jk-color-divider); }
+  .kv div { font: 400 11px/15px var(--jk-font-family); color: var(--jk-color-on-surface-muted); }
+  .kv b { display: block; font: 600 14px/20px var(--jk-font-family); color: var(--jk-color-on-surface); margin-top: 2px; }
+  .tlc { padding: 14px 16px; margin-top: 12px; }
+  .tlc .h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .tlc .h b { font: 600 15px/22px var(--jk-font-family); }
+  .gate { display: flex; gap: 10px; align-items: flex-start; font: 400 12px/17px var(--jk-font-family); color: var(--jk-color-on-surface-muted); margin: 10px 2px 0; }
+  .gate .ic { color: var(--jk-color-on-surface-muted); }
+  .safepay .rule { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.25); font: 500 12px/17px var(--jk-font-family); display: flex; gap: 8px; align-items: flex-start; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="statusbar"><span>9:41</span><span class="sys"><i data-i="signal" class="ic sm"></i><i data-i="wifi" class="ic sm"></i><i data-i="battery-full" class="ic lg"></i></span></div>
+    <div class="navbar">
+      <div class="iconbtn"><i data-i="chevron-left" class="ic lg"></i></div>
+      <div class="title">Detail Titipan<span class="sub tnum">JK-260927-7QK2MD</span></div>
+      <div class="iconbtn"><i data-i="message-circle" class="ic"></i></div>
+    </div>
+  </div>
+
+  <div class="page">
+    <div class="modebar"><span class="pill"><i data-i="plane" class="ic sm"></i>Mode Traveler</span> Tokyo → Jakarta · 12 Okt</div>
+
+    <section class="safepay blocked" role="alert" aria-live="assertive">
+      <div class="badge-ic"><i data-i="octagon-x" class="ic xl"></i></div>
+      <div>
+        <div class="k">Do not purchase</div>
+        <div class="t">Jangan beli dulu</div>
+        <p>Pembayaran penitip <b>belum aman</b> di SafePay. Pembelian sekarang tidak dijamin diganti.</p>
+        <div class="rule"><i data-i="lock" class="ic sm"></i><span>Pembelian dibuka otomatis saat status <b>PURCHASE APPROVED</b>.</span></div>
+      </div>
+    </section>
+
+    <div class="card req">
+      <div class="r">
+        <div class="thumb" style="background:var(--jk-color-secondary-container);color:var(--jk-color-secondary)"><i data-i="briefcase" class="ic lg"></i></div>
+        <div><div class="t">Porter Tanker Briefcase</div><div class="s">Penitip: Rina M. · <span class="chip kyc3" style="height:20px;font-size:11px;padding:0 8px">KYC Level 3</span></div></div>
+      </div>
+      <div class="kv">
+        <div>Harga maks. disetujui<b class="tnum">¥88.000</b></div>
+        <div>Traveler fee kamu<b class="tnum">Rp 450.000</b></div>
+      </div>
+    </div>
+
+    <div class="card tlc">
+      <div class="h"><b>Status transaksi</b><span class="countdown"><i data-i="clock" class="ic sm"></i><span class="tnum">Invoice 42:18</span></span></div>
+      <div class="tl">
+        <div class="row done inline"><span class="node"><i data-i="check" class="ic sm"></i></span><div><div class="lbl">Titipan dibuat</div><div class="meta">26 Sep, 20:14</div></div></div>
+        <div class="row done inline"><span class="node"><i data-i="check" class="ic sm"></i></span><div><div class="lbl">Match dengan kamu</div><div class="meta">27 Sep, 09:02</div></div></div>
+        <div class="row now"><span class="node"></span><div><div class="lbl">Menunggu pembayaran penitip</div><div class="meta">Invoice VA kedaluwarsa 42 menit lagi</div></div></div>
+        <div class="row todo"><span class="node"></span><div><div class="lbl">Pembayaran aman (SafePay)</div></div></div>
+        <div class="row todo"><span class="node"></span><div><div class="lbl">Konfirmasi harga → boleh beli</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actionbar">
+    <div class="btn disabled" aria-disabled="true"><i data-i="lock" class="ic"></i>Upload bukti pembelian</div>
+    <div class="gate"><i data-i="info" class="ic sm"></i><span>Aktif setelah pembayaran aman dan harga aktual dikonfirmasi (≤ harga ter-secure).</span></div>
+  </div>
+  <div class="home-ind"></div>
+</body>
+</html>

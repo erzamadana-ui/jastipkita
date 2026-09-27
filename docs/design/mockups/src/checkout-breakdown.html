@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Checkout — price breakdown</title>
+<link rel="stylesheet" href="mockup.css">
+<style>
+  body { background: var(--jk-color-background); }
+  .top { background: var(--jk-color-surface); }
+  .item { display: flex; gap: 12px; padding: 12px 14px; align-items: center; }
+  .item .t { font: 600 14px/20px var(--jk-font-family); }
+  .item .s { font: 400 12px/17px var(--jk-font-family); color: var(--jk-color-on-surface-muted); }
+  .item .p { margin-left: auto; text-align: right; font: 600 14px/20px var(--jk-font-family); }
+  .fx { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; font: 400 12px/16px var(--jk-font-family); color: var(--jk-color-on-background-muted); }
+  .fx b { color: var(--jk-color-on-background); font-weight: 600; }
+  .bd { padding: 4px 16px 12px; }
+  .bd h4 { font: 600 15px/22px var(--jk-font-family); padding: 10px 0 4px; display: flex; justify-content: space-between; align-items: center; }
+  .bd h4 span { font: 500 11px/14px var(--jk-font-family); color: var(--jk-color-on-surface-muted); }
+  .ln { display: flex; align-items: center; gap: 6px; padding: 5px 0; font: 400 13px/19px var(--jk-font-family); }
+  .ln .n { color: var(--jk-color-on-surface); display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+  .ln .n small { color: var(--jk-color-on-surface-muted); font-size: 11px; }
+  .ln .v { font-weight: 500; }
+  .ln .ic.sm { color: var(--jk-color-on-surface-muted); width: 14px; height: 14px; }
+  .ln.neg .v { color: var(--jk-color-success-text); }
+  .grp { height: 1px; background: var(--jk-color-divider); margin: 4px 0; }
+  .total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 10px; margin-top: 4px; border-top: 1px dashed var(--jk-color-outline); }
+  .total .n { font: 600 14px/20px var(--jk-font-family); }
+  .total .v { font: 600 20px/28px var(--jk-font-family); letter-spacing: -0.01em; }
+  .tip { margin: 2px 0 6px 0; padding: 8px 10px; border-radius: 10px; background: var(--jk-color-surface-inverse); color: var(--jk-color-on-surface-inverse); font: 400 11px/16px var(--jk-font-family); position: relative; }
+  .tip::before { content: ''; position: absolute; top: -5px; left: 96px; width: 10px; height: 10px; background: var(--jk-color-surface-inverse); transform: rotate(45deg); }
+  .tip b { font-weight: 600; }
+  .ab .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .ab .lbl { font: 400 12px/16px var(--jk-font-family); color: var(--jk-color-on-surface-muted); }
+  .ab .amt { font: 600 20px/28px var(--jk-font-family); letter-spacing: -0.01em; }
+  .ab .pm { display: flex; align-items: center; gap: 6px; font: 500 12px/16px var(--jk-font-family); color: var(--jk-color-on-surface); padding: 6px 10px; border-radius: 999px; border: 1px solid var(--jk-color-outline); }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="statusbar"><span>9:41</span><span class="sys"><i data-i="signal" class="ic sm"></i><i data-i="wifi" class="ic sm"></i><i data-i="battery-full" class="ic lg"></i></span></div>
+    <div class="navbar" style="border-bottom:1px solid var(--jk-color-divider)">
+      <div class="iconbtn"><i data-i="chevron-left" class="ic lg"></i></div>
+      <div class="title">Checkout<span class="sub">Langkah 2 dari 3 · Rincian biaya</span></div>
+      <div class="iconbtn"><i data-i="circle-help" class="ic"></i></div>
+    </div>
+  </div>
+
+  <div class="page" style="padding-top:12px">
+    <div class="card item">
+      <div class="thumb" style="width:48px;height:48px;background:var(--jk-color-secondary-container);color:var(--jk-color-secondary)"><i data-i="briefcase" class="ic lg"></i></div>
+      <div style="min-width:0"><div class="t">Porter Tanker Briefcase</div><div class="s">Dimas A. · Tokyo → Jakarta</div></div>
+      <div class="p tnum">¥88.000</div>
+    </div>
+
+    <div class="fx"><span>Kurs dikunci <b class="tnum">¥1 = Rp 108,42</b></span><span class="countdown"><i data-i="lock" class="ic sm"></i><span class="tnum">27:41</span></span></div>
+
+    <div class="card bd" aria-label="Rincian biaya">
+      <h4>Rincian biaya <span>Semua biaya ditampilkan</span></h4>
+      <div class="ln"><span class="n">Harga Barang <small class="tnum">1 × ¥88.000</small></span><span class="v tnum">Rp 9.540.960</span></div>
+      <div class="ln"><span class="n">Traveler Fee</span><span class="v tnum">Rp 450.000</span></div>
+      <div class="ln"><span class="n">Bea Masuk <span class="est">Estimasi</span><i data-i="info" class="ic sm"></i></span><span class="v tnum">Rp 312.400</span></div>
+      <div class="tip"><b>Aturan:</b> customs.passenger_goods v3 · estimasi, nilai final ditetapkan Bea Cukai.</div>
+      <div class="ln"><span class="n">Pajak Impor <small>PPN + PPh 22</small> <span class="est">Estimasi</span></span><span class="v tnum">Rp 655.900</span></div>
+      <div class="grp"></div>
+      <div class="ln"><span class="n">JastipKita Protection <small>1,5%</small></span><span class="v tnum">Rp 143.114</span></div>
+      <div class="ln"><span class="n">Platform Fee <small>5%</small></span><span class="v tnum">Rp 477.048</span></div>
+      <div class="ln"><span class="n">PPN atas layanan <small>12% × 11/12</small></span><span class="v tnum">Rp 68.218</span></div>
+      <div class="ln"><span class="n">Biaya Pembayaran <small>Virtual Account</small></span><span class="v tnum">Rp 4.500</span></div>
+      <div class="grp"></div>
+      <div class="ln neg"><span class="n">Diskon promo <small>JKBARU</small></span><span class="v tnum">−Rp 50.000</span></div>
+      <div class="ln neg"><span class="n">JastipKita Credit</span><span class="v tnum">−Rp 25.000</span></div>
+      <div class="total"><span class="n">Total Landed Cost</span><span class="v tnum">Rp 11.577.140</span></div>
+    </div>
+  </div>
+
+  <div class="actionbar ab">
+    <div class="row">
+      <div><div class="lbl">Total dibayar</div><div class="amt tnum">Rp 11.577.140</div></div>
+      <span class="pm"><i data-i="landmark" class="ic sm"></i>VA BCA<i data-i="chevron-right" class="ic sm"></i></span>
+    </div>
+    <div class="btn primary"><i data-i="shield-check" class="ic"></i>Bayar dengan SafePay</div>
+  </div>
+  <div class="home-ind"></div>
+</body>
+</html>
