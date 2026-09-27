@@ -15,14 +15,29 @@ interface CacheEntry {
  * changes apply without an app release. Falls back to packages/core defaults when a key is missing
  * (logged as a warning — seeds should always provide every key).
  */
+/** Holder so several ConfigService instances (e.g. one per Workers request) can share one cache. */
+export interface ConfigCacheHolder {
+  cache: CacheEntry | null;
+}
+
 export class ConfigService {
-  private cache: CacheEntry | null = null;
+  private readonly holder: ConfigCacheHolder;
   constructor(
     private readonly db: Db,
     private readonly clock: Clock,
     private readonly logger: Logger,
     private readonly ttlMs = 30_000,
-  ) {}
+    holder?: ConfigCacheHolder,
+  ) {
+    this.holder = holder ?? { cache: null };
+  }
+
+  private get cache(): CacheEntry | null {
+    return this.holder.cache;
+  }
+  private set cache(v: CacheEntry | null) {
+    this.holder.cache = v;
+  }
 
   invalidate(): void {
     this.cache = null;

@@ -25,7 +25,7 @@ export const MIGRATION_MANIFEST: readonly MigrationManifestEntry[] = [
   { version: '0013', name: 'disputes_support', file: '0013_disputes_support.sql', checksum: 'e82b4f7ff26988a65818f60888d3543b7b03930c77a0bce6a503e195a46aa843' },
   { version: '0014', name: 'privacy_ops', file: '0014_privacy_ops.sql', checksum: 'b303f8055f1516759a2622e3c33d400d0da86341572090691900ccfd2dbf6e56' },
   { version: '0015', name: 'analytics_views', file: '0015_analytics_views.sql', checksum: 'c1643ac26eaba80e6a510d56f351d65cbbade62c6b4a8fe168f08e7b83cf2a7a' },
-  { version: '0016', name: 'roles_grants', file: '0016_roles_grants.sql', checksum: '0e22d173ebb2bebe57064dbc7f12f479ee054364d0c4865982a6efa00b021d43' },
+  { version: '0016', name: 'roles_grants', file: '0016_roles_grants.sql', checksum: 'ed1de053c61b742c21d69e8575561df7029180ebf500760119fee070c1c3dd76' },
   { version: '0017', name: 'spec_alignment', file: '0017_spec_alignment.sql', checksum: '2f0a6e8b256bca624577dbf581862e2b143cba8d871142c8c2af394362051097' },
   { version: '0018', name: 'outbox_handler_runs', file: '0018_outbox_handler_runs.sql', checksum: 'e1efd27faf8a99bdc337d9d30453ae584780923a72f095d28e397b8a0f5ac5b4' },
   { version: '0020', name: 'identity_runtime', file: '0020_identity_runtime.sql', checksum: '1935290c384396a468792468ec06b170ed87c22e1181f8e20bc1924faf89739c' },

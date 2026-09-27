@@ -43,7 +43,7 @@ mode = "smart"
 # ≈ 720 h × 0.25 CU = 180 CU-hours/month (ASUMSI) versus the free allowance (ASUMSI 100 CU-hours/project/month,
 # check the Neon pricing page). If the Neon console shows the budget running out, change this to "*/15 * * * *".
 [env.staging.triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/15 * * * *"]
 
 [env.staging.vars]
 APP_ENV = "staging"

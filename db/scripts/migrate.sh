@@ -45,7 +45,7 @@ role_clause() {
   local ok
   ok=$(sql "SELECT (EXISTS (SELECT 1 FROM schema_migrations WHERE version = '0016')
                     AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname='jk_migrator')
-                    AND (current_user = 'jk_migrator' OR pg_has_role(current_user, 'jk_migrator', 'MEMBER')))::int" 2>/dev/null || echo 0)
+                    AND (current_user = 'jk_migrator' OR pg_has_role(current_user, 'jk_migrator', CASE WHEN current_setting('server_version_num')::int >= 160000 THEN 'SET' ELSE 'MEMBER' END)))::int" 2>/dev/null || echo 0)
   if [[ "$ok" == "1" ]]; then echo "SET LOCAL ROLE jk_migrator;"; fi
 }
 

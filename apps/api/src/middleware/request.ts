@@ -9,7 +9,10 @@ export function requestContext(deps: AppDeps): MiddlewareHandler<AppEnv> {
     const incoming = c.req.header('x-request-id');
     const requestId = incoming && /^[A-Za-z0-9._-]{8,64}$/.test(incoming) ? incoming : randomToken(12);
     c.set('requestId', requestId);
-    c.set('deps', deps);
+    // Cloudflare Workers: the app is built once per isolate; per-request deps (fresh DB client)
+    // arrive through the fetch "env" argument as `__deps`. Node passes nothing → static deps.
+    const perRequest = (c.env as { __deps?: AppDeps } | undefined)?.__deps;
+    c.set('deps', perRequest ?? deps);
     c.set('auth', undefined);
     const ip =
       c.req.header('cf-connecting-ip') ??
@@ -20,7 +23,7 @@ export function requestContext(deps: AppDeps): MiddlewareHandler<AppEnv> {
     const started = Date.now();
     await next();
     c.header('x-request-id', requestId);
-    deps.logger.info('http.request', {
+    (perRequest ?? deps).logger.info('http.request', {
       requestId,
       method: c.req.method,
       path: c.req.path,

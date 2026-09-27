@@ -24,8 +24,14 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jk_migrator') THEN CREATE ROLE jk_migrator NOLOGIN; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jk_app')      THEN CREATE ROLE jk_app NOLOGIN; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jk_readonly') THEN CREATE ROLE jk_readonly NOLOGIN; END IF;
-  -- the account applying migrations must be able to SET ROLE jk_migrator
-  IF current_user <> 'jk_migrator' AND NOT pg_has_role(current_user, 'jk_migrator', 'MEMBER') THEN
+  -- The account applying migrations must be able to SET ROLE jk_migrator. On PostgreSQL 16+
+  -- membership alone is not enough for non-superuser owners (e.g. Neon's neondb_owner):
+  -- the grant needs the SET (and INHERIT) option, and the check must test 'SET'.
+  IF current_setting('server_version_num')::int >= 160000 THEN
+    IF current_user <> 'jk_migrator' AND NOT pg_has_role(current_user, 'jk_migrator', 'SET') THEN
+      EXECUTE format('GRANT jk_migrator TO %I WITH INHERIT TRUE, SET TRUE', current_user);
+    END IF;
+  ELSIF current_user <> 'jk_migrator' AND NOT pg_has_role(current_user, 'jk_migrator', 'MEMBER') THEN
     EXECUTE format('GRANT jk_migrator TO %I', current_user);
   END IF;
 END $$;

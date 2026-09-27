@@ -12,7 +12,7 @@ if [[ -n "${DATABASE_URL:-}" ]]; then PSQL+=("$DATABASE_URL"); fi
 ok=$("${PSQL[@]}" -At -c "SELECT (to_regclass('schema_migrations') IS NOT NULL
        AND EXISTS (SELECT 1 FROM schema_migrations WHERE version = '0016')
        AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname='jk_migrator')
-       AND (current_user = 'jk_migrator' OR pg_has_role(current_user, 'jk_migrator', 'MEMBER')))::int")
+       AND (current_user = 'jk_migrator' OR pg_has_role(current_user, 'jk_migrator', CASE WHEN current_setting('server_version_num')::int >= 160000 THEN 'SET' ELSE 'MEMBER' END)))::int")
 if [[ "$ok" == "1" ]]; then export PGOPTIONS="${PGOPTIONS:-} -c role=jk_migrator"; fi
 
 shopt -s nullglob

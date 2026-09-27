@@ -16,7 +16,16 @@ export function createApp(deps: AppDeps) {
     },
   });
 
-  const allowed = new Set([deps.env.WEB_BASE_URL, deps.env.ADMIN_BASE_URL, ...deps.env.CORS_ORIGINS]);
+  // Browser Origin headers never contain a path: compare origins, not full base URLs
+  // (e.g. WEB_BASE_URL=https://antarkitaindonesia.com/jastipkita → https://antarkitaindonesia.com).
+  const toOrigin = (u: string) => {
+    try {
+      return new URL(u).origin;
+    } catch {
+      return u;
+    }
+  };
+  const allowed = new Set([deps.env.WEB_BASE_URL, deps.env.ADMIN_BASE_URL, ...deps.env.CORS_ORIGINS].map(toOrigin));
   app.use('*', requestContext(deps));
   app.use(
     '*',

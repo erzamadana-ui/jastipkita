@@ -8,7 +8,7 @@ function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
 }
 
-const apiBase = str(env.PUBLIC_API_BASE_URL) || 'https://api.antarkitaindonesia.com/jastipkita';
+const apiBase = str(env.PUBLIC_API_BASE_URL) || 'https://api.antarkitaindonesia.com';
 
 export const SITE = {
   name: 'JastipKita',
