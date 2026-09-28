@@ -171,7 +171,9 @@ final GlobalKey _canvasKey = GlobalKey(debugLabel: 'store-canvas');
 
 /// Renders [shot] on [device] and writes `build/store_screenshots/<device>/<file>.png`.
 Future<void> captureStoreShot(WidgetTester tester, StoreDevice device, StoreShot shot) async {
-  if (!await loadStoreFonts()) {
+  // Font files and the engine's font registration are real async work: inside testWidgets' fake-async zone they
+  // never complete (each shot then hangs until the test timeout), so they run in runAsync.
+  if (!(await tester.runAsync(loadStoreFonts) ?? false)) {
     debugPrint('store screenshots: Poppins could not be loaded — ${shot.file} skipped');
     return;
   }

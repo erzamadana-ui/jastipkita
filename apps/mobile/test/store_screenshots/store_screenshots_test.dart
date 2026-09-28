@@ -169,6 +169,8 @@ void main() {
         '${device.name} ${shot.file}',
         (WidgetTester tester) => captureStoreShot(tester, device, shot),
         skip: !storeScreenshotsEnabled,
+        // a stuck shot must fail fast instead of blocking the CI job for the 10-minute default
+        timeout: const Timeout(Duration(minutes: 2)),
       );
     }
   }

@@ -323,6 +323,7 @@ jobs:
       - if: steps.app.outputs.present == 'true'
         name: Store screenshots (tag store, real Poppins fonts; does not gate the build)
         continue-on-error: true
+        timeout-minutes: 20
         run: |
           if [ -d test/store_screenshots ]; then
             # country flags in the screenshots need a colour emoji font (optional; Poppins comes from the app assets)
