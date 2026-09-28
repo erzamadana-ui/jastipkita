@@ -90,6 +90,8 @@ export async function disputeDetail(ctx: AdminCtx, id: string) {
   const [conv] = await db<{ id: string }[]>`SELECT id FROM conversations WHERE transaction_id = ${d.transaction_id}`;
   const held = await transactionBuckets(db, d.transaction_id);
   const escrowIdr = held.PRODUCT_FUND + held.CUSTOMS_RESERVE + held.CLEARING;
+  // exactly what resolve() would refund for REFUND_FULL (and the exclusive upper bound for REFUND_PARTIAL)
+  const refundCapIdr = await refundableIdr(db as unknown as TxSql, d.transaction_id);
   const preStatus = await drepo.preDisputeStatus(db, d.transaction_id);
   const allowed: string[] = [];
   if (['OPEN', 'UNDER_REVIEW'].includes(d.status)) allowed.push('REQUEST_EVIDENCE');
@@ -124,7 +126,7 @@ export async function disputeDetail(ctx: AdminCtx, id: string) {
     appealedAt: iso(d.appealed_at),
     appealDeadline: d.resolved_at && !d.appealed_at ? appealDeadline(d.resolved_at, sla).toISOString() : null,
     closedAt: iso(d.closed_at),
-    transaction: { id: d.transaction_id, number: d.tx_number, status: d.tx_status, preDisputeStatus: preStatus, escrowHeldIdr: escrowIdr },
+    transaction: { id: d.transaction_id, number: d.tx_number, status: d.tx_status, preDisputeStatus: preStatus, escrowHeldIdr: escrowIdr, refundableIdr: refundCapIdr },
     buyer: party(d.buyer_id),
     traveler: party(d.traveler_id),
     conversationId: conv?.id ?? null,

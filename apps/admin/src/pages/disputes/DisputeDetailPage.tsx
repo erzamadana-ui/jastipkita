@@ -21,11 +21,13 @@ type Resolution = 'REFUND_FULL' | 'REFUND_PARTIAL' | 'NO_REFUND' | 'RETURN_AND_R
 /** Client-side money preview of a resolution (the API decides; this mirrors docs/api/admin.md §3). */
 export function resolutionPreview(d: DisputeDetail, resolution: Resolution, amountIdr: number) {
   const held = d.transaction.escrowHeldIdr;
+  // server cap (min of escrow held and what the payments can still refund) — older APIs: escrow held
+  const cap = d.transaction.refundableIdr ?? held;
   const executes = d.transaction.status === 'DISPUTED';
   if (!executes) return { executes, toBuyer: 0, toTraveler: 0, remainsHeld: held, needsReleaseConfirm: false };
-  if (resolution === 'REFUND_FULL' || resolution === 'RETURN_AND_REFUND') return { executes, toBuyer: held, toTraveler: 0, remainsHeld: 0, needsReleaseConfirm: false };
+  if (resolution === 'REFUND_FULL' || resolution === 'RETURN_AND_REFUND') return { executes, toBuyer: cap, toTraveler: 0, remainsHeld: Math.max(0, held - cap), needsReleaseConfirm: false };
   if (resolution === 'REFUND_PARTIAL') {
-    const a = Math.max(0, Math.min(amountIdr, held));
+    const a = Math.max(0, Math.min(amountIdr, cap));
     return { executes, toBuyer: a, toTraveler: held - a, remainsHeld: 0, needsReleaseConfirm: false };
   }
   return { executes, toBuyer: 0, toTraveler: held, remainsHeld: 0, needsReleaseConfirm: d.transaction.preDisputeStatus !== 'DELIVERED' };
@@ -60,7 +62,7 @@ export default function DisputeDetailPage() {
   const d = q.data;
   const act = (a: DisputeDetail['allowedActions'][number]) => can.reason ?? (d.allowedActions.includes(a) ? null : `Tidak tersedia pada status ${d.status}`);
   const pv = resolutionPreview(d, resolution, Number(amount) || 0);
-  const partialOk = resolution !== 'REFUND_PARTIAL' || (Number(amount) > 0 && Number(amount) < d.transaction.escrowHeldIdr);
+  const partialOk = resolution !== 'REFUND_PARTIAL' || (Number(amount) > 0 && Number(amount) < (d.transaction.refundableIdr ?? d.transaction.escrowHeldIdr));
 
   return (
     <div className="stack stack--lg">
@@ -200,7 +202,7 @@ export default function DisputeDetailPage() {
             <Select value={resolution} onChange={(v) => setResolution(v as Resolution)} options={['REFUND_FULL', 'REFUND_PARTIAL', 'RETURN_AND_REFUND', 'NO_REFUND', 'OTHER']} />
           </Field>
           {resolution === 'REFUND_PARTIAL' ? (
-            <Field label="Nominal refund (IDR)" required hint={`Harus < dana ditahan ${formatIdr(d.transaction.escrowHeldIdr)}`} error={!partialOk && amount ? 'Harus > 0 dan lebih kecil dari dana ditahan (gunakan REFUND_FULL untuk semuanya)' : null}>
+            <Field label="Nominal refund (IDR)" required hint={`Harus < dana yang bisa direfund ${formatIdr(d.transaction.refundableIdr ?? d.transaction.escrowHeldIdr)}`} error={!partialOk && amount ? 'Harus > 0 dan lebih kecil dari dana ditahan (gunakan REFUND_FULL untuk semuanya)' : null}>
               <input className="input tabular" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </Field>
           ) : null}

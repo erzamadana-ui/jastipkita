@@ -47,6 +47,9 @@ describe('dispute queue & review', () => {
     const detail = await as(t, ops, 'GET', `/v1/admin/disputes/${disputeId}`);
     expect(detail.body).toMatchObject({ transaction: { id: tx.id, preDisputeStatus: 'PURCHASED' }, allowedActions: ['REQUEST_EVIDENCE', 'START_REVIEW', 'CLOSE'] });
     expect(detail.body.transaction.escrowHeldIdr).toBeGreaterThan(0);
+    // resolve preview: the exact REFUND_FULL amount (≤ what is still held)
+    expect(detail.body.transaction.refundableIdr).toBeGreaterThan(0);
+    expect(detail.body.transaction.refundableIdr).toBeLessThanOrEqual(detail.body.transaction.escrowHeldIdr);
     // file URLs are absolute (contract fix)
     expect(detail.body.evidence.find((e: any) => e.fileId === photo)).toMatchObject({
       fileUrlEndpoint: `http://api.test/v1/files/${photo}/url`,

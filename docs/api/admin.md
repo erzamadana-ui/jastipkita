@@ -82,7 +82,7 @@ event `trip.verified {tripId, travelerId, verifiedBy:'ADMIN'}` → identity job 
 | Method & path | Notes |
 |---|---|
 | `GET /v1/admin/disputes?status&assignee=me\|none\|<id>&sla=BREACHED\|DUE_SOON` | `slaState` ON_TRACK / DUE_SOON / BREACHED |
-| `GET /v1/admin/disputes/{id}` | evidence (`fileUrlEndpoint` and `contentUrl` are absolute URLs), timeline, escrow held, pre-dispute status, refunds, `allowedActions` |
+| `GET /v1/admin/disputes/{id}` | evidence (`fileUrlEndpoint` and `contentUrl` are absolute URLs), timeline, escrow held, `transaction.refundableIdr` (exact REFUND_FULL amount / exclusive REFUND_PARTIAL bound — resolve preview), pre-dispute status, refunds, `allowedActions` |
 | `POST …/{id}/assign` | `{assigneeId?}` (default me; assignee needs disputes.manage) |
 | `POST …/{id}/request-evidence` | `{note, dueHours}` → EVIDENCE_COLLECTION |
 | `POST …/{id}/review` | → UNDER_REVIEW; while the evidence window is open → 422 `EVIDENCE_WINDOW_OPEN` unless `closeEvidenceWindow:true` |

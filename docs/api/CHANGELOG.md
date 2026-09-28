@@ -12,6 +12,8 @@ Legend: **ADD** backward-compatible addition · **CHG** changed value/behaviour 
 
 OpenAPI regenerated (256 paths). No client action required; admin web already consumes `permissions` and the reconciliation routes.
 
+- **ADD** `GET /v1/admin/disputes/{id}` → `transaction.refundableIdr`: the amount a REFUND_FULL resolution refunds (and the exclusive
+  upper bound of REFUND_PARTIAL); the admin resolve dialog previews with it.
 - **ADD** Admin reconciliation: `GET /v1/admin/reconciliation/runs`, `GET /v1/admin/reconciliation/runs/{id}/items`,
   `POST /v1/admin/reconciliation/items/{id}/resolve` (M), `POST /v1/admin/reconciliation/runs` (M I) — see `docs/api/admin.md`.
 

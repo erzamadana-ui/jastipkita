@@ -396,7 +396,7 @@ export interface DisputeDetail {
   appealedAt: string | null;
   appealDeadline: string | null;
   closedAt: string | null;
-  transaction: { id: string; number: string; status: string; preDisputeStatus: string | null; escrowHeldIdr: number };
+  transaction: { id: string; number: string; status: string; preDisputeStatus: string | null; escrowHeldIdr: number; refundableIdr?: number };
   buyer: Party | null;
   traveler: Party | null;
   conversationId: string | null;
