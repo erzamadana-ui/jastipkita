@@ -5,8 +5,7 @@
 > butuh akun & secret yang harus dibuat owner sendiri (gratis). Production, pembayaran LIVE, submit toko aplikasi, badan
 > usaha dan iklan berbayar **tidak dilakukan** — menunggu keputusan owner (lihat §5).
 
-Repo: `github.com/erzamadana-ui/jastipkita` (private) · salinan lokal Mac: `~/Developer/jastipkita` · commit terakhir
-`7615e97`. Detail per requirement & tes: [`checklists/test-scenarios.md`](checklists/test-scenarios.md) (R01–R42).
+Repo: `github.com/erzamadana-ui/jastipkita` (private, branch `main`) · salinan lokal Mac: `~/Developer/jastipkita`. Detail per requirement & tes: [`checklists/test-scenarios.md`](checklists/test-scenarios.md) (R01–R42).
 
 ## 1. Apa yang sudah jadi
 
@@ -67,8 +66,8 @@ Status: **SELESAI** = kode + tes otomatis hijau · **MOCK/SANDBOX** = kode jadi,
 | Database (SQL) | 359 lulus, PG 16 & 17 | lokal + CI |
 | Admin | 67 unit + 18 Playwright | lokal + CI (unit) |
 | Web | 130 Playwright + 6 unit, CSP di 57 halaman | lokal + CI (build) |
-| Flutter | analyze bersih, widget/unit test lulus, APK debug & web build | CI |
-| Secret scan (guard + gitleaks), audit dependensi, CodeQL | hijau | CI |
+| Flutter | analyze bersih, widget/unit test lulus, APK debug & web build; draf screenshot toko (artefak `store-screenshots`) | CI |
+| Secret scan (guard + gitleaks), audit dependensi (laporan) | hijau | CI · CodeQL siap, aktif bila `CODEQL_ENABLED=true` (repo private butuh lisensi) |
 | Load test lokal | lihat `checklists/load-test-2026-09.md` | lokal (bukan production) |
 
 ## 4. Risiko & keterbatasan terbuka
@@ -128,7 +127,11 @@ aktivasi; bila tidak mau, staging tetap bisa jalan dengan storage dinonaktifkan 
 | Jeda rekening refund/payout baru | tanpa jeda · tahan 24 jam sebelum dipakai | 24 jam (menahan pengambilalihan akun) — belum dibangun; yang ada baru `money.policy.payoutDelayHours` (menunda semua payout, bukan khusus rekening baru) |
 | Subsidi biaya kanal bayar (VA) | dibebankan penuh · disubsidi | putuskan setelah tarif resmi Xendit akun bisnis keluar |
 
-Semua gerbang go-live: `docs/checklists/launch-checklist.md` (status seluruh butir = BELUM per tanggal ini).
+Semua gerbang go-live: `docs/checklists/launch-checklist.md` (belum ada gerbang yang lulus; T2 & T4 berstatus PROSES).
+
+Jadwal tindakan di atas sudah dibuat di Google Calendar Erza (WIB, pengingat 60 menit): cek merek PDKI (Rab 30 Sep 12.00),
+minta penawaran legal/pajak/kepabeanan (Jum 2 Okt 12.00), nyalakan staging (Sab 3 Okt 09.00), Xendit TEST + login + publish
+web (Sab 3 Okt 10.45), keputusan anggaran (Min 4 Okt 19.30).
 
 ## 6. Cara melanjutkan pengembangan
 
