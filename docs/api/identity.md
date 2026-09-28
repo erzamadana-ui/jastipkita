@@ -20,7 +20,7 @@ All endpoints are under `/v1`, JSON camelCase, errors `{ error: { code, message,
 | `POST /auth/logout` · `GET /auth/sessions` · `DELETE /auth/sessions/{id}` | 🔒 | |
 | `POST /auth/mfa/totp/enroll` | 🔒 admin (any role), **fresh OTP-login session ≤ 15 min** | secret returned once; `403 MFA_ENROLL_FRESH_LOGIN_REQUIRED`, `409 MFA_ENROLLMENT_IN_PROGRESS` (other session), `409 MFA_ALREADY_ENROLLED` (reset = maker-checker, §3.2) |
 | `POST /auth/mfa/totp/confirm` · `POST /auth/mfa/verify` | 🔒 | step-up token with `mfa_at`; confirm only from the enrolling session (`403 MFA_ENROLL_SESSION_MISMATCH`, `409 MFA_ENROLLMENT_EXPIRED` after 15 min) |
-| `GET /me` · `PATCH /me` · `POST /me/mode` | 🔒 | |
+| `GET /me` · `PATCH /me` · `POST /me/mode` | 🔒 | `GET /me` returns `roles` + effective `permissions` (from `role_permissions`, `[]` for non-staff; UI hint only) |
 | `GET/POST /me/devices` · `DELETE /me/devices/{id}` | 🔒 | |
 | `GET/POST /me/consents` | 🔒 | append-only; `version` must be one of `GET /consents/requirements` `acceptedVersions` (422 `CONSENT_VERSION_INVALID {allowedVersions}`) |
 | `GET /legal/documents?locale&type` | public | current published version per type & locale: `{type, version, locale, title, summary, effectiveAt, publishedAt, slug, url, contentUrl, isTemplate, consentType}` (`Cache-Control: public, max-age=300`) |

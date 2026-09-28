@@ -8,6 +8,22 @@ Legend: **ADD** backward-compatible addition · **CHG** changed value/behaviour 
 
 ---
 
+## 2026-09-28 (sore) — SEC-16 / SEC-17 / SEC-20 + effective permissions
+
+OpenAPI regenerated (253 paths). No client action required; admin web already consumes `permissions`.
+
+- **ADD** `GET /v1/me` → `permissions: string[]` — effective permission codes of the active roles (`role_permissions`), `[]` for
+  non-staff. UI hint only; every admin route still enforces RBAC. Admin web now prefers it over its mirrored role matrix.
+- **CHG** `DELETE /v1/admin/users/{id}/roles/{roleCode}` also revokes **every session** of the subject (SEC-16): the next call with the
+  old token answers `401`, the user logs in again. Audit/security event carry `sessionsRevoked`.
+- **CHG** `POST /v1/kyc/payout-accounts` without a verified identity record: a bank-name match is stored as `verificationStatus: PENDING`
+  (not `VERIFIED`, not default, does not unlock level 4) until admin review (SEC-17). With a verified identity nothing changes.
+- **CHG** error bodies for DB rule violations (SEC-20): custom `JK*` codes answer fixed Indonesian text instead of the raw DB message;
+  `details` is empty except `JK409` (`currentVersion`, `currentStatus`), `JK422`/`JK403`/`JK404` (unchanged) and `JK423` (blockers);
+  `409 DUPLICATE` no longer includes the constraint name; ledger/quote invariants (`JKL*`, `JKQ01`) answer **500**.
+
+---
+
 ## 2026-09-28 — QA follow-ups + SEC-12 / SEC-13 (`docs/checklists/test-scenarios.md`, `docs/security/review-2026-09.md`)
 
 OpenAPI regenerated (253 paths; 6 new admin operations, new request fields). **Mobile/web action required** for the

@@ -33,6 +33,12 @@ describe('/me', () => {
       deletionScheduledFor: null,
     });
     expect(r.body.referralCode).toMatch(/^[0-9A-Z]{4,16}$/);
+    // effective permissions come from role_permissions (source of truth for the admin UI)
+    const expected = await t.adminSql<{ permission_code: string }[]>`SELECT permission_code FROM role_permissions WHERE role_code = 'SUPPORT' ORDER BY permission_code`;
+    expect(expected.length).toBeGreaterThan(0);
+    expect(r.body.permissions).toEqual(expected.map((x) => x.permission_code));
+    const plain = await t.createUser();
+    expect((await t.request('GET', '/v1/me', { token: plain.accessToken })).body.permissions).toEqual([]);
   });
 
   it('PATCH updates profile fields and validates the country', async () => {

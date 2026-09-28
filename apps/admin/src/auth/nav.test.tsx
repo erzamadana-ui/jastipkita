@@ -46,4 +46,11 @@ describe('permission-based navigation', () => {
     expect(homePath(permissionsFor(['SUPPORT']), ['SUPPORT'])).toBe('/users');
     expect(homePath(permissionsFor([]), [])).toBe('/no-access');
   });
+
+  it('prefers effective permissions from /v1/me over the mirrored matrix (unknown codes ignored)', () => {
+    const fromServer = permissionsFor(['SUPPORT'], ['users.read', 'audit.read', 'future.permission']);
+    expect([...fromServer].sort()).toEqual(['audit.read', 'users.read']);
+    expect(permissionsFor(['SUPPORT'], []).size).toBe(0);
+    expect(permissionsFor(['SUPPORT'], undefined).has('support.tickets.manage')).toBe(true);
+  });
 });

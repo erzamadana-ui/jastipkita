@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const me = snapshot.authenticated ? (meQ.data ?? null) : null;
   const roles = useMemo(() => me?.roles ?? [], [me]);
-  const perms = useMemo(() => permissionsFor(roles), [roles]);
+  const perms = useMemo(() => permissionsFor(roles, me?.permissions), [roles, me]);
 
   const passGate = useCallback(() => {
     try {

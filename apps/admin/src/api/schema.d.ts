@@ -4534,6 +4534,8 @@ export interface components {
             /** @description Verified e-mail for receipts/transaction mail (OTP-verified) */
             transactionEmail: string | null;
             roles: string[];
+            /** @description Effective permission codes from the active roles (role_permissions) — empty for non-staff. UI hint only; the API enforces RBAC on every call. */
+            permissions: string[];
             mfaEnabled: boolean;
             deletionScheduledFor: string | null;
             createdAt: string;

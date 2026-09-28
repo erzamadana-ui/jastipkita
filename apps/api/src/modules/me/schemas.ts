@@ -18,6 +18,9 @@ export const ProfileSchema = z
     referralCode: z.string(),
     transactionEmail: z.string().nullable().openapi({ description: 'Verified e-mail for receipts/transaction mail (OTP-verified)' }),
     roles: z.array(z.string()),
+    permissions: z
+      .array(z.string())
+      .openapi({ description: 'Effective permission codes from the active roles (role_permissions) — empty for non-staff. UI hint only; the API enforces RBAC on every call.' }),
     mfaEnabled: z.boolean(),
     deletionScheduledFor: z.string().nullable(),
     createdAt: z.string(),

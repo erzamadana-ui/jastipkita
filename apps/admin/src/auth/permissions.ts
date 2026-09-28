@@ -1,8 +1,8 @@
 /**
- * Permission model for the UI. `/v1/me` returns role codes only (no effective permissions), so the role →
- * permission matrix is mirrored from the RBAC seed (db/scripts/gen-reference-seed.mjs, docs/api/admin.md §2).
- * The UI uses it ONLY to hide/disable controls — the API re-checks every route (PERMISSION_DENIED / ROLE_REQUIRED).
- * Keep in sync with the seed (reported API gap: expose effective permissions on /v1/me).
+ * Permission model for the UI. `/v1/me.permissions` carries the effective permission codes from the DB
+ * (role_permissions) and is the source of truth; the role → permission matrix below mirrors the RBAC seed
+ * (db/scripts/gen-reference-seed.mjs, docs/api/admin.md §2) only as a fallback for an older API.
+ * The UI uses permissions ONLY to hide/disable controls — the API re-checks every route (PERMISSION_DENIED / ROLE_REQUIRED).
  */
 export const PERMISSIONS = [
   'users.read', 'users.suspend', 'kyc.review', 'trips.verify', 'transactions.read', 'transactions.override',
@@ -43,7 +43,9 @@ export const ROLE_PERMISSIONS: Record<AdminRole, readonly Permission[]> = {
   ],
 };
 
-export function permissionsFor(roles: readonly string[]): Set<Permission> {
+export function permissionsFor(roles: readonly string[], serverPermissions?: readonly string[] | null): Set<Permission> {
+  const known = new Set<string>(PERMISSIONS);
+  if (Array.isArray(serverPermissions)) return new Set(serverPermissions.filter((p): p is Permission => known.has(p)));
   const out = new Set<Permission>();
   for (const r of roles) for (const p of ROLE_PERMISSIONS[r as AdminRole] ?? []) out.add(p);
   return out;

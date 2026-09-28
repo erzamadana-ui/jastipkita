@@ -323,6 +323,13 @@
               "type": "string"
             }
           },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Effective permission codes from the active roles (role_permissions) — empty for non-staff. UI hint only; the API enforces RBAC on every call."
+          },
           "mfaEnabled": {
             "type": "boolean"
           },
@@ -353,6 +360,7 @@
           "referralCode",
           "transactionEmail",
           "roles",
+          "permissions",
           "mfaEnabled",
           "deletionScheduledFor",
           "createdAt"

@@ -22,6 +22,7 @@ interface ProfileRow {
   transaction_email: string | null;
   created_at: Date;
   roles: string[];
+  permissions: string[];
   mfa_enabled: boolean;
   deletion_scheduled_for: Date | null;
 }
@@ -33,6 +34,9 @@ export async function loadProfile(db: Db, userId: string): Promise<Profile> {
            u.transaction_email, u.created_at,
            coalesce((SELECT array_agg(ur.role_code ORDER BY ur.role_code) FROM user_roles ur
                       WHERE ur.user_id = u.id AND ur.revoked_at IS NULL), '{}') AS roles,
+           coalesce((SELECT array_agg(DISTINCT rp.permission_code ORDER BY rp.permission_code)
+                       FROM user_roles ur JOIN role_permissions rp ON rp.role_code = ur.role_code
+                      WHERE ur.user_id = u.id AND ur.revoked_at IS NULL), '{}') AS permissions,
            EXISTS (SELECT 1 FROM mfa_factors m WHERE m.user_id = u.id AND m.confirmed_at IS NOT NULL AND m.disabled_at IS NULL) AS mfa_enabled,
            (SELECT pr.scheduled_for FROM privacy_requests pr
              WHERE pr.user_id = u.id AND pr.type = 'DELETION' AND pr.status = 'IN_PROGRESS'
@@ -56,6 +60,7 @@ export async function loadProfile(db: Db, userId: string): Promise<Profile> {
     referralCode: r.referral_code,
     transactionEmail: r.transaction_email,
     roles: r.roles,
+    permissions: r.permissions,
     mfaEnabled: r.mfa_enabled,
     deletionScheduledFor: iso(r.deletion_scheduled_for),
     createdAt: iso(r.created_at)!,
