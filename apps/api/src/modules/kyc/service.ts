@@ -367,7 +367,11 @@ export async function addPayoutAccount(
       // NAME_MISMATCH for manual review (admin payout-account queue → verification-override), never as default.
       if (!identityName) throw Errors.unprocessable('BANK_ACCOUNT_NAME_MISMATCH', 'Nama pemilik rekening tidak sesuai dengan nama yang kamu isi');
       status = 'NAME_MISMATCH';
-    } else status = 'VERIFIED';
+    } else {
+      // SEC-17: a bank-name match only proves "same as what the user typed" unless a verified identity exists —
+      // without one the account stays PENDING for manual review (admin payout-account queue).
+      status = identityName ? 'VERIFIED' : 'PENDING';
+    }
   }
 
   const id = crypto.randomUUID();

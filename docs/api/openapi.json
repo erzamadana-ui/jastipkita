@@ -28384,7 +28384,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Revoke a role (never the last SUPER_ADMIN, never your own SUPER_ADMIN)",
+        "summary": "Revoke a role and end all sessions of the user (never the last SUPER_ADMIN, never your own SUPER_ADMIN)",
         "operationId": "deleteAdminUsersByIdRolesByRoleCode",
         "parameters": [
           {

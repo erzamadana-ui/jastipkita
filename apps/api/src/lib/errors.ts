@@ -51,7 +51,7 @@ export function fromPgError(err: unknown): AppError | null {
     case 'JK001':
       return new AppError(500, 'IMMUTABLE_RECORD', 'Catatan bersifat append-only');
     case '23505':
-      return new AppError(409, 'DUPLICATE', 'Data sudah ada', { constraint: e.constraint_name ?? e.constraint });
+      return new AppError(409, 'DUPLICATE', 'Data sudah ada');
     case '23503':
       return new AppError(422, 'REFERENCE_INVALID', 'Referensi data tidak valid', { constraint: e.constraint_name ?? e.constraint });
     case '23514':
@@ -60,10 +60,26 @@ export function fromPgError(err: unknown): AppError | null {
     case '40P01':
       return new AppError(409, 'RETRY_TRANSACTION', 'Konflik bersamaan, silakan coba lagi');
     default:
-      if (e.code && /^JK/.test(e.code)) return new AppError(422, e.code, e.message ?? 'Aturan bisnis dilanggar', detail);
+      if (e.code && /^JK/.test(e.code)) {
+        // SEC-20: never echo the raw DB exception text (it can carry ids, balances, account states) — fixed text per code;
+        // the DB message is logged server-side by errorResponse. JK423 keeps its structured DETAIL (blocker counts)
+        // because callers act on it. Ledger/quote invariants (JKL*, JKQ*) are server faults, not user errors → 500.
+        const invariant = /^JK[LQ]/.test(e.code);
+        return new AppError(invariant ? 500 : 422, e.code, JK_MESSAGES[e.code] ?? 'Aturan bisnis dilanggar', e.code === 'JK423' ? detail : undefined);
+      }
       return null;
   }
 }
+
+/** Client-facing text for custom SQLSTATEs raised by db/migrations. */
+const JK_MESSAGES: Record<string, string> = {
+  JK423: 'Akun belum dapat dihapus karena masih ada transaksi atau dana yang berjalan',
+  JKC01: 'Saldo kredit tidak mencukupi',
+  JKL01: 'Pencatatan keuangan tidak lengkap, coba lagi atau hubungi dukungan',
+  JKL02: 'Pencatatan keuangan tidak seimbang, coba lagi atau hubungi dukungan',
+  JKL03: 'Akun keuangan tidak aktif, hubungi dukungan',
+  JKQ01: 'Rincian harga tidak konsisten, buat penawaran ulang',
+};
 
 function parseDetail(detail?: string): Record<string, unknown> | undefined {
   if (!detail) return undefined;

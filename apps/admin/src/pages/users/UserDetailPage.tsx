@@ -273,7 +273,7 @@ export default function UserDetailPage() {
         open={typeof dlg === 'object' && dlg !== null}
         onClose={() => setDlg(null)}
         title={`Cabut peran ${typeof dlg === 'object' && dlg ? dlg.revoke : ''}`}
-        description="SUPER_ADMIN terakhir dan SUPER_ADMIN milik sendiri tidak dapat dicabut."
+        description="Semua sesi pengguna ini langsung diakhiri (harus login ulang). SUPER_ADMIN terakhir dan SUPER_ADMIN milik sendiri tidak dapat dicabut."
         confirmLabel="Cabut peran"
         tone="danger"
         mfa

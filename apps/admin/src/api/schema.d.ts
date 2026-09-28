@@ -2377,7 +2377,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Revoke a role (never the last SUPER_ADMIN, never your own SUPER_ADMIN) */
+        /** Revoke a role and end all sessions of the user (never the last SUPER_ADMIN, never your own SUPER_ADMIN) */
         delete: operations["deleteAdminUsersByIdRolesByRoleCode"];
         options?: never;
         head?: never;

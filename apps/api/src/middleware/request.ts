@@ -54,8 +54,14 @@ export function errorResponse(c: Context<AppEnv>, err: unknown) {
   if (err instanceof AppError) appErr = err;
   else {
     const mapped = fromPgError(err);
-    if (mapped) appErr = mapped;
-    else {
+    if (mapped) {
+      appErr = mapped;
+      // SEC-20: the client gets fixed text; the raw DB rule message is kept for operators only.
+      if (/^JK/.test(String((err as { code?: string }).code ?? ''))) {
+        const log = mapped.status >= 500 ? deps?.logger.error : deps?.logger.warn;
+        log?.call(deps?.logger, 'http.db_rule', { requestId, code: mapped.code, dbMessage: err instanceof Error ? err.message : String(err) });
+      }
+    } else {
       deps?.logger.error('http.unhandled_error', {
         requestId,
         error: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : String(err),

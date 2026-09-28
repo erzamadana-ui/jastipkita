@@ -124,7 +124,7 @@ export function registerAdminUsers(app: App) {
   r.openapi(
     createRoute({
       method: 'delete', path: '/v1/admin/users/{id}/roles/{roleCode}', tags: rbacTags, security: bearer,
-      summary: 'Revoke a role (never the last SUPER_ADMIN, never your own SUPER_ADMIN)',
+      summary: 'Revoke a role and end all sessions of the user (never the last SUPER_ADMIN, never your own SUPER_ADMIN)',
       middleware: adminGuard(['rbac.manage'], { mfa: true }),
       request: { params: RoleParam, ...jsonBody(ReasonBody) },
       responses: { 200: jsonContent(AdminLoose), ...errorResponses },

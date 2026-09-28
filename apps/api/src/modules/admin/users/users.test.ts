@@ -123,7 +123,10 @@ describe('RBAC & privileged role maker-checker', () => {
     expect(dup.status).toBe(409);
     const rev = await t.request('DELETE', `/v1/admin/users/${u.id}/roles/SUPPORT`, { token: superA.accessToken, body: { reason: 'Pindah divisi' } });
     expect(rev.status, JSON.stringify(rev.body)).toBe(200);
-    expect((await t.request('GET', '/v1/admin/support/tickets', { token: u.accessToken })).status).toBe(403);
+    // SEC-16: role revocation ends every session of the subject at once (no 60 s permission-cache window)
+    expect((await t.request('GET', '/v1/admin/support/tickets', { token: u.accessToken })).status).toBe(401);
+    const [live] = await t.adminSql<{ n: number }[]>`SELECT count(*)::int AS n FROM refresh_tokens WHERE user_id = ${u.id} AND revoked_at IS NULL`;
+    expect(live!.n).toBe(0);
     expect(await auditRows(t, 'rbac.role_granted', u.id)).toHaveLength(1);
     expect(await auditRows(t, 'rbac.role_revoked', u.id)).toHaveLength(1);
   });

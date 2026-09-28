@@ -50,7 +50,7 @@ unggahan di memori. Web: `pnpm dev:web` (http://localhost:4321/jastipkita/).
 ```bash
 pnpm --filter @jastipkita/core test                     # 282 unit test engine (doc ↔ code FSM parity)
 bash db/scripts/test-db.sh                              # 359 cek SQL: FSM, append-only, ledger, audit chain, grants, rollback
-TEST_PG_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @jastipkita/api test   # 540 tes integrasi API + E2E J1–J8 (butuh superuser)
+TEST_PG_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @jastipkita/api test   # 547 tes integrasi API + E2E J1–J8 (butuh superuser)
 pnpm --filter @jastipkita/api typecheck
 pnpm --filter @jastipkita/api openapi                   # regenerasi docs/api/openapi.json (CI gagal bila basi)
 bash scripts/ci/secret-grep.sh                          # penjaga secret sebelum commit

@@ -267,7 +267,7 @@ describe('payout accounts & level 4', () => {
       const st = await t.request('GET', '/v1/kyc/status', { token: u.token });
       expect(st.body.next).toMatchObject({ level: 5, evaluatedBy: 'SYSTEM' });
 
-      // a fixture-level traveler (L3 set directly) also reaches L4 through payout_account.verified
+      // a fixture-level traveler (L3 set directly, no verified identity record)
       const fx = await t.createUser({ kycLevel: 3 });
       await verifiedTrip(fx.id);
       await t.drain();
@@ -284,8 +284,11 @@ describe('payout accounts & level 4', () => {
         body: { bankCode: 'BNI', accountNumber: '4440001111', holderName: 'Budi Santoso', stepUp: await sensitiveStepUp(t, fx, 'PAYOUT_ACCOUNT_ADD', fx.id) },
       });
       expect(addFx.status).toBe(201);
+      // SEC-17: without a verified identity a bank-name match only proves "same as typed" → PENDING (manual review),
+      // never default, and it does not unlock level 4
+      expect(addFx.body).toMatchObject({ verificationStatus: 'PENDING', isDefault: false });
       await t.drain();
-      expect((await t.request('GET', '/v1/me', { token: fx.accessToken })).body.kycLevel).toBe(4);
+      expect((await t.request('GET', '/v1/me', { token: fx.accessToken })).body.kycLevel).toBe(3);
     } finally {
       payment.validateBankAccount = original;
     }

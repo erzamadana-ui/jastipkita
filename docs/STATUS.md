@@ -36,7 +36,7 @@ Status: **SELESAI** = kode + tes otomatis hijau · **MOCK/SANDBOX** = kode jadi,
 | 19 | Asuransi/proteksi (abstraksi) | `providers/` insurance | **MOCK** (belum ada mitra) |
 | 20 | Chat, rating, referral (Rp25rb/25rb, min Rp500rb, cap Rp250rb/bln, traveler Rp50rb, A/B 15/25/50rb, guardrail), promo | `modules/{chat,ratings,referrals,promotions,credits}` | SELESAI |
 | 21 | Config dinamis berversi (maker-checker), backup/DR (RPO/RTO), observability, analytics | `modules/admin/config`, `docs/06-observability.md`, `docs/08-backup-dr.md`, `db-backup.yml` | SELESAI · backup production belum ada (belum ada production) |
-| 22 | Keamanan & privasi (UU PDP): enkripsi AES-GCM, HMAC pepper, step-up, rate limit, review keamanan | `docs/09-security.md`, `docs/10-privacy.md`, `docs/security/review-2026-09.md` | SELESAI · 7 temuan Low/Medium terbuka (§4) |
+| 22 | Keamanan & privasi (UU PDP): enkripsi AES-GCM, HMAC pepper, step-up, rate limit, review keamanan | `docs/09-security.md`, `docs/10-privacy.md`, `docs/security/review-2026-09.md` | SELESAI · 4 temuan Low/Medium terbuka/diterima (§4) |
 | 23 | Template legal (S&K, privasi, refund, traveler, barang terlarang, cookie, KYC, marketing, komunitas, pembayaran) | `docs/legal/`, seed `0200_legal_documents` | **TEMPLATE** — wajib review hukum |
 | 24 | CI/CD, deployment, env | `.github/workflows/`, `infra/`, `docs/07-deployment.md` | CI SELESAI (hijau) · deploy staging **OWNER** (secret) |
 | 25 | Checklist toko, keamanan, launch; skenario tes; load test | `docs/checklists/` | SELESAI (dokumen) · load test lokal saja |
@@ -63,7 +63,7 @@ Status: **SELESAI** = kode + tes otomatis hijau · **MOCK/SANDBOX** = kode jadi,
 | Suite | Hasil | Di mana |
 |---|---|---|
 | `packages/core` (engine murni) | 282 lulus | lokal + CI |
-| API (unit + integrasi + keamanan + E2E J1–J8) | 540 lulus, 0 gagal (85 file); bundle Worker 580 KiB gzip | lokal + CI |
+| API (unit + integrasi + keamanan + E2E J1–J8) | 547 lulus, 0 gagal (86 file); bundle Worker 580 KiB gzip | lokal + CI |
 | Database (SQL) | 359 lulus, PG 16 & 17 | lokal + CI |
 | Admin | 60 unit + 18 Playwright | lokal + CI (unit) |
 | Web | 130 Playwright + 6 unit, CSP di 57 halaman | lokal + CI (build) |
@@ -80,8 +80,9 @@ Status: **SELESAI** = kode + tes otomatis hijau · **MOCK/SANDBOX** = kode jadi,
    disarankan pindah ke subdomain `jastipkita.antarkitaindonesia.com` sebelum publik.
 4. **Free tier:** Cloudflare Workers Free punya batas CPU per request; app sudah di-cache per isolate, tapi belum diuji
    di Cloudflare nyata. Bila error 1102 muncul → Workers Paid (±US$5/bulan, ASUMSI harga publik, perlu persetujuan).
-5. **Temuan keamanan Low terbuka/diterima:** SEC-15 (nonce OAuth opsional), SEC-16…SEC-20 — rincian & rekomendasi di
-   `docs/security/review-2026-09.md`. Pentest independen belum dilakukan.
+5. **Temuan keamanan Low terbuka/diterima:** SEC-15 (nonce OAuth opsional), SEC-18 (polyglot file, perlu domain storage
+   terpisah), SEC-19 (tanggal trip publik — keputusan produk) — rincian di `docs/security/review-2026-09.md` (SEC-16, SEC-17,
+   SEC-20 sudah diperbaiki 2026-09-28). Pentest independen belum dilakukan.
 6. **Tarif bea/pajak & angka config** (biaya kanal bayar, limit, SLA dukungan) adalah **ASUMSI** yang ditandai; rule
    customs berstatus DRAFT sampai diverifikasi.
 7. **iOS:** build iOS belum dijalankan (butuh Mac + akun Apple Developer); Android APK debug sudah terbangun di CI.

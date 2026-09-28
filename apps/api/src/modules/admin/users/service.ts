@@ -324,8 +324,11 @@ export async function revokeRole(ctx: AdminCtx, userId: string, roleCode: string
       if ((n?.n ?? 0) <= 1) throw Errors.unprocessable('LAST_SUPER_ADMIN', 'Tidak dapat mencabut SUPER_ADMIN terakhir');
     }
     await tx`UPDATE user_roles SET revoked_at = GREATEST(${now}::timestamptz, granted_at), revoked_by = ${ctx.auth.userId}, reason = ${reason} WHERE id = ${g.id}`;
-    await securityEventRow(tx, ctx.deps, { userId, type: 'ROLE_REVOKED', severity: 'MEDIUM', req: ctx.req, meta: { roleCode, by: ctx.auth.userId } });
-    await adminAudit(tx, ctx, { action: 'rbac.role_revoked', entityType: 'user', entityId: userId, before: { roleCode }, after: { roleCode: null }, meta: { reason } });
+    // SEC-16: the permission cache is per isolate (≤ 60 s). Revoking every session of the subject makes the change
+    // effective immediately everywhere — sessions are checked in the DB on each request (middleware/auth.ts loadAuth).
+    const sessions = await revokeAllSessions(tx, userId, now);
+    await securityEventRow(tx, ctx.deps, { userId, type: 'ROLE_REVOKED', severity: 'MEDIUM', req: ctx.req, meta: { roleCode, by: ctx.auth.userId, sessionsRevoked: sessions } });
+    await adminAudit(tx, ctx, { action: 'rbac.role_revoked', entityType: 'user', entityId: userId, before: { roleCode }, after: { roleCode: null }, meta: { reason, sessionsRevoked: sessions } });
   });
   clearPermissionCache(userId);
   return { userId, roleCode, revoked: true };
