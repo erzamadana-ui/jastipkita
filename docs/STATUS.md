@@ -119,6 +119,15 @@ aktivasi; bila tidak mau, staging tetap bisa jalan dengan storage dinonaktifkan 
 | P1 | ClamAV terkelola, SMS/WhatsApp OTP (Twilio) | berbasis pemakaian |
 | P2 | Iklan berbayar soft launch | sesuai `docs/marketing/launch-plan.md` |
 
+### 5c. Keputusan produk (tanpa biaya) yang menunggu owner
+
+| Keputusan | Opsi | Rekomendasi Claude (usulan, bukan keputusan) |
+|---|---|---|
+| Alamat web | tetap `antarkitaindonesia.com/jastipkita` · subdomain `jastipkita.antarkitaindonesia.com` | subdomain sebelum publik (SEC-14) |
+| Tanggal trip di halaman publik (SEC-19) | tanggal pasti · rentang minggu untuk pengunjung anonim | rentang minggu untuk anonim, tanggal pasti setelah login |
+| Jeda rekening refund/payout baru | tanpa jeda · tahan 24 jam sebelum dipakai | 24 jam (menahan pengambilalihan akun) — belum dibangun; yang ada baru `money.policy.payoutDelayHours` (menunda semua payout, bukan khusus rekening baru) |
+| Subsidi biaya kanal bayar (VA) | dibebankan penuh · disubsidi | putuskan setelah tarif resmi Xendit akun bisnis keluar |
+
 Semua gerbang go-live: `docs/checklists/launch-checklist.md` (status seluruh butir = BELUM per tanggal ini).
 
 ## 6. Cara melanjutkan pengembangan
