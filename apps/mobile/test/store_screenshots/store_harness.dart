@@ -349,36 +349,44 @@ class StoreCanvas extends StatelessWidget {
               height: captionHeight,
               child: Padding(
                 padding: EdgeInsets.fromLTRB(size.width * 0.07, device.statusBar * 0.6, size.width * 0.07, 8),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    const Text(
-                      'JastipKita',
-                      style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFF5B83D), letterSpacing: 1.2),
+                // a 3-line caption + subcaption can be taller than the band on small (360×640) canvases: scale it down
+                // instead of overflowing
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: SizedBox(
+                    width: size.width * 0.86,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const Text(
+                          'JastipKita',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFF5B83D), letterSpacing: 1.2),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          shot.caption,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: size.width * 0.064,
+                            height: 1.2,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        if (sub != null) ...<Widget>[
+                          const SizedBox(height: 6),
+                          Text(
+                            sub,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            style: TextStyle(fontFamily: 'Poppins', fontSize: size.width * 0.036, height: 1.35, color: const Color(0xCCFFFFFF)),
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      shot.caption,
-                      textAlign: TextAlign.center,
-                      maxLines: 3,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: size.width * 0.064,
-                        height: 1.2,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    if (sub != null) ...<Widget>[
-                      const SizedBox(height: 6),
-                      Text(
-                        sub,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        style: TextStyle(fontFamily: 'Poppins', fontSize: size.width * 0.036, height: 1.35, color: const Color(0xCCFFFFFF)),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ),

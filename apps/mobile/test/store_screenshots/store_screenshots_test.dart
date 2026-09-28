@@ -42,7 +42,12 @@ void main() {
         'GET /transactions/$storeTxId/timeline': (RequestOptions r) => storeTimeline(status),
       };
 
+  // ListView children are built lazily: a target below the cache extent does not exist yet, so drag the page's main
+  // scrollable until it does, then align it.
   Future<void> scrollTo(WidgetTester tester, Finder finder) async {
+    if (finder.evaluate().isEmpty) {
+      await tester.dragUntilVisible(finder, find.byType(Scrollable).first, const Offset(0, -200), maxIteration: 80);
+    }
     await tester.ensureVisible(finder.first);
     await tester.pump(const Duration(milliseconds: 300));
   }
