@@ -68,6 +68,9 @@ Enkripsi saat transit: **ya**. Permintaan hapus data: **ya** (A4).
 7. Serah terima dengan PIN/QR
 8. Pusat bantuan & sengketa / JastipKita Protection
 Mockup acuan: `docs/design/mockups/*.png`.
+Draf otomatis: setiap run CI menghasilkan artefak **`store-screenshots`** (14 hari) — 7 layar × Google Play 1080×1920 & 1440×2560 +
+App Store iPhone 6.7" 1290×2796, dirender dari layar asli dengan data contoh (`apps/mobile/test/store_screenshots/`). Tinjau teks
+& data contoh sebelum dipakai; screenshot final untuk listing harus dari build rilis (tanpa badge SANDBOX).
 
 ## D. Apple App Store
 | # | Item | PIC | Status | Catatan |
