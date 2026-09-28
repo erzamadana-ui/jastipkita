@@ -37,8 +37,11 @@ describe('/me', () => {
     const expected = await t.adminSql<{ permission_code: string }[]>`SELECT permission_code FROM role_permissions WHERE role_code = 'SUPPORT' ORDER BY permission_code`;
     expect(expected.length).toBeGreaterThan(0);
     expect(r.body.permissions).toEqual(expected.map((x) => x.permission_code));
+    expect(r.body.adminMfaPolicy).toEqual({ stepUpSec: t.deps.env.ADMIN_MFA_STEP_UP_SEC, sessionMaxAgeSec: t.deps.env.ADMIN_SESSION_MFA_MAX_AGE_SEC });
     const plain = await t.createUser();
-    expect((await t.request('GET', '/v1/me', { token: plain.accessToken })).body.permissions).toEqual([]);
+    const pm = await t.request('GET', '/v1/me', { token: plain.accessToken });
+    expect(pm.body.permissions).toEqual([]);
+    expect(pm.body.adminMfaPolicy).toBeNull();
   });
 
   it('PATCH updates profile fields and validates the country', async () => {

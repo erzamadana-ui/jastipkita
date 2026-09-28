@@ -4589,6 +4589,11 @@ export interface components {
             /** @description Effective permission codes from the active roles (role_permissions) — empty for non-staff. UI hint only; the API enforces RBAC on every call. */
             permissions: string[];
             mfaEnabled: boolean;
+            /** @description Staff only (null otherwise): step-up window for sensitive admin writes and the max age of the session MFA for any /v1/admin call (ADMIN_MFA_STEP_UP_SEC / ADMIN_SESSION_MFA_MAX_AGE_SEC) */
+            adminMfaPolicy?: {
+                stepUpSec: number;
+                sessionMaxAgeSec: number;
+            } | null;
             deletionScheduledFor: string | null;
             createdAt: string;
         };

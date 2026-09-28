@@ -15,8 +15,8 @@ export const ENV = {
   appEnv: (['development', 'staging', 'production'].includes(rawEnv) ? rawEnv : 'development') as AppEnv,
   basePath: ((import.meta.env.VITE_BASE_PATH as string | undefined) ?? '/').trim() || '/',
   /**
-   * Server step-up window (ADMIN_MFA_STEP_UP_SEC, default 900 s). The API does not expose it, so the UI assumes the
-   * default and treats the server's MFA_REQUIRED answer as the truth (step-up + retry).
+   * Fallback step-up window (ADMIN_MFA_STEP_UP_SEC default 900 s) until `/v1/me.adminMfaPolicy` is loaded; the
+   * server's MFA_REQUIRED answer stays the truth either way (step-up + retry).
    */
   mfaWindowSec: 900,
 } as const;

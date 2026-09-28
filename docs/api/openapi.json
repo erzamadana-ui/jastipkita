@@ -333,6 +333,25 @@
           "mfaEnabled": {
             "type": "boolean"
           },
+          "adminMfaPolicy": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "stepUpSec": {
+                "type": "integer"
+              },
+              "sessionMaxAgeSec": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "stepUpSec",
+              "sessionMaxAgeSec"
+            ],
+            "description": "Staff only (null otherwise): step-up window for sensitive admin writes and the max age of the session MFA for any /v1/admin call (ADMIN_MFA_STEP_UP_SEC / ADMIN_SESSION_MFA_MAX_AGE_SEC)"
+          },
           "deletionScheduledFor": {
             "type": [
               "string",

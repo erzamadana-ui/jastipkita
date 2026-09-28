@@ -65,7 +65,7 @@ Status: **SELESAI** = kode + tes otomatis hijau · **MOCK/SANDBOX** = kode jadi,
 | `packages/core` (engine murni) | 282 lulus | lokal + CI |
 | API (unit + integrasi + keamanan + E2E J1–J8) | 549 lulus, 0 gagal (87 file); bundle Worker ±580 KiB gzip | lokal + CI |
 | Database (SQL) | 359 lulus, PG 16 & 17 | lokal + CI |
-| Admin | 64 unit + 18 Playwright | lokal + CI (unit) |
+| Admin | 67 unit + 18 Playwright | lokal + CI (unit) |
 | Web | 130 Playwright + 6 unit, CSP di 57 halaman | lokal + CI (build) |
 | Flutter | analyze bersih, widget/unit test lulus, APK debug & web build | CI |
 | Secret scan (guard + gitleaks), audit dependensi, CodeQL | hijau | CI |

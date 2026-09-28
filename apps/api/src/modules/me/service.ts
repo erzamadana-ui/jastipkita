@@ -6,7 +6,15 @@ import { createOtpChallenge } from '../auth/service';
 import * as repo from './repository';
 import type { ConsentInput, DeviceInput, Profile } from './schemas';
 
-export const getMe = (deps: AppDeps, auth: AuthContext) => repo.loadProfile(deps.sql, auth.userId);
+export async function getMe(deps: AppDeps, auth: AuthContext) {
+  const profile = await repo.loadProfile(deps.sql, auth.userId);
+  return {
+    ...profile,
+    adminMfaPolicy: profile.roles.length
+      ? { stepUpSec: deps.env.ADMIN_MFA_STEP_UP_SEC, sessionMaxAgeSec: deps.env.ADMIN_SESSION_MFA_MAX_AGE_SEC }
+      : null,
+  };
+}
 
 export interface PatchMeInput {
   displayName?: string | null | undefined;

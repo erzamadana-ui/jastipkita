@@ -40,9 +40,9 @@ export function EnvRibbon() {
 }
 
 function MfaPill() {
-  const { snapshot } = useAuth();
+  const { snapshot, me } = useAuth();
   const now = useNow(15_000);
-  const left = mfaSecondsLeft(snapshot.mfaAt, ENV.mfaWindowSec, now);
+  const left = mfaSecondsLeft(snapshot.mfaAt, me?.adminMfaPolicy?.stepUpSec ?? ENV.mfaWindowSec, now);
   if (left > 0) {
     const min = Math.ceil(left / 60);
     return (
