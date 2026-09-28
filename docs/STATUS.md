@@ -18,7 +18,7 @@ Status: **SELESAI** = kode + tes otomatis hijau · **MOCK/SANDBOX** = kode jadi,
 | 1 | Riset regulasi, pajak/bea, PSP, FX, pasar & nama | `docs/research/01–05` | SELESAI (riset desk, bukan opini hukum) |
 | 2 | Arsitektur, ADR, domain model (sumber kebenaran FSM & aturan) | `docs/00-domain-model.md`, `docs/01-architecture.md`, `docs/adr/0001–0008` | SELESAI |
 | 3 | Database: 26 migrasi, ledger double-entry, audit hash-chain, append-only, FSM di DB, role `jk_app/jk_readonly` | `db/migrations/`, `db/tests/`, `docs/03-database.md` | SELESAI (359 cek SQL, PG 16 & 17) |
-| 4 | API `/v1` ±279 operasi + OpenAPI | `apps/api/`, `docs/api/openapi.json`, `docs/api/*.md` | SELESAI |
+| 4 | API `/v1` 283 operasi (151 admin) + OpenAPI | `apps/api/`, `docs/api/openapi.json`, `docs/api/*.md` | SELESAI |
 | 5 | Brand: logo (tas belanja + pesawat + orbit), ikon, splash, aset toko, design tokens | `brand/`, `packages/design-tokens/`, `docs/05-ui-design-system.md` | SELESAI |
 | 6 | Aplikasi Flutter satu app, mode Penitip & Traveler (37 layar), Material 3 / Liquid Glass selektif | `apps/mobile/` | SELESAI (analyze + test + APK debug + web build di CI) |
 | 7 | Web publik: landing, halaman negara (SEO), trip discovery, kalkulator bea, cek barang terlarang, bantuan, auth, legal, hapus akun, EN | `apps/web/` (19 route) | SELESAI (Playwright; CSP diverifikasi) |
@@ -32,7 +32,7 @@ Status: **SELESAI** = kode + tes otomatis hijau · **MOCK/SANDBOX** = kode jadi,
 | 15 | Bukti pembelian, serah terima (meet-up QR/PIN, kurir, mitra logistik), auto-confirm | `modules/{purchase,delivery}` | SELESAI |
 | 16 | Notifikasi multi-kanal + siklus e-mail lengkap | `modules/notifications`, template e-mail | SELESAI · kanal **MOCK** (log) |
 | 17 | Trust score, fraud engine, limit, barang terlarang | `packages/core/src/{trust-score,fraud,limits,restricted}` | SELESAI |
-| 18 | Matriks pembatalan, sengketa + SLA, refund, payout, rekonsiliasi | `modules/{cancellation,disputes,refunds,payouts,reconciliation}` | SELESAI |
+| 18 | Matriks pembatalan, sengketa + SLA, refund, payout, rekonsiliasi harian + layar rekonsiliasi admin | `modules/{cancellation,disputes,refunds,payouts,reconciliation}`, `admin/reconciliation` | SELESAI |
 | 19 | Asuransi/proteksi (abstraksi) | `providers/` insurance | **MOCK** (belum ada mitra) |
 | 20 | Chat, rating, referral (Rp25rb/25rb, min Rp500rb, cap Rp250rb/bln, traveler Rp50rb, A/B 15/25/50rb, guardrail), promo | `modules/{chat,ratings,referrals,promotions,credits}` | SELESAI |
 | 21 | Config dinamis berversi (maker-checker), backup/DR (RPO/RTO), observability, analytics | `modules/admin/config`, `docs/06-observability.md`, `docs/08-backup-dr.md`, `db-backup.yml` | SELESAI · backup production belum ada (belum ada production) |
@@ -63,9 +63,9 @@ Status: **SELESAI** = kode + tes otomatis hijau · **MOCK/SANDBOX** = kode jadi,
 | Suite | Hasil | Di mana |
 |---|---|---|
 | `packages/core` (engine murni) | 282 lulus | lokal + CI |
-| API (unit + integrasi + keamanan + E2E J1–J8) | 547 lulus, 0 gagal (86 file); bundle Worker 580 KiB gzip | lokal + CI |
+| API (unit + integrasi + keamanan + E2E J1–J8) | 549 lulus, 0 gagal (87 file); bundle Worker ±580 KiB gzip | lokal + CI |
 | Database (SQL) | 359 lulus, PG 16 & 17 | lokal + CI |
-| Admin | 60 unit + 18 Playwright | lokal + CI (unit) |
+| Admin | 64 unit + 18 Playwright | lokal + CI (unit) |
 | Web | 130 Playwright + 6 unit, CSP di 57 halaman | lokal + CI (build) |
 | Flutter | analyze bersih, widget/unit test lulus, APK debug & web build | CI |
 | Secret scan (guard + gitleaks), audit dependensi, CodeQL | hijau | CI |

@@ -935,3 +935,42 @@ export interface BackupsResponse {
   error?: string | null;
   operations: { id: string; type: string; status: string; createdAt: string; result: unknown }[];
 }
+
+/** GET /v1/admin/reconciliation/runs item (admin/reconciliation/service.ts runView). */
+export interface ReconciliationRun {
+  id: string;
+  provider: string;
+  sandbox: boolean;
+  periodStart: string;
+  periodEnd: string;
+  status: 'RUNNING' | 'MATCHED' | 'COMPLETED_WITH_DIFFS' | 'FAILED';
+  payments: number;
+  mismatches: number;
+  internalCapturedIdr: number;
+  providerSecuredIdr: number;
+  openItems: number;
+  resolvedItems: number;
+  manual: boolean;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+/** GET /v1/admin/reconciliation/runs/{id}/items item. */
+export interface ReconciliationItem {
+  id: string;
+  itemType: string;
+  internalRef: string | null;
+  providerRef: string | null;
+  transactionId: string | null;
+  transactionNumber: string | null;
+  channel: string | null;
+  internalAmountIdr: number | null;
+  providerAmountIdr: number | null;
+  diffIdr: number;
+  status: 'MATCHED' | 'MISMATCH' | 'MISSING_INTERNAL' | 'MISSING_PROVIDER' | 'RESOLVED';
+  resolutionNote: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}

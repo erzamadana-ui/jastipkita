@@ -142,6 +142,16 @@ export const Payouts = {
   retry: (id: string, note: string, key: string) => call<{ id: string; status: string }>(c().POST('/v1/admin/payouts/{id}/retry', { params: { path: { id }, header: idem(key) }, body: { note } })),
 };
 
+export const Reconciliation = {
+  runs: (q: QueryOf<'/v1/admin/reconciliation/runs'>) => call<T.Page<T.ReconciliationRun>>(c().GET('/v1/admin/reconciliation/runs', { params: { query: q } })),
+  items: (id: string, q: QueryOf<'/v1/admin/reconciliation/runs/{id}/items'>) =>
+    call<T.Page<T.ReconciliationItem>>(c().GET('/v1/admin/reconciliation/runs/{id}/items', { params: { path: { id }, query: q } })),
+  resolve: (id: string, note: string) =>
+    call<{ id: string; runId: string; status: string; previousStatus: string }>(c().POST('/v1/admin/reconciliation/items/{id}/resolve', { params: { path: { id } }, body: { note } })),
+  start: (body: { periodStart: string; periodEnd: string; reason: string }, key: string) =>
+    call<{ runId: string; status: string; payments: number; mismatches: number }>(c().POST('/v1/admin/reconciliation/runs', { params: { header: idem(key) }, body })),
+};
+
 // ------------------------------------------------------------------ config & rules
 export const Config = {
   list: () => call<T.ConfigListResponse>(c().GET('/v1/admin/config')),

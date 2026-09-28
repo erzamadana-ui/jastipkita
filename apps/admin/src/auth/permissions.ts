@@ -177,6 +177,7 @@ export const CAP = {
   refundApprove: { perms: ['refunds.approve'] },
   refundDestinationReview: { perms: ['refunds.approve'] },
   payouts: { perms: ['payouts.manage'] },
+  reconciliationResolve: { perms: ['finance.reports.read', 'payouts.manage'] },
   settlementRequest: { perms: ['finance.settlement.request_change'] },
   settlementApprove: { perms: ['finance.settlement.approve_change'], role: 'FINANCE_SUPER_ADMIN' },
   configPropose: { perms: ['config.propose'] },

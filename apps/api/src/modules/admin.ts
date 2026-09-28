@@ -7,6 +7,7 @@ import { registerAdminDisputes } from './admin/disputes/routes';
 import { registerAdminFinance } from './admin/finance/routes';
 import { registerAdminGrowth } from './admin/growth/routes';
 import { registerAdminKyc } from './admin/kyc/routes';
+import { registerAdminReconciliation } from './admin/reconciliation/routes';
 import { registerAdminRisk } from './admin/risk/routes';
 import { registerAdminRules } from './admin/rules/routes';
 import { registerAdminSettlement } from './admin/settlement/routes';
@@ -29,6 +30,7 @@ export function registerAdmin(app: App): void {
   registerAdminTransactions(app);
   registerAdminDisputes(app);
   registerAdminFinance(app);
+  registerAdminReconciliation(app);
   registerAdminConfig(app);
   registerAdminRules(app);
   registerAdminSettlement(app);

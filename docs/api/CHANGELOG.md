@@ -8,9 +8,12 @@ Legend: **ADD** backward-compatible addition · **CHG** changed value/behaviour 
 
 ---
 
-## 2026-09-28 (sore) — SEC-16 / SEC-17 / SEC-20 + effective permissions
+## 2026-09-28 (sore) — SEC-16 / SEC-17 / SEC-20, effective permissions, admin reconciliation
 
-OpenAPI regenerated (253 paths). No client action required; admin web already consumes `permissions`.
+OpenAPI regenerated (256 paths). No client action required; admin web already consumes `permissions` and the reconciliation routes.
+
+- **ADD** Admin reconciliation: `GET /v1/admin/reconciliation/runs`, `GET /v1/admin/reconciliation/runs/{id}/items`,
+  `POST /v1/admin/reconciliation/items/{id}/resolve` (M), `POST /v1/admin/reconciliation/runs` (M I) — see `docs/api/admin.md`.
 
 - **ADD** `GET /v1/me` → `permissions: string[]` — effective permission codes of the active roles (`role_permissions`), `[]` for
   non-staff. UI hint only; every admin route still enforces RBAC. Admin web now prefers it over its mirrored role matrix.

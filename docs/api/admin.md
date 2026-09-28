@@ -23,7 +23,7 @@ session never passed MFA or it is older than 12 h; no scope → step-up older th
 
 ---
 
-## 1. Endpoint catalogue (147 operations)
+## 1. Endpoint catalogue (151 operations)
 
 Legend: **M** = fresh MFA (≤ 15 min) required · **I** = `Idempotency-Key` header required (declared as the `idempotency-key` header parameter in
 OpenAPI for every such operation) · **MC** = maker-checker. Every operation has a stable `operationId` (see `docs/api/CHANGELOG.md`).
@@ -100,6 +100,14 @@ event `trip.verified {tripId, travelerId, verifiedBy:'ADMIN'}` → identity job 
 | `GET /v1/admin/refund-destinations?status` | refunds.approve | SEC-12 review queue (default `PENDING_REVIEW`): masked account, `nameMatch`, amount, `canReview` |
 | `POST /v1/admin/refund-destinations/{id}/review` | refunds.approve **M I MC** | `{decision: APPROVE\|REJECT, note}`; reviewer ≠ buyer; APPROVE → VALID + refund processed; REJECT → REJECTED, buyer asked again (`refund.destination_required`); audit `refund.destination_reviewed` |
 | `POST /v1/admin/payouts/{id}/retry` | payouts.manage **M I** | FAILED → SCHEDULED now, attempts reset |
+
+### Reconciliation — `finance.reports.read`
+| Method & path | Permission | Notes |
+|---|---|---|
+| `GET /v1/admin/reconciliation/runs?status` | finance.reports.read | newest first; totals (`payments`, `mismatches`, `providerSecuredIdr`, `internalCapturedIdr`), `openItems`, `resolvedItems`, `manual`, `sandbox` |
+| `GET /v1/admin/reconciliation/runs/{id}/items?status` | finance.reports.read | default open differences (`MISMATCH`, `MISSING_INTERNAL`, `MISSING_PROVIDER`); `diffIdr` = provider − ledger; linked transaction number |
+| `POST /v1/admin/reconciliation/items/{id}/resolve` | finance.reports.read + payouts.manage **M** | `{note ≥ 10}` → RESOLVED (resolver + note stored); 409 `RECONCILIATION_ITEM_NOT_OPEN`; no money moves; audit `reconciliation.item_resolved` |
+| `POST /v1/admin/reconciliation/runs` | finance.reports.read + payouts.manage **M I** | `{periodStart, periodEnd, reason}` (≤ 31 days, not in the future) → same comparison as the daily job; `created_by` set; audit `reconciliation.manual_run` |
 
 ### Business config — maker-checker
 `GET /v1/admin/config` (all keys + active version + pending count + `assumptions`) · `GET /v1/admin/config/{key}` (history with diff
