@@ -22,7 +22,7 @@ import 'store_harness.dart';
 ///
 ///   flutter test --tags store --update-goldens --dart-define=STORE_SCREENSHOTS=true test/store_screenshots
 ///
-/// Output: build/store_screenshots/<device>/NN_name.png. Skipped in the normal `flutter test`.
+/// Output: `build/store_screenshots/<device>/NN_name.png`. Skipped in the normal `flutter test`.
 void main() {
   final l10n = idStrings;
 

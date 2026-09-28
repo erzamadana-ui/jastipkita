@@ -6,7 +6,7 @@ berlisensi Bank Indonesia (**SafePay**, via Xendit) sampai barang diterima; seti
 (harga, traveler fee, estimasi bea & pajak, fee platform).
 
 > **Status: pra-peluncuran.** Tidak ada yang live. Semua integrasi MOCK/SANDBOX (tabel di bawah). Production butuh
-> persetujuan owner (`docs/checklists/launch-checklist.md`).
+> persetujuan owner (`docs/checklists/launch-checklist.md`). Status serah terima & tindakan owner: **`docs/STATUS.md`**.
 
 ## Monorepo
 | Path | Isi | Stack |
@@ -16,8 +16,8 @@ berlisensi Bank Indonesia (**SafePay**, via Xendit) sampai barang diterima; seti
 | `apps/api` | HTTP API `/v1` + job worker | Hono, zod-openapi, postgres.js — Cloudflare Workers & Node 22 |
 | `db/` | migrasi SQL (forward-only), seed, runner psql, tes SQL | PostgreSQL 16/17 |
 | `apps/web` | situs publik `antarkitaindonesia.com/jastipkita/` | Astro (static) |
-| `apps/admin` | admin SPA (RBAC + MFA), tidak diindeks | React (sedang dibangun) |
-| `apps/mobile` | aplikasi Android/iOS/web, mode penitip & traveler | Flutter (sedang dibangun) |
+| `apps/admin` | admin SPA (RBAC + MFA + maker-checker), tidak diindeks | React 19 + Vite |
+| `apps/mobile` | aplikasi Android/iOS/web, mode penitip & traveler | Flutter (Riverpod, go_router) |
 | `infra/` | `cloudflare/wrangler.toml`, `docker/` (compose dev, bundler), `env/*.env.example` | — |
 | `scripts/` | `gen-secrets.sh`, helper CI (`scripts/ci/`) | bash, Node |
 | `brand/` | logo, ikon aplikasi, splash, aset toko | — |
@@ -48,9 +48,9 @@ unggahan di memori. Web: `pnpm dev:web` (http://localhost:4321/jastipkita/).
 
 ## Tes
 ```bash
-pnpm --filter @jastipkita/core test                     # 280+ unit test engine (doc ↔ code FSM parity)
-bash db/scripts/test-db.sh                              # 325 cek SQL: FSM, append-only, ledger, audit chain, grants, rollback
-TEST_PG_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @jastipkita/api test   # integrasi API (butuh superuser)
+pnpm --filter @jastipkita/core test                     # 282 unit test engine (doc ↔ code FSM parity)
+bash db/scripts/test-db.sh                              # 359 cek SQL: FSM, append-only, ledger, audit chain, grants, rollback
+TEST_PG_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres pnpm --filter @jastipkita/api test   # 540 tes integrasi API + E2E J1–J8 (butuh superuser)
 pnpm --filter @jastipkita/api typecheck
 pnpm --filter @jastipkita/api openapi                   # regenerasi docs/api/openapi.json (CI gagal bila basi)
 bash scripts/ci/secret-grep.sh                          # penjaga secret sebelum commit

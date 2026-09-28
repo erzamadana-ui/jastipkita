@@ -1,6 +1,6 @@
 # Launch Checklist — Gerbang Go-Live Production
 
-> Tidak ada satu pun gerbang di bawah yang sudah lulus per 2026-09-27. Production (dan terutama **pembayaran LIVE**)
+> Tidak ada satu pun gerbang di bawah yang sudah lulus per 2026-09-28 (T2 & T4 berstatus PROSES). Production (dan terutama **pembayaran LIVE**)
 > hanya boleh dinyalakan setelah semua gerbang **P0** berstatus SELESAI dan owner mencatat keputusan tertulis
 > (variabel `ALLOW_LIVE_PAYMENTS` + `LIVE_PAYMENTS_DECISION_REF` di environment `production`).
 > Bukan nasihat hukum/pajak — setiap butir legal/pajak wajib diverifikasi profesional berizin.
@@ -35,9 +35,9 @@ Status: BELUM · PROSES · SELESAI · N/A. Prioritas: **P0** = blokir launch, **
 | # | Prio | Gerbang | PIC | Status | Bukti |
 |---|---|---|---|---|---|
 | T1 | P0 | Paket infrastruktur production disetujui (Workers Paid, Neon berbayar dengan PITR ≥ 7 hari, R2) — biaya bulanan tercatat | **Owner** | BELUM | keputusan + anggaran |
-| T2 | P0 | Risiko CPU Workers W1/W2 ditutup (app di-cache per isolate, unggah KYC 10 MB lolos di production) | Tim API/DevOps | BELUM | hasil uji |
+| T2 | P0 | Risiko CPU Workers W1/W2 ditutup (app di-cache per isolate, unggah KYC 10 MB lolos di production) | Tim API/DevOps | PROSES — app di-cache per isolate (`apps/api/src/worker.ts`, tes `worker-entry.test.ts`); belum diuji di Cloudflare | hasil uji |
 | T3 | P0 | **Pentest** independen API + admin + mobile; temuan high/critical ditutup | Owner/Security | BELUM | laporan |
-| T4 | P0 | **Load test**: target ASUMSI 50 request/detik selama 15 menit, p95 < 800 ms, error < 0,5 %, tanpa jurnal tidak seimbang | DevOps | BELUM | laporan k6/Artillery |
+| T4 | P0 | **Load test**: target ASUMSI 50 request/detik selama 15 menit, p95 < 800 ms, error < 0,5 %, tanpa jurnal tidak seimbang | DevOps | PROSES — load test lokal (`load-test-2026-09.md`); belum pada infrastruktur staging/production | laporan k6/Artillery |
 | T5 | P0 | **Backup terverifikasi**: backup harian production + restore test ≤ 4 jam berhasil (`docs/08-backup-dr.md` §4) | DevOps | BELUM | catatan `RESTORE_TEST` |
 | T6 | P0 | **Monitoring & on-call**: alert 5xx, latensi, antrean job, lag outbox, selisih rekonsiliasi, `payment.amount_mismatch`; siapa on-call 24/7 dan eskalasi | DevOps/Owner | BELUM | jadwal on-call |
 | T7 | P0 | Pemindai malware nyata (clamd) aktif | DevOps | BELUM | uji EICAR ditolak |
