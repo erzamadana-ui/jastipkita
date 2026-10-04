@@ -10,6 +10,7 @@ void main() {
       expect(normalizeDeepLink(Uri.parse('jastipkita://conversations/c1')), '/conversations/c1');
       expect(normalizeDeepLink(Uri.parse('jastipkita://account/verification')), '/account/verification');
       expect(normalizeDeepLink(Uri.parse('jastipkita://support/tickets/t1')), '/support/tickets/t1');
+      expect(normalizeDeepLink(Uri.parse('jastipkita://support/complaint')), Routes.complaint);
       expect(normalizeDeepLink(Uri.parse('jastipkita://handover/tx9?t=abc')), '/transactions/tx9');
     });
 

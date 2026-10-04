@@ -332,14 +332,33 @@ export async function publishedTrip(t: TestContext, traveler: Actor, admin: Acto
   return pub;
 }
 
-/** Traveler: sign-up + phone + TRAVELER mode + KYC (admin) + payout account + published verified trip → drain → level 4. */
-export async function onboardTraveler(t: TestContext, admin: Actor, o: { label?: string; trip?: Record<string, unknown>; fullName?: string } = {}) {
+/**
+ * Backdates a payout account (added / verified / default) by `hours` so it is past the new-account payout cooldown
+ * (money.policy.newPayoutAccountCooldownHours, money.md §5.7) — for journeys that are not about that cooldown.
+ * Two statements: default_since can only be set while the account becomes the default (migration 0120 trigger).
+ */
+export async function establishPayoutAccount(t: TestContext, accountId: string, hours = 7 * 24) {
+  const at = new Date(t.clock.now().getTime() - hours * 3600_000);
+  await t.adminSql`UPDATE payout_accounts SET is_default = false WHERE id = ${accountId}`;
+  await t.adminSql`UPDATE payout_accounts SET created_at = ${at}, verified_at = ${at}, is_default = true, default_since = ${at} WHERE id = ${accountId}`;
+}
+
+/**
+ * Traveler: sign-up + phone + TRAVELER mode + KYC (admin) + payout account + published verified trip → drain → level 4.
+ * `establishedPayoutAccount`: backdate the payout account past the new-account cooldown (default: fresh, as in real life).
+ */
+export async function onboardTraveler(
+  t: TestContext,
+  admin: Actor,
+  o: { label?: string; trip?: Record<string, unknown>; fullName?: string; establishedPayoutAccount?: boolean } = {},
+) {
   const traveler = await signUpByEmail(t, { label: o.label ?? 'traveler' });
   await verifyPhone(t, traveler);
   const mode = await ok(api(t, traveler, 'POST', '/v1/me/mode', { mode: 'TRAVELER' }));
   expect(mode.activeMode).toBe('TRAVELER');
   await kycApproved(t, traveler, admin, o.fullName ?? 'Budi Santoso');
   const payout = await payoutAccount(t, traveler, (o.fullName ?? 'Budi Santoso').toUpperCase());
+  if (o.establishedPayoutAccount) await establishPayoutAccount(t, payout.id);
   const trip = await publishedTrip(t, traveler, admin, o.trip ?? {});
   await t.drain(); // trip.verified → level recompute (identity consumer)
   const me = await ok(api(t, traveler, 'GET', '/v1/me'));
@@ -540,7 +559,7 @@ export interface World {
 /** One admin (OPERATIONS + COMPLIANCE, TOTP) and one fully onboarded traveler with a published, verified trip. */
 export async function world(t: TestContext, o: { roles?: string[]; trip?: Record<string, unknown> } = {}): Promise<World> {
   const admin = await adminWithMfa(t, o.roles ?? ['OPERATIONS', 'COMPLIANCE']);
-  const { traveler, trip } = await onboardTraveler(t, admin, { trip: { maxItems: 30, capacityKg: 30, ...(o.trip ?? {}) } });
+  const { traveler, trip } = await onboardTraveler(t, admin, { trip: { maxItems: 30, capacityKg: 30, ...(o.trip ?? {}) }, establishedPayoutAccount: true });
   return { admin, traveler, trip };
 }
 

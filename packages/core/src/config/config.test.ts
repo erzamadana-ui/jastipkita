@@ -175,11 +175,22 @@ describe('config keys added in wave A integration', () => {
     for (const k of ['money.policy', 'marketplace.lifetimes', 'support.sla'] as const) {
       expect(validateBusinessConfig(k, DEFAULT_BUSINESS_CONFIG[k]).ok).toBe(true);
     }
+    // CEO decision 2026-10-04: new payout accounts wait 24 h before receiving a payout
+    expect(DEFAULT_BUSINESS_CONFIG['money.policy'].newPayoutAccountCooldownHours).toBe(24);
   });
   it('rejects invalid values', async () => {
     const { validateBusinessConfig } = await import('./index');
     expect(validateBusinessConfig('money.policy', { refundAutoApproveMaxIdr: -1, refundMaxSystemRetries: 3, payoutMaxSystemRetries: 3, payoutDelayHours: 0, pendingPaymentPollMinutes: 15, payoutFeeIdr: 0, payoutMinIdr: 0 }).ok).toBe(false);
     expect(validateBusinessConfig('money.policy', { refundAutoApproveMaxIdr: 1, refundMaxSystemRetries: 3, payoutMaxSystemRetries: 3, payoutDelayHours: 0, pendingPaymentPollMinutes: 15, payoutFeeIdr: 0, payoutMinIdr: 0 }).ok).toBe(true);
+    // newPayoutAccountCooldownHours (2026-10-04): optional for older versions, integer 0..720 when present
+    const mp = { refundAutoApproveMaxIdr: 1, refundMaxSystemRetries: 3, payoutMaxSystemRetries: 3, payoutDelayHours: 0, pendingPaymentPollMinutes: 15, payoutFeeIdr: 0, payoutMinIdr: 0 };
+    expect(validateBusinessConfig('money.policy', { ...mp, newPayoutAccountCooldownHours: 0 }).ok).toBe(true);
+    expect(validateBusinessConfig('money.policy', { ...mp, newPayoutAccountCooldownHours: 72 }).ok).toBe(true);
+    for (const bad of [-1, 721, 1.5, '24', null]) {
+      const r = validateBusinessConfig('money.policy', { ...mp, newPayoutAccountCooldownHours: bad });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.errors.map((e) => e.path)).toContain('money.policy.newPayoutAccountCooldownHours');
+    }
     expect(validateBusinessConfig('marketplace.lifetimes', { requestExpiryDays: 0, offerExpiryHours: 48, unpublishedTripGraceDays: 0 }).ok).toBe(false);
     expect(validateBusinessConfig('marketplace.lifetimes', { requestExpiryDays: 30, offerExpiryHours: 9999, unpublishedTripGraceDays: 0 }).ok).toBe(false);
     expect(validateBusinessConfig('support.sla', { hoursByPriority: { URGENT: 24, HIGH: 12, NORMAL: 24, LOW: 72 } }).ok).toBe(false);

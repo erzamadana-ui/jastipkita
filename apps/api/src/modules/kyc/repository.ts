@@ -50,22 +50,35 @@ export interface PayoutRow {
   verification_status: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'FAILED' | 'NAME_MISMATCH';
   is_default: boolean;
   verified_at: Date | null;
+  default_since: Date | null;
   disabled_at: Date | null;
   created_at: Date;
 }
 
+const payoutCols = (db: Db) => db`id, user_id, bank_code, account_mask, holder_name, verification_status, is_default, verified_at, default_since, disabled_at, created_at`;
+
 export async function listPayoutAccounts(db: Db, userId: string) {
-  return db<PayoutRow[]>`SELECT id, user_id, bank_code, account_mask, holder_name, verification_status, is_default, verified_at, disabled_at, created_at FROM payout_accounts WHERE user_id = ${userId} AND disabled_at IS NULL ORDER BY is_default DESC, created_at`;
+  return db<PayoutRow[]>`SELECT ${payoutCols(db)} FROM payout_accounts WHERE user_id = ${userId} AND disabled_at IS NULL ORDER BY is_default DESC, created_at`;
 }
 
 export async function getPayoutAccount(db: Db, userId: string, id: string, lock = false) {
   const [r] = lock
-    ? await db<PayoutRow[]>`SELECT id, user_id, bank_code, account_mask, holder_name, verification_status, is_default, verified_at, disabled_at, created_at FROM payout_accounts WHERE id = ${id} AND user_id = ${userId} AND disabled_at IS NULL FOR UPDATE`
-    : await db<PayoutRow[]>`SELECT id, user_id, bank_code, account_mask, holder_name, verification_status, is_default, verified_at, disabled_at, created_at FROM payout_accounts WHERE id = ${id} AND user_id = ${userId} AND disabled_at IS NULL`;
+    ? await db<PayoutRow[]>`SELECT ${payoutCols(db)} FROM payout_accounts WHERE id = ${id} AND user_id = ${userId} AND disabled_at IS NULL FOR UPDATE`
+    : await db<PayoutRow[]>`SELECT ${payoutCols(db)} FROM payout_accounts WHERE id = ${id} AND user_id = ${userId} AND disabled_at IS NULL`;
   return r;
 }
 
-export function toPayoutDto(p: PayoutRow) {
+/**
+ * `payoutsFrom`: when the account may first receive a payout (new-account cooldown, money.policy.newPayoutAccountCooldownHours)
+ * while that moment is still in the future; null once it passed (or without cooldown info).
+ */
+export function toPayoutDto(p: PayoutRow, cooldown?: { hours: number; now: Date }) {
+  let payoutsFrom: string | null = null;
+  if (cooldown) {
+    const latest = Math.max(p.created_at.getTime(), p.verified_at?.getTime() ?? 0, p.default_since?.getTime() ?? 0);
+    const ready = latest + Math.max(0, cooldown.hours) * 3600_000;
+    if (ready > cooldown.now.getTime()) payoutsFrom = new Date(ready).toISOString();
+  }
   return {
     id: p.id,
     bankCode: p.bank_code,
@@ -74,6 +87,7 @@ export function toPayoutDto(p: PayoutRow) {
     verificationStatus: p.verification_status,
     isDefault: p.is_default,
     verifiedAt: iso(p.verified_at),
+    payoutsFrom,
     createdAt: iso(p.created_at)!,
   };
 }

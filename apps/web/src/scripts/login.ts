@@ -4,14 +4,16 @@
  *   - versions come from GET /v1/consents/requirements (fallback: docs/legal front-matter embedded at build time);
  *   - 422 CONSENT_REQUIRED → show the consent step (the OTP code is not consumed, the same code is re-submitted);
  *   - 422 CONSENT_VERSION_INVALID → re-fetch requirements once (or use details.allowedVersions) and retry once.
- * Tokens are kept in sessionStorage only.
+ * Session (SEC-14): the access token stays in memory; the refresh token is set by the API as the HttpOnly cookie `jk_rt`
+ * (cookie transport, see src/lib/api.ts) and never reaches this script. Google sign-in sends a fresh nonce (SEC-15).
+ * A visitor who is already signed in (silent restore succeeds) is sent on to `next`.
  */
 import { api, ApiError, describeError, escapeHtml, session } from '../lib/api.ts';
 import { applyAllowedVersions, loadSignupRequirements, readFallback, toConsentInputs, type SignupRequirements } from '../lib/consents.ts';
 import type { LegalType } from '../lib/legal-catalog.ts';
 
 interface Challenge { challengeId: string; expiresAt: string; resendAvailableAt: string }
-interface LoginResult { tokens?: { accessToken: string; accessTokenExpiresAt: string; refreshToken: string }; isNewUser?: boolean }
+interface LoginResult { tokens?: { accessToken: string; accessTokenExpiresAt: string; refreshToken?: string }; isNewUser?: boolean }
 
 const $ = <E extends HTMLElement>(s: string) => document.querySelector<E>(s);
 const req = $<HTMLFormElement>('#otp-request');
@@ -29,7 +31,14 @@ const fallback = readFallback($('#consent-fallback'));
 let challenge: Challenge | null = null;
 let requirements: SignupRequirements | null = null;
 /** What to re-run once consents are given: the OTP verify or a Google credential sign-in. */
-let pending: { kind: 'otp'; code: string } | { kind: 'google'; idToken: string } | null = null;
+let pending: { kind: 'otp'; code: string } | { kind: 'google'; idToken: string; nonce: string } | null = null;
+
+/** 256-bit random nonce (base64url) for Google Identity Services; the API requires the ID token to carry it once. */
+function randomNonce(): string {
+  const b = new Uint8Array(32);
+  crypto.getRandomValues(b);
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 function next(): string {
   const n = new URLSearchParams(location.search).get('next') ?? '';
@@ -85,7 +94,7 @@ async function run(consents?: ReturnType<typeof toConsentInputs>): Promise<Login
       body: { challengeId: challenge?.challengeId, code: pending.code, device: device(), ...(consents ? { consents } : {}) },
     });
   }
-  return api<LoginResult>('/v1/auth/google', { body: { idToken: pending.idToken, device: device(), ...(consents ? { consents } : {}) } });
+  return api<LoginResult>('/v1/auth/google', { body: { idToken: pending.idToken, nonce: pending.nonce, device: device(), ...(consents ? { consents } : {}) } });
 }
 
 function done(res: LoginResult) {
@@ -210,14 +219,21 @@ gBtn?.addEventListener('click', () => {
   s.async = true;
   s.onload = () => {
     const g = (window as unknown as { google?: { accounts: { id: { initialize: (o: unknown) => void; prompt: () => void } } } }).google;
+    const nonce = randomNonce();
     g?.accounts.id.initialize({
       client_id: clientId,
+      nonce, // echoed in the ID token's `nonce` claim; the API checks it and accepts the token only once
       callback: async (resp: { credential: string }) => {
-        pending = { kind: 'google', idToken: resp.credential };
+        pending = { kind: 'google', idToken: resp.credential, nonce };
         await attempt(reqErr);
       },
     });
     g?.accounts.id.prompt();
   };
   document.head.appendChild(s);
+});
+
+// ---- Already signed in? (silent restore with the HttpOnly refresh cookie) ----
+void session.restore().then((signedIn) => {
+  if (signedIn && !pending) location.assign(next());
 });

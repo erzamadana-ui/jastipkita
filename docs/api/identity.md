@@ -13,11 +13,12 @@ All endpoints are under `/v1`, JSON camelCase, errors `{ error: { code, message,
 | Endpoint | Auth | Notes |
 |---|---|---|
 | `POST /auth/otp/request` | public (LOGIN) / 🔒 (VERIFY_*, SENSITIVE_ACTION) | `{channel SMS\|WHATSAPP\|EMAIL, destination, purpose LOGIN\|VERIFY_PHONE\|VERIFY_EMAIL\|SENSITIVE_ACTION, locale?, action?, targetId?}` → `{challengeId, expiresAt, resendAvailableAt, devCode?}` — SENSITIVE_ACTION: see §3.1 |
-| `POST /auth/otp/verify` | public / 🔒 | `{challengeId, code, device?, consents?}` → LOGIN `{purpose, verified, tokens, user, isNewUser}`; VERIFY_* `{purpose, verified, user}` |
-| `POST /auth/google` | public | `{idToken, nonce?, device?, consents?}` → `{tokens, user, isNewUser}` |
-| `POST /auth/apple` | public | `{identityToken, rawNonce?, nonce?, fullName?, device?, consents?}` → `{tokens, user, isNewUser}` (see *Apple nonce*) |
-| `POST /auth/refresh` | public | `{refreshToken}` → `{tokens}` (rotation) |
-| `POST /auth/logout` · `GET /auth/sessions` · `DELETE /auth/sessions/{id}` | 🔒 | |
+| `POST /auth/otp/verify` | public / 🔒 | `{challengeId, code, device?, consents?}` → LOGIN `{purpose, verified, tokens, user, isNewUser}`; VERIFY_* `{purpose, verified, user}` · cookie transport (§3.3) |
+| `POST /auth/google` | public | `{idToken, nonce?, device?, consents?}` → `{tokens, user, isNewUser}` (see *OAuth nonce*) · cookie transport |
+| `POST /auth/apple` | public | `{identityToken, rawNonce (required by default), nonce?, fullName?, device?, consents?}` → `{tokens, user, isNewUser}` (see *OAuth nonce*) · cookie transport |
+| `POST /auth/refresh` | public | `{refreshToken}` → `{tokens}` (rotation); cookie transport: empty body, token from the `jk_rt` cookie |
+| `POST /auth/logout` | 🔒 or refresh token | bearer and/or `{refreshToken?}` (or the `jk_rt` cookie); cookie transport clears the cookie; no credential → 401 |
+| `GET /auth/sessions` · `DELETE /auth/sessions/{id}` | 🔒 | |
 | `POST /auth/mfa/totp/enroll` | 🔒 admin (any role), **fresh OTP-login session ≤ 15 min** | secret returned once; `403 MFA_ENROLL_FRESH_LOGIN_REQUIRED`, `409 MFA_ENROLLMENT_IN_PROGRESS` (other session), `409 MFA_ALREADY_ENROLLED` (reset = maker-checker, §3.2) |
 | `POST /auth/mfa/totp/confirm` · `POST /auth/mfa/verify` | 🔒 | step-up token with `mfa_at`; confirm only from the enrolling session (`403 MFA_ENROLL_SESSION_MISMATCH`, `409 MFA_ENROLLMENT_EXPIRED` after 15 min) |
 | `GET /me` · `PATCH /me` · `POST /me/mode` | 🔒 | `GET /me` returns `roles` + effective `permissions` (from `role_permissions`, `[]` for non-staff; UI hint only) and, for staff, `adminMfaPolicy` |
@@ -29,7 +30,7 @@ All endpoints are under `/v1`, JSON camelCase, errors `{ error: { code, message,
 | `POST /files/uploads` · `POST /files/{id}/complete` · `GET /files/{id}` · `GET /files/{id}/url` · `GET /files/{id}/content` | 🔒 | |
 | `GET /kyc/status` | 🔒 | |
 | `POST /kyc/submissions` | 🔒 K2 | |
-| `GET/POST /kyc/payout-accounts` · `DELETE /kyc/payout-accounts/{id}` · `POST /kyc/payout-accounts/{id}/default` | 🔒 K3 | masked only; POST and `/default` need `stepUp` (§3.1) |
+| `GET/POST /kyc/payout-accounts` · `DELETE /kyc/payout-accounts/{id}` · `POST /kyc/payout-accounts/{id}/default` | 🔒 K3 | masked only; POST and `/default` need `stepUp` (§3.1); `payoutsFrom` = end of the new-account payout cooldown (money.md §5.7), a default change re-points pending payouts |
 | `POST /privacy/export` · `POST /privacy/delete-account` | 🔒 | |
 | `GET /privacy/requests` · `POST /privacy/cancel-deletion` | 🔒 (also PENDING_DELETION) | |
 | `PUT /dev/storage/upload/{token}` · `GET /dev/storage/download/{token}` | none | **development/test only** (404 otherwise), memory storage |
@@ -78,11 +79,11 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  App->>Google/Apple: native sign-in (nonce optional)
-  App->>API: POST /auth/google {idToken} | /auth/apple {identityToken, fullName?}
+  App->>Google/Apple: sign-in with a fresh random nonce (Apple: SHA-256(rawNonce); web Google: GIS nonce)
+  App->>API: POST /auth/google {idToken, nonce?} | /auth/apple {identityToken, rawNonce, fullName?}
   API->>JWKS: verify RS256 (cached remote JWKS; injectable resolver)
-  API->>API: iss, aud ∈ *_CLIENT_IDS, exp (60 s tolerance), nonce, email_verified
-  API->>DB: identity (provider, sub) → user | verified e-mail → link | create (consents, signup risk)
+  API->>API: iss, aud ∈ *_CLIENT_IDS, exp (60 s tolerance), nonce (required per OAUTH_REQUIRE_NONCE), email_verified
+  API->>DB: nonce not used yet? → identity (provider, sub) → user | verified e-mail → link | create (consents, signup risk) → record nonce
   API-->>App: {tokens, user, isNewUser}
 ```
 
@@ -95,7 +96,18 @@ sequenceDiagram
   claim to equal `sha256hex(rawNonce)` (constant-time) — missing/mismatching claim → `401 OAUTH_TOKEN_INVALID {reason: NONCE_MISMATCH}`.
   The legacy `nonce` field (compared verbatim with the claim) still works; when both are sent they must agree. `fullName` is sent by Apple only on the first authorization and is stored
   only then (or if the stored name is empty).
-* Failures → `401 OAUTH_TOKEN_INVALID {reason: AUDIENCE_MISMATCH | TOKEN_EXPIRED | ISSUER_MISMATCH | SIGNATURE_INVALID | NONCE_MISMATCH | CLAIMS_INVALID}`
+* **OAuth nonce (SEC-15)**: env `OAUTH_REQUIRE_NONCE` = csv of providers whose requests **must** carry a nonce (`GOOGLE`, `APPLE`,
+  or `none`; unset/empty = `APPLE`, validated by `env.ts`; production must include `APPLE`). Default rationale: every Apple client
+  (mobile) sends `rawNonce`; the mobile Google flow (`google_sign_in`) does not send a nonce yet, the web does (GIS `nonce`, 256-bit
+  random). A required provider without `rawNonce`/`nonce` → `401 OAUTH_NONCE_REQUIRED {provider}` (before any JWKS call). Google
+  `nonce` is compared verbatim (constant-time) with the claim, min 16 chars. **Single use:** whenever a nonce was verified, the first
+  *successful* sign-in records `(provider, SHA-256(nonce claim))` in `oauth_nonce_uses` until the token expires (migration 0110;
+  concurrent requests with the same nonce are serialized by an advisory lock); presenting the same ID token again →
+  `401 OAUTH_TOKEN_INVALID {reason: NONCE_REUSED}` + `LOGIN_FAILED` (MEDIUM). A `422 CONSENT_REQUIRED` answer does **not** consume the
+  nonce, so the documented "re-submit the same token with consents" flow keeps working. Google tokens without a nonce are not single
+  use (cached mobile tokens keep working) — add `GOOGLE` to `OAUTH_REQUIRE_NONCE` once the mobile app sends a nonce.
+* Failures → `401 OAUTH_TOKEN_INVALID {reason: AUDIENCE_MISMATCH | TOKEN_EXPIRED | ISSUER_MISMATCH | SIGNATURE_INVALID | NONCE_MISMATCH | NONCE_REUSED | CLAIMS_INVALID}`,
+  `401 OAUTH_NONCE_REQUIRED`
   + `LOGIN_FAILED` security event; JWKS outage → `503 OAUTH_UNAVAILABLE`; no client ids configured → `503 OAUTH_NOT_CONFIGURED`.
 * **Account linking**: only when the provider asserts the e-mail is verified **and** our account's e-mail is
   verified (`users.email_verified_at`). E-mail OTP ↔ Google ↔ Apple with the same verified address land in one
@@ -117,10 +129,12 @@ deleted account (`email_suppressions`) → `assessRisk('USER', …)` from `@jast
 
 `legal_documents` holds the versioned texts (published = immutable evidence). `db/seeds/0200_legal_documents.sql` is **generated** from
 `docs/legal/*.md` by `apps/api/scripts/gen-legal-seed.ts` (`--check` in CI; `legal.test.ts` fails when stale): 10 documents (incl.
-`COMMUNITY_GUIDELINES`, migration 0070), version `0.1-template`, locale `id`, published `2026-09-27T00:00:00Z`, TEMPLATE banner kept verbatim.
+`COMMUNITY_GUIDELINES`, migration 0070), version = the document's frontmatter `version` (default `0.1-template`; `COOKIES` is `0.3-template`
+since 2026-10-04 — refresh-token cookie `jk_rt`), locale `id`, published `2026-09-27T00:00:00Z`, TEMPLATE banner kept verbatim. A changed
+template needs a new frontmatter version (published rows are immutable); the web shows the same frontmatter version.
 Consent validation (`me/repository acceptedConsentVersions`) accepts every published, non-retired version of the type — the same list
 `GET /consents/requirements` returns — so an app that shows `version` and submits it never hits `CONSENT_VERSION_INVALID`.
-Because the templates are published, **only `0.1-template` is accepted** for TOS/PRIVACY/KYC/MARKETING/COOKIES/TRAVELER_AGREEMENT/PAYMENT_TERMS
+Because the templates are published, **only `0.1-template` is accepted** for TOS/PRIVACY/KYC/MARKETING/TRAVELER_AGREEMENT/PAYMENT_TERMS (COOKIES: `0.3-template`, plus `0.1-template` in databases seeded before 2026-10-04)
 until Compliance publishes a reviewed version (admin `POST /v1/admin/legal-documents` → publish; `retirePrevious` retires the template).
 
 ## 3. Sessions & MFA
@@ -128,7 +142,10 @@ until Compliance publishes a reviewed version (admin `POST /v1/admin/legal-docum
 * Access JWT HS256 (15 min, `sid` = refresh family, optional `mfa_at`); refresh token opaque 256-bit, SHA-256
   stored, 30 days, single use (`services/session.ts`). Reusing a rotated refresh token revokes the whole family
   and writes `REFRESH_TOKEN_REUSE` (HIGH). Every request re-checks that the family is unrevoked.
-* `GET /auth/sessions` lists families with device/platform; `DELETE /auth/sessions/{id}` and logout revoke.
+* `GET /auth/sessions` lists families with device/platform; `DELETE /auth/sessions/{id}` and logout revoke. Logout accepts the
+  bearer token (verified strictly when sent, as before) and/or a refresh token (`{refreshToken}` body, or the `jk_rt` cookie with
+  cookie transport) — any token of a family identifies it; a token whose session already ended is a no-op (`200`). Security event
+  `LOGOUT {sessionId, via: ACCESS_TOKEN|REFRESH_TOKEN}`.
   Unlinking a device (`DELETE /me/devices/{id}`) also revokes its sessions and push token.
 * **Admin TOTP (RFC 6238, SHA-1, 30 s, ±1 step)**: enroll (admins only; secret AES-GCM encrypted with AAD
   `mfa_factors.secret:<id>`, shown once) → confirm (activates, 10 one-time recovery codes stored as HMAC,
@@ -189,6 +206,44 @@ Security events written: `LOGIN_SUCCESS`, `LOGIN_FAILED`, `USER_REGISTERED`, `SI
 `REFUND_DESTINATION_NAME_MISMATCH`, `UPLOAD_TYPE_MISMATCH`, `MALWARE_UPLOAD`, `SENSITIVE_FILE_VIEWED`,
 `KYC_DUPLICATE_IDENTITY`, `PAYOUT_ACCOUNT_INVALID`, `PAYOUT_ACCOUNT_NAME_MISMATCH`, `DATA_EXPORT_REQUESTED`,
 `ACCOUNT_DELETION_REQUESTED`, `ACCOUNT_DELETION_CANCELLED` (+ `REFRESH_TOKEN_REUSE` from services/session).
+
+### 3.3 Web cookie transport (SEC-14)
+
+The public web stays at `https://antarkitaindonesia.com/jastipkita` (origin shared with other AntarKita pages — ADR 0007), so its
+refresh token must never be readable by JavaScript. Mobile and admin keep the default **body transport** (nothing changes for them).
+Code: `apps/api/src/modules/auth/cookie-transport.ts`; web client: `apps/web/src/lib/api.ts`.
+
+| | Body transport (default) | Cookie transport (`X-JK-Token-Transport: cookie`) |
+|---|---|---|
+| Who | mobile, admin, any non-browser client | public web only (credentialed `fetch`, `credentials: 'include'`) |
+| Login response (`otp/verify` LOGIN, `google`, `apple`) | `tokens.refreshToken` in JSON | `tokens.refreshToken` **omitted**; `Set-Cookie: jk_rt=<token>; Max-Age=<REFRESH_TOKEN_TTL_DAYS×86400>; Path=/v1/auth; HttpOnly; Secure; SameSite=Strict` (no `Domain` → host-only on the API host) |
+| `POST /auth/refresh` | `{refreshToken}` required (400 otherwise) | body optional/empty; token from `jk_rt` (a body token, if sent, wins); cookie rotated and re-set; no cookie → `401 REFRESH_MISSING`; any 401/403 also clears the cookie |
+| `POST /auth/logout` | bearer and/or `{refreshToken}` | bearer and/or the cookie; the cookie is always cleared (`Max-Age=0`) |
+| Header `Cache-Control` on token responses | `no-store` | `no-store` |
+
+* **CSRF / origin rules.** Every cookie-transport request must carry an `Origin` in the web allow-list = origin of `WEB_BASE_URL`
+  plus `CORS_ORIGINS` (exact match; never `*`/`null`; the admin origin is **not** included) — checked before the cookie is read or set
+  and before any side effect (an OTP is not consumed) → `403 ORIGIN_NOT_ALLOWED`. Together with `SameSite=Strict` (never sent on
+  cross-site requests) and the custom header (forces a CORS preflight that only allow-listed origins pass) a third-party site cannot
+  trigger refresh/logout. Without the header the cookie is ignored entirely.
+* **CORS.** `Access-Control-Allow-Credentials: true` only for the web allow-list; admin and other allow-listed origins stay
+  non-credentialed; `X-JK-Token-Transport` is an allowed request header.
+* **Secure attribute.** Omitted only when `APP_ENV` is `development`/`test` (plain `http://localhost`); staging/production always set it.
+* **Same-site requirement.** `SameSite=Strict` cookies flow on credentialed fetches only when the API host is *same-site* with the web:
+  production `https://api.antarkitaindonesia.com` (or `jastipkita-api.antarkitaindonesia.com`) ↔ `https://antarkitaindonesia.com` ✓;
+  local `localhost:8787` ↔ `localhost:4321` ✓. A staging API on `*.workers.dev` is cross-site: the browser drops the cookie, so a web
+  session ends at the next page load (use a custom staging API domain under `antarkitaindonesia.com` to test web account flows).
+* **Rotation & reuse detection are unchanged** (`services/session.ts`). Because the cookie is shared by all tabs of the browser, web
+  clients must serialize refreshes across tabs (the web uses the Web Locks API, lock `jk:auth-refresh`); otherwise two tabs presenting the
+  same token at once would trip reuse detection and revoke the session.
+* **Web session lifecycle.** Access token in memory only; on page load an auth page restores the session silently with
+  `POST /auth/refresh` (no body); a 401 is remembered for the page (anonymous visitors cost one request). Logout = `POST /auth/logout`
+  (bearer if in memory + cookie), then every `jk:*` key is removed from web storage; the pre-2026-10-04 `jk:refresh` sessionStorage key is
+  deleted on every page load. Cookie policy: `docs/legal/cookie-policy.md` 0.3-template.
+* **Residual risk (accepted 2026-10-04).** Script injected into *another* page of `antarkitaindonesia.com` runs in the same origin: it
+  can drive an open JastipKita tab and can call `/auth/refresh` with credentials (allow-listed Origin) to obtain 15-minute access tokens
+  while it runs in the victim's browser. It cannot read or exfiltrate the refresh token. Mitigation outside this repo: CSP across the
+  whole origin + security review of the other AntarKita pages (`docs/security/review-2026-09.md` SEC-14).
 
 ## 4. Files
 
@@ -304,7 +359,8 @@ userId, effectiveAt}` (and `user.anonymized` via the DB). Consumed: `trip.verifi
 ## 8. Environment variables
 
 `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `ACCESS_TOKEN_TTL_SEC`, `REFRESH_TOKEN_TTL_DAYS`, `ADMIN_MFA_STEP_UP_SEC`,
-`DATA_ENCRYPTION_KEYS` (KEKs, first = active), `HMAC_PEPPER`, `GOOGLE_CLIENT_IDS`, `APPLE_CLIENT_IDS`, `OTP_DEV_ECHO`,
+`DATA_ENCRYPTION_KEYS` (KEKs, first = active), `HMAC_PEPPER`, `GOOGLE_CLIENT_IDS`, `APPLE_CLIENT_IDS`, `OAUTH_REQUIRE_NONCE`
+(csv `GOOGLE,APPLE` | `none`, default `APPLE`, §2 *OAuth nonce*), `WEB_BASE_URL` + `CORS_ORIGINS` (web cookie-transport allow-list, §3.3), `OTP_DEV_ECHO`,
 `SMS_PROVIDER` (`log`|`twilio`), `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` (used for SMS and, prefixed,
 WhatsApp), `EMAIL_PROVIDER`/`EMAIL_FROM` (OTP e-mail), `STORAGE_PROVIDER` (`memory`|`s3`), `S3_ENDPOINT`, `S3_REGION`,
 `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `MALWARE_SCAN_PROVIDER` (`none`|`mock`|`clamav-http`),

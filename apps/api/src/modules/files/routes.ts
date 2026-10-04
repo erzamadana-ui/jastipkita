@@ -4,6 +4,7 @@ import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../
 import { getAuth, requireAuth } from '../../middleware/auth';
 import { rateLimit } from '../../middleware/rate-limit';
 import { MemoryStorageProvider } from '../../providers/mock';
+import { FILE_RESPONSE_SECURITY_HEADERS, contentDisposition, servedContentType } from '../../providers/storage/content-safety';
 import { requestMeta } from '../auth/common';
 import { CreateUploadBody, CreateUploadResponse, DownloadResponse, FileSchema } from './schemas';
 import * as svc from './service';
@@ -81,7 +82,10 @@ export function registerFiles(app: App) {
       path: '/v1/files/{id}/content',
       tags,
       summary: 'Stream a file through the API (decrypts encrypted files)',
-      description: 'KYC documents require permission kyc.review; access is audited.',
+      description:
+        'KYC documents require permission kyc.review; access is audited. SEC-18: `Content-Disposition: inline` only for raster images ' +
+        '(jpeg/png/webp/heic), `attachment` for everything else; always `X-Content-Type-Options: nosniff` and ' +
+        "`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox`.",
       security: bearer,
       middleware: [requireAuth] as const,
       request: { params: IdParam },
@@ -93,10 +97,10 @@ export function registerFiles(app: App) {
     async (c) => {
       const f = await svc.streamContent(c.get('deps'), getAuth(c), c.req.valid('param').id, await requestMeta(c));
       return c.body(new Uint8Array(f.body), 200, {
-        'content-type': f.contentType,
+        'content-type': servedContentType(f.contentType),
         'cache-control': 'no-store, private',
-        'x-content-type-options': 'nosniff',
-        'content-disposition': `${f.attachment ? 'attachment' : 'inline'}; filename="${f.filename}"`,
+        ...FILE_RESPONSE_SECURITY_HEADERS,
+        'content-disposition': contentDisposition(f.contentType, f.filename, f.attachment ? 'attachment' : 'inline'),
       }) as never;
     },
   );
@@ -140,10 +144,13 @@ export function registerFiles(app: App) {
       const d = storage.resolveDownload(c.req.valid('param').token);
       const obj = d ? await storage.get(d.key) : null;
       if (!d || !obj) return c.json({ error: { code: 'DOWNLOAD_TOKEN_INVALID', message: 'Tautan unduhan tidak valid atau kedaluwarsa', details: {}, requestId: c.get('requestId') } }, 404) as never;
+      // SEC-18: same contract as a presigned S3/R2 URL — type pinned at presign time (else the stored type), disposition
+      // decided from the presign-time type (unknown → attachment) — plus nosniff/CSP, which S3/R2 cannot add.
       return c.body(new Uint8Array(obj.body), 200, {
-        'content-type': obj.contentType,
+        'content-type': servedContentType(d.contentType ?? obj.contentType),
         'cache-control': 'no-store',
-        ...(d.filename ? { 'content-disposition': `inline; filename="${d.filename}"` } : {}),
+        ...FILE_RESPONSE_SECURITY_HEADERS,
+        'content-disposition': contentDisposition(d.contentType, d.filename, d.disposition),
       }) as never;
     },
   );

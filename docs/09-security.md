@@ -20,18 +20,31 @@
 - TLS di semua hop: Cloudflare edge (HTTPS saja), Neon `sslmode=require` (CI menolak `DATABASE_URL` tanpa itu —
   `scripts/ci/worker-config.ts`), R2/Xendit/Resend via HTTPS.
 - Header API (`apps/api/src/app.ts`): HSTS 2 tahun + preload, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
-  CSP `default-src 'none'; frame-ancestors 'none'`, CORP same-site. CORS: allow-list origin eksak, `credentials: false`.
+  CSP `default-src 'none'; frame-ancestors 'none'`, CORP same-site. CORS: allow-list origin eksak; `credentials: true` **hanya** untuk
+  origin web (`WEB_BASE_URL` + `CORS_ORIGINS`, untuk cookie refresh — SEC-14), origin admin/lain tanpa credentials, tidak pernah `*`.
 - Batas body JSON 1 MB; file diunggah langsung ke storage via URL presigned.
 
 ### 2.2 Identitas & sesi (ADR 0004)
 - Passwordless: OTP disimpan sebagai HMAC, 5 percobaan, kedaluwarsa 5 menit, cooldown & kuota per tujuan/IP berbasis DB
-  (tetap berlaku lintas isolate Worker); Google/Apple ID token diverifikasi (issuer, audience, nonce).
+  (tetap berlaku lintas isolate Worker); Google/Apple ID token diverifikasi (issuer, audience, exp, nonce). Nonce **wajib** per
+  penyedia lewat `OAUTH_REQUIRE_NONCE` (default `APPLE` — semua klien Apple mengirim `rawNonce`; Google opsional sampai mobile
+  mengirim nonce; production wajib memuat `APPLE`); ID token dengan nonce terverifikasi **sekali pakai** (`oauth_nonce_uses`,
+  migrasi 0110) → replay `401 {reason: NONCE_REUSED}` (SEC-15).
 - JWT akses HS256 15 menit; refresh token opak 256-bit (SHA-256 di DB), sekali pakai, rotasi, **deteksi reuse**
   mencabut seluruh keluarga sesi + `security_events` HIGH.
 - Admin: TOTP wajib **ditegakkan di API** — setiap `/v1/admin/*` dan akses file staf butuh sesi yang lolos MFA ≤ 12 jam
   (`refresh_tokens.mfa_verified_at`, bertahan saat refresh) + step-up ≤ 15 menit untuk aksi sensitif, anti-replay per time-step, kunci
   setelah 5 gagal/15 menit (review 2026-09 SEC-01; sebelumnya gerbang login TOTP hanya di UI).
-- Tidak ada cookie → tidak ada permukaan CSRF; token hanya di header `Authorization`.
+- Mobile & admin: token hanya di header `Authorization` / body JSON, tanpa cookie. **Web** (origin bersama `antarkitaindonesia.com`,
+  SEC-14): *cookie transport* opt-in — header `X-JK-Token-Transport: cookie` membuat API menaruh refresh token di cookie `jk_rt`
+  (`HttpOnly; Secure; SameSite=Strict; Path=/v1/auth`, Max-Age = TTL refresh, host-only di host API) dan menghapusnya dari body;
+  `/v1/auth/refresh` & `/v1/auth/logout` membacanya dari cookie. `Secure` hanya dihilangkan bila `APP_ENV` development/test (http
+  lokal). Pertahanan CSRF: SameSite=Strict (tidak pernah dikirim lintas situs) + header kustom (memaksa preflight CORS) + `Origin`
+  wajib ∈ allow-list web setiap kali cookie dipakai/dipasang (`403 ORIGIN_NOT_ALLOWED`); tanpa header itu cookie diabaikan. Access
+  token web hanya di memori; tidak ada token di `localStorage`/`sessionStorage`. Risiko sisa (diterima Commissioner 2026-10-04): XSS
+  di halaman lain origin yang sama masih bisa bertindak sebagai pengguna di peramban korban (memanggil refresh untuk access token
+  15 menit, menyetir tab terbuka) — tetapi tidak bisa mencuri refresh token untuk dipakai offline. Lihat `docs/api/identity.md`
+  §"Web cookie transport", ADR 0007.
 
 ### 2.3 Otorisasi
 - RBAC berbasis permission per route admin (`requirePermission`), peran: SUPER_ADMIN, OPERATIONS, FINANCE,
@@ -99,13 +112,19 @@
   host admin selain MFA aplikasi.
 - Mobile: tidak ada secret di binary; simpan token di secure storage (Keychain/Keystore) — tanggung jawab tim mobile;
   tidak ada SDK pelacakan iklan (App Tracking Transparency tidak diperlukan).
-- Web statis tanpa form yang mengirim data sensitif ke pihak ketiga.
+- Web statis tanpa form yang mengirim data sensitif ke pihak ketiga; CSP ketat via `<meta>` di setiap halaman (diverifikasi
+  `scripts/postbuild.mjs`); sesi web = access token di memori + refresh token di cookie HttpOnly API (di atas); refresh antartab
+  diserialkan dengan Web Locks (satu cookie yang berotasi dipakai bersama semua tab — tanpa itu deteksi reuse akan mengakhiri sesi).
+  **Wajib di luar repo ini:** CSP setara di seluruh origin `antarkitaindonesia.com`, review keamanan halaman AntarKita lain, dan
+  `frame-ancestors 'none'` sebagai header host/CDN (meta diabaikan peramban).
 
 ## 3. Gap & tindakan (diurutkan menurut risiko)
 
 > Review keamanan internal 2026-09 (`docs/security/review-2026-09.md`): 11 temuan diperbaiki (SEC-01…SEC-11); terbuka sebelum
 > production: SEC-12 (pembajakan tujuan refund pasca-ATO, sebelum Iluma aktif), SEC-13 (trust-on-first-use TOTP admin),
-> SEC-14 (web berbagi origin `antarkitaindonesia.com` tanpa CSP). Tabel di bawah = gap infrastruktur/proses yang tetap berlaku.
+> SEC-14 (web berbagi origin `antarkitaindonesia.com`). Update 2026-10-04: SEC-14 **dimitigasi** (keputusan: tetap di `/jastipkita`;
+> CSP + refresh token di cookie HttpOnly SameSite=Strict + access token di memori; risiko sisa XSS same-origin diterima — CSP seluruh
+> origin & review halaman lain tetap wajib), SEC-15 (replay ID token OAuth) **FIXED**. Tabel di bawah = gap infrastruktur/proses yang tetap berlaku.
 | # | Gap | Risiko | Tindakan | PIC | Kapan |
 |---|---|---|---|---|---|
 | 1 | Pemindai malware MOCK | file berbahaya ke staf/pengguna | deploy clamd + shim HTTP; `MALWARE_SCAN_PROVIDER=clamav-http` | Eng + Owner (biaya) | sebelum beta publik |

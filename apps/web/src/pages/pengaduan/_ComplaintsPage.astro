@@ -1,0 +1,192 @@
+---
+/**
+ * Shared body of /pengaduan/ (id) and /en/complaints/ (en) — "Layanan Pengaduan Konsumen" (launch checklist L12,
+ * Permendag 19/2026 · UU 8/1999). Channels from PUBLIC_SUPPORT_* (src/config.ts), SLA from the versioned business
+ * config defaults, government escalation from ./_data.ts (mirrors GET /v1/support/complaint-info).
+ */
+import Icon from '../../components/Icon.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { url } from '../../lib/paths.ts';
+import { CONFIG, formatWhatsapp, whatsappUrl } from '../../config.ts';
+import type { Crumb } from '../../lib/seo.ts';
+import { COMPLAINT_PRIORITY, ESCALATION, LEGAL_BASIS, SLA_HOURS, type Priority } from './_data.ts';
+
+interface Props { lang: 'id' | 'en'; crumbs: Crumb[] }
+const { lang, crumbs } = Astro.props;
+const id = lang === 'id';
+const t = (a: string, b: string) => (id ? a : b);
+const wa = whatsappUrl(t('Halo JastipKita, saya ingin menyampaikan pengaduan.', 'Hello JastipKita, I would like to file a complaint.'));
+const mailto = CONFIG.supportEmail
+  ? `mailto:${CONFIG.supportEmail}?subject=${encodeURIComponent(t('Pengaduan konsumen', 'Consumer complaint'))}`
+  : null;
+const hours = (h: number) => (id ? `${h} jam` : `${h} hours`);
+const accessed = id ? '4 Oktober 2026' : '4 October 2026';
+
+const slaRows: Array<[Priority, string, string]> = [
+  ['URGENT', t('Mendesak', 'Urgent'), t('Ditetapkan tim kami, mis. dugaan penipuan yang sedang berlangsung', 'Set by our team, e.g. suspected fraud in progress')],
+  ['HIGH', t('Tinggi', 'High'), t('Pengaduan konsumen, sengketa, refund, pembayaran', 'Consumer complaints, disputes, refunds, payments')],
+  ['NORMAL', t('Normal', 'Normal'), t('Transaksi, akun, bea cukai, pertanyaan lain', 'Transactions, account, customs, other questions')],
+  ['LOW', t('Rendah', 'Low'), t('Saran & masukan (bila kamu memilih prioritas rendah)', 'Suggestions & feedback (if you choose low priority)')],
+];
+const include: string[] = [
+  t('Nama dan e-mail/nomor HP yang terdaftar di akun JastipKita.', 'Your name and the e-mail/phone registered to your JastipKita account.'),
+  t('Nomor transaksi (JK-…), dispute (DSP-…) atau tiket (TKT-…) bila ada.', 'The transaction (JK-…), dispute (DSP-…) or ticket (TKT-…) number, if any.'),
+  t('Kronologi singkat: apa yang terjadi, kapan, dan dengan siapa.', 'A short timeline: what happened, when and with whom.'),
+  t('Bukti pendukung: tangkapan layar chat di aplikasi, foto barang, bukti pembayaran.', 'Supporting evidence: screenshots of the in-app chat, photos of the item, proof of payment.'),
+  t('Penyelesaian yang kamu harapkan (mis. penjelasan, refund, perbaikan layanan).', 'The resolution you expect (e.g. an explanation, a refund, a service fix).'),
+];
+const steps: Array<[string, string]> = [
+  [t('Kirim pengaduan', 'Submit your complaint'), t('Lewat aplikasi (Bantuan → Pengaduan konsumen) atau kanal di atas. Kamu menerima nomor tiket TKT-… sebagai bukti.', 'In the app (Help → Consumer complaint) or through a channel above. You receive a TKT-… ticket number as proof.')],
+  [t('Respons pertama sesuai target', 'First response within the target'), t(`Pengaduan otomatis berprioritas Tinggi: tim kami merespons paling lambat ${hours(SLA_HOURS[COMPLAINT_PRIORITY])} sejak tiket dibuat.`, `Complaints are automatically High priority: our team responds within ${hours(SLA_HOURS[COMPLAINT_PRIORITY])} of the ticket being created.`)],
+  [t('Penelusuran', 'Investigation'), t('Kami memeriksa data transaksi dan bisa meminta keterangan tambahan — status tiket menjadi "Menunggu balasanmu".', 'We review the transaction data and may ask for more information — the ticket status becomes "Waiting for your reply".')],
+  [t('Jawaban & penyelesaian', 'Answer & resolution'), t('Kami menyampaikan hasil dan tindakan yang diambil. Belum tuntas? Balas tiketnya dan tiket dibuka kembali.', 'We share the outcome and the action taken. Not resolved? Reply to the ticket and it reopens.')],
+  [t('Eskalasi bila perlu', 'Escalate if needed'), t('Bila kamu tidak puas dengan penyelesaian kami, kamu berhak mengadu ke Kementerian Perdagangan atau BPSK (lihat di bawah).', 'If you are not satisfied with our resolution, you may complain to the Ministry of Trade or a BPSK (see below).')],
+];
+---
+<section class="page-hero">
+  <div class="container container-narrow">
+    <Breadcrumbs items={crumbs} lang={lang} />
+    <span class="eyebrow mt-18"><Icon name="scale" size={16} />{t('Perlindungan konsumen', 'Consumer protection')}</span>
+    <h1>{t('Layanan Pengaduan Konsumen', 'Consumer Complaints')}</h1>
+    <p class="lead">{t(
+      'Punya keluhan tentang layanan JastipKita, traveler, atau transaksimu? Sampaikan lewat kanal resmi di bawah. Setiap pengaduan dicatat dengan nomor tiket dan ditangani sesuai target waktu respons yang kami umumkan di halaman ini.',
+      'Unhappy with the JastipKita service, a traveler or your transaction? Tell us through an official channel below. Every complaint gets a ticket number and is handled within the response targets published on this page.',
+    )}</p>
+  </div>
+</section>
+<section class="section-tight pt-0">
+  <div class="container container-narrow stack st-20">
+    <div class="note note-warning" data-prelaunch>
+      <Icon name="info" />
+      <p>
+        <strong>{t('Pra-peluncuran.', 'Pre-launch.')}</strong>{' '}
+        {t(
+          'Aplikasi JastipKita belum diluncurkan dan belum melayani transaksi. Kanal dan target waktu di halaman ini berlaku saat layanan dibuka; nomor WhatsApp dan e-mail resmi diumumkan sebelum peluncuran.',
+          'The JastipKita app has not launched and does not process transactions yet. The channels and targets on this page apply once the service opens; the official WhatsApp number and e-mail will be announced before launch.',
+        )}
+      </p>
+    </div>
+
+    <div>
+      <h2 class="h-card">{t('Kanal pengaduan resmi', 'Official complaint channels')}</h2>
+      <div class="grid grid-3 g-16 mt-12" data-channels>
+        <div class="card">
+          <span class="icon-tile"><Icon name="smartphone" /></span>
+          <h3 class="h-card mt-12">{t('Di aplikasi (disarankan)', 'In the app (recommended)')}</h3>
+          <p class="small muted mt-6">{t('Buka Bantuan → Pengaduan konsumen. Pengaduan langsung tercatat dengan nomor TKT-… dan bisa dikaitkan ke transaksimu.', 'Open Help → Consumer complaint. Your complaint is logged with a TKT-… number and can be linked to your transaction.')}</p>
+        </div>
+        <div class="card" data-channel="whatsapp">
+          <span class="icon-tile"><Icon name="message-circle" /></span>
+          <h3 class="h-card mt-12">WhatsApp</h3>
+          <p class="small mt-6">
+            {wa ? <a href={wa} rel="noopener">{formatWhatsapp(CONFIG.supportWhatsapp)}</a> : <span class="muted">{t('Segera diumumkan sebelum peluncuran', 'To be announced before launch')}</span>}
+          </p>
+        </div>
+        <div class="card" data-channel="email">
+          <span class="icon-tile"><Icon name="mail" /></span>
+          <h3 class="h-card mt-12">E-mail</h3>
+          <p class="small mt-6 break-anywhere">
+            {mailto ? <a href={mailto}>{CONFIG.supportEmail}</a> : <span class="muted">{t('Segera diumumkan sebelum peluncuran', 'To be announced before launch')}</span>}
+          </p>
+        </div>
+      </div>
+      <p class="xsmall muted mt-8">{t(
+        'Kami tidak pernah meminta PIN serah terima, kode OTP, kata sandi, atau nomor kartu — termasuk lewat kanal pengaduan.',
+        'We never ask for your handover PIN, OTP code, password or card number — not even through the complaint channels.',
+      )}</p>
+    </div>
+
+    <div>
+      <h2 class="h-card">{t('Target waktu respons (SLA)', 'Response time targets (SLA)')}</h2>
+      <div class="table-wrap mt-12">
+        <table class="table" data-sla>
+          <thead><tr><th scope="col">{t('Prioritas', 'Priority')}</th><th scope="col">{t('Respons pertama paling lambat', 'First response within')}</th><th scope="col">{t('Untuk', 'Used for')}</th></tr></thead>
+          <tbody>
+            {slaRows.map(([p, label, use]) => (
+              <tr data-priority={p}>
+                <td>{label}{p === COMPLAINT_PRIORITY ? <span class="chip chip-info sla-chip">{t('pengaduan', 'complaints')}</span> : null}</td>
+                <td class="tnum">{hours(SLA_HOURS[p])}</td>
+                <td>{use}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="xsmall muted mt-8">{t(
+        'SLA adalah batas respons pertama dari tim kami sejak tiket dibuat (jam kalender), bukan batas penyelesaian. Angka ini target internal pra-peluncuran (konfigurasi berversi, ditinjau setelah soft launch); target untuk tiketmu selalu tampil di tiket sebagai "Target respons".',
+        'The SLA is the deadline for our team’s first response after the ticket is created (calendar hours), not for the final resolution. These are internal pre-launch targets (versioned configuration, reviewed after the soft launch); the target for your ticket is always shown on the ticket as "Response target".',
+      )}</p>
+    </div>
+
+    <div class="grid grid-2 g-16">
+      <div class="card">
+        <h2 class="h-card">{t('Yang perlu kamu sertakan', 'What to include')}</h2>
+        <ul class="list-check mt-14" role="list">
+          {include.map((line) => <li><Icon name="check" /><span>{line}</span></li>)}
+        </ul>
+      </div>
+      <div class="card">
+        <h2 class="h-card">{t('Alur penanganan', 'How we handle it')}</h2>
+        <ol class="steps mt-14">
+          {steps.map(([title, body]) => <li><div><h3 class="step-title">{title}</h3><p>{body}</p></div></li>)}
+        </ol>
+      </div>
+    </div>
+
+    <div class="note note-neutral" data-dispute>
+      <Icon name="shield-check" />
+      <p>
+        <strong>{t('Masalah dengan barang yang sudah dibayar?', 'A problem with an item you already paid for?')}</strong>{' '}
+        {t(
+          'Barang tidak diterima, tidak sesuai, rusak, atau palsu diselesaikan lewat dispute dari halaman transaksi di aplikasi — dana tetap ditahan SafePay selama dispute berjalan.',
+          'Items not received, not as described, damaged or counterfeit are handled through a dispute from the transaction page in the app — the funds stay held by SafePay while the dispute runs.',
+        )}{' '}
+        <a href={url('/bantuan/cara-membuka-dispute/')}>{t('Cara membuka dispute', 'How to open a dispute (ID)')}</a>
+        {' · '}
+        <a href={url('/app/transactions/')}>{t('Buka transaksi di aplikasi', 'Open your transaction in the app')}</a>
+      </p>
+    </div>
+
+    <div class="card" data-escalation>
+      <span class="icon-tile"><Icon name="landmark" /></span>
+      <h2 class="h-card mt-12">{t('Belum puas? Eskalasi ke pemerintah', 'Not satisfied? Escalate to the government')}</h2>
+      <p class="small muted mt-6">{t(
+        'Kamu berhak menyampaikan pengaduan ke instansi pemerintah yang membidangi perlindungan konsumen:',
+        'You have the right to complain to the government body responsible for consumer protection:',
+      )}</p>
+      <p class="small mt-10"><strong>{ESCALATION.authority}</strong><br />{ESCALATION.unit} — {id ? ESCALATION.ministryId : ESCALATION.ministryEn}</p>
+      <ul class="esc-list small mt-10" role="list">
+        <li><Icon name="message-circle" size={16} />WhatsApp: <a href={ESCALATION.whatsapp.url} rel="noopener">{ESCALATION.whatsapp.display}</a></li>
+        <li><Icon name="mail" size={16} />E-mail: <a class="break-anywhere" href={`mailto:${ESCALATION.email}`}>{ESCALATION.email}</a></li>
+        <li><Icon name="phone" size={16} />{t('Telepon', 'Phone')}: <a href={`tel:${ESCALATION.phone.tel}`}>{ESCALATION.phone.display}</a></li>
+        <li><Icon name="external-link" size={16} />Web: <a href={ESCALATION.website} rel="noopener">ditjenpktn.kemendag.go.id</a></li>
+      </ul>
+      <p class="small mt-10">{t(
+        'Sengketa juga dapat diselesaikan di luar pengadilan melalui Badan Penyelesaian Sengketa Konsumen (BPSK) di kabupaten/kota tempat kamu tinggal, sesuai UU No. 8 Tahun 1999.',
+        'Disputes can also be settled out of court through the Consumer Dispute Settlement Body (BPSK) in your regency/city, under Law No. 8 of 1999.',
+      )}</p>
+      <p class="xsmall muted mt-10">{t(
+        `Data kontak diverifikasi pada ${accessed} dari situs resmi Ditjen PKTN dan dapat berubah sewaktu-waktu — cek kembali di situs resminya.`,
+        `Contact details verified on ${accessed} from the official Ditjen PKTN website and may change at any time — please check the official site.`,
+      )} <a href={ESCALATION.source} rel="noopener">{t('Sumber', 'Source')}</a></p>
+    </div>
+
+    <div>
+      <h2 class="h-card">{t('Dasar hukum', 'Legal basis')}</h2>
+      <ul class="small mt-8 legal-list">{LEGAL_BASIS.map((l) => <li>{l}</li>)}</ul>
+      <p class="xsmall muted mt-8">{t(
+        'Ringkasan ini bukan nasihat hukum. Ketentuan lengkap mengikuti Syarat & Ketentuan JastipKita yang sedang ditinjau konsultan hukum.',
+        'This summary is not legal advice. The full terms follow the JastipKita Terms of Service, which are under legal review.',
+      )} <a href={url('/legal/terms-of-service/')}>{t('Syarat & Ketentuan', 'Terms of Service (ID)')}</a> · <a href={url('/bantuan/')}>{t('Pusat bantuan', 'Help center (ID)')}</a></p>
+    </div>
+  </div>
+</section>
+<style>
+  .step-title { font-size: 1rem; font-weight: 600; line-height: 1.4; margin-top: 4px; }
+  .sla-chip { margin-left: 8px; }
+  .break-anywhere { overflow-wrap: anywhere; }
+  .esc-list { list-style: none; padding: 0; display: grid; gap: 8px; }
+  .esc-list li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .esc-list :global(svg) { color: var(--jk-color-secondary); flex: none; }
+  .legal-list { padding-left: 1.2em; display: grid; gap: 4px; }
+</style>

@@ -14,6 +14,7 @@ import { assertCategories, assertDestinationCountry, assertOriginCountry } from 
 import { addDaysIso, ceilKg, decodeKeyset, encodeKeyset, badCursor, iso, isIsoDate, num, tx, wibDate } from '../catalog/shared';
 import { type PublicProfileDto, loadUserSignals, publicProfile } from '../matching/signals';
 import { closePendingOffers } from '../offers/lifecycle';
+import { coarsenDiscoveryBounds, dateWindow, isoWeekStart, type DatePrecision, type DateWindow } from './date-precision';
 import * as repo from './repository';
 import type { FeeType, TripRow, TripStatus } from './repository';
 
@@ -68,8 +69,12 @@ export interface TripPublicDto {
   originCity: string;
   destinationCountry: string;
   destinationCity: string;
+  /** DAY: exact date · WEEK (anonymous, SEC-19): Monday of the ISO week — use the windows */
   departureDate: string;
   arrivalDate: string;
+  datePrecision: DatePrecision;
+  departureWindow: DateWindow;
+  arrivalWindow: DateWindow;
   capacityRemainingKg: number;
   itemsRemaining: number | null;
   fee: TripFeeDto;
@@ -160,7 +165,13 @@ async function ownerDto(db: Db, deps: Deps, t: TripRow): Promise<TripOwnerDto> {
   };
 }
 
-export function publicTripDto(t: TripRow, traveler: PublicProfileDto): TripPublicDto {
+/**
+ * Public trip view. `precision` WEEK (anonymous visitors, SEC-19) replaces both dates by their ISO-week window and
+ * sets departureDate / arrivalDate to the window start; DAY (signed-in users) keeps exact dates.
+ */
+export function publicTripDto(t: TripRow, traveler: PublicProfileDto, precision: DatePrecision = 'DAY'): TripPublicDto {
+  const departureWindow = dateWindow(t.departure_date, precision);
+  const arrivalWindow = dateWindow(t.arrival_date, precision);
   return {
     id: t.id,
     status: t.status,
@@ -168,8 +179,11 @@ export function publicTripDto(t: TripRow, traveler: PublicProfileDto): TripPubli
     originCity: t.origin_city,
     destinationCountry: t.destination_country,
     destinationCity: t.destination_city,
-    departureDate: t.departure_date,
-    arrivalDate: t.arrival_date,
+    departureDate: departureWindow.from,
+    arrivalDate: arrivalWindow.from,
+    datePrecision: precision,
+    departureWindow,
+    arrivalWindow,
     capacityRemainingKg: effectiveRemainingKg(t),
     itemsRemaining: t.max_items === null ? null : Math.max(0, t.max_items - t.reserved_items),
     fee: feeDto(t),
@@ -179,9 +193,14 @@ export function publicTripDto(t: TripRow, traveler: PublicProfileDto): TripPubli
   };
 }
 
-export async function publicTrips(db: Db, rows: TripRow[]): Promise<TripPublicDto[]> {
+export async function publicTrips(db: Db, rows: TripRow[], precision: DatePrecision = 'DAY'): Promise<TripPublicDto[]> {
   const signals = await loadUserSignals(db, rows.map((r) => r.traveler_id));
-  return rows.map((r) => publicTripDto(r, publicProfile(signals.get(r.traveler_id), r.traveler_id, 'TRAVELER')));
+  return rows.map((r) => publicTripDto(r, publicProfile(signals.get(r.traveler_id), r.traveler_id, 'TRAVELER'), precision));
+}
+
+/** SEC-19: exact dates only for signed-in (ACTIVE) users; anonymous visitors get ISO-week precision. */
+export function datePrecisionFor(auth: AuthContext | undefined): DatePrecision {
+  return auth && auth.status === 'ACTIVE' ? 'DAY' : 'WEEK';
 }
 
 // ------------------------------------------------------------------------------------ validation
@@ -571,7 +590,7 @@ export async function getTripView(deps: Deps, auth: AuthContext | undefined, id:
   if (!trip) throw Errors.notFound('Trip', 'TRIP_NOT_FOUND');
   if (auth && auth.userId === trip.traveler_id) return { view: 'OWNER', trip: await ownerDto(deps.sql, deps, trip) };
   if (!PUBLIC_TRIP_STATUSES.includes(trip.status)) throw Errors.notFound('Trip', 'TRIP_NOT_FOUND');
-  const [dto] = await publicTrips(deps.sql, [trip]);
+  const [dto] = await publicTrips(deps.sql, [trip], datePrecisionFor(auth));
   return { view: 'PUBLIC', trip: dto! };
 }
 
@@ -612,23 +631,29 @@ export interface DiscoveryQuery {
   verifiedOnly?: boolean | undefined;
 }
 
-/** Public discovery: ACTIVE, not yet departed, traveler account ACTIVE. No PII in the output. */
-export async function discoverTrips(deps: Deps, q: DiscoveryQuery): Promise<{ data: TripPublicDto[]; nextCursor: string | null }> {
+/**
+ * Public discovery: ACTIVE, not yet departed, traveler account ACTIVE. No PII in the output.
+ * SEC-19 — `precision` WEEK (anonymous): dates coarsened to ISO weeks, date filters evaluated per whole week, results
+ * ordered by (week, id) so the order inside a week reveals nothing; cursors are precision-specific.
+ */
+export async function discoverTrips(deps: Deps, q: DiscoveryQuery, precision: DatePrecision = 'DAY'): Promise<{ data: TripPublicDto[]; nextCursor: string | null }> {
   const cur = decodeKeyset(q.cursor);
   if (q.cursor && (!cur || !isIsoDate(cur.t))) throw badCursor();
   for (const [k, v] of Object.entries({ departureFrom: q.departureFrom, departureTo: q.departureTo, arrivalBy: q.arrivalBy })) {
     if (v !== undefined && !isIsoDate(v)) throw Errors.validation({ issues: [{ path: k, code: 'invalid_date', message: 'Format tanggal YYYY-MM-DD' }] });
   }
   const today = wibDate(deps.clock.now());
-  const from = q.departureFrom && q.departureFrom > today ? q.departureFrom : today;
+  const b = coarsenDiscoveryBounds({ today, departureFrom: q.departureFrom, departureTo: q.departureTo, arrivalBy: q.arrivalBy }, precision);
+  const week = precision === 'WEEK';
   const db = deps.sql;
+  const sortKey = week ? db`date_trunc('week', t.departure_date)::date` : db`t.departure_date`;
   const rows = await db<repo.TripRow[]>`
     SELECT ${repo.tripCols(db)} FROM trips t
       JOIN users u ON u.id = t.traveler_id AND u.status = 'ACTIVE'
      WHERE t.status = 'ACTIVE'
-       AND t.departure_date >= ${from}::date
-       ${q.departureTo ? db`AND t.departure_date <= ${q.departureTo}::date` : db``}
-       ${q.arrivalBy ? db`AND t.arrival_date <= ${q.arrivalBy}::date` : db``}
+       AND t.departure_date >= ${b.from}::date
+       ${b.departureTo ? db`AND t.departure_date <= ${b.departureTo}::date` : db``}
+       ${b.arrivalBy ? db`AND t.arrival_date <= ${b.arrivalBy}::date` : db``}
        ${q.originCountry ? db`AND t.origin_country = ${q.originCountry}` : db``}
        ${q.originCity ? db`AND lower(t.origin_city) = lower(${q.originCity.trim()})` : db``}
        ${q.destinationCountry ? db`AND t.destination_country = ${q.destinationCountry}` : db``}
@@ -636,11 +661,12 @@ export async function discoverTrips(deps: Deps, q: DiscoveryQuery): Promise<{ da
        ${q.categoryCode ? db`AND NOT (${q.categoryCode} = ANY (t.excluded_categories))` : db``}
        ${q.minCapacityKg !== undefined ? db`AND (t.capacity_kg - t.reserved_kg) >= ${q.minCapacityKg}` : db``}
        ${q.verifiedOnly ? db`AND t.verified_at IS NOT NULL` : db``}
-       ${cur ? db`AND (t.departure_date, t.id) > (${cur.t}::date, ${cur.id}::uuid)` : db``}
-     ORDER BY t.departure_date, t.id
+       ${cur ? db`AND (${sortKey}, t.id) > (${cur.t}::date, ${cur.id}::uuid)` : db``}
+     ORDER BY ${sortKey}, t.id
      LIMIT ${q.limit + 1}`;
   const page = rows.slice(0, q.limit);
-  const data = await publicTrips(db, page);
+  const data = await publicTrips(db, page, precision);
   const last = page[page.length - 1];
-  return { data, nextCursor: rows.length > q.limit && last ? encodeKeyset(last.departure_date, last.id) : null };
+  const lastKey = last ? (week ? isoWeekStart(last.departure_date) : last.departure_date) : null;
+  return { data, nextCursor: rows.length > q.limit && last && lastKey ? encodeKeyset(lastKey, last.id) : null };
 }

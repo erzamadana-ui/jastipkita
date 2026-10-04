@@ -1,0 +1,505 @@
+# JastipKita — alerting as code (provider-neutral). Launch checklist T6. How to wire it: infra/monitoring/README.md.
+#
+# Nothing in this file is connected to a paging service yet (status: NOT_WIRED). In-app alerts are evaluated by the API
+# itself every 5 min (status: IN_APP) and shown in Admin → DB & Infra Center; reaching a phone needs one of the wiring
+# options in the README. Never mark an alert WIRED until a test page has actually been received and recorded.
+#
+# Schema (one key per line inside each alert; checked by apps/api/src/modules/infra/monitoring.test.ts):
+#   id         unique, UPPER_SNAKE
+#   severity   CRITICAL | HIGH | MEDIUM | from_tier (in-app alerts: the tier reached decides, see thresholds)
+#   source     type: http_check | log | in_app_alert
+#                http_check   url (+ path), expect (status / body keyword)
+#                log          event: exact `msg` of the JSON log line (src/lib/logger.ts → {ts, level, msg, ...fields}),
+#                             filter: extra field conditions
+#                in_app_alert code: ALERT_THRESHOLDS key (apps/api/src/modules/admin/system/service.ts), mirrored below
+#   condition  human-readable rule; threshold + window make it executable
+#   runbook    repo path (+ optional #anchor) of the first-response procedure
+#   status     NOT_WIRED | IN_APP | WIRED
+#
+# Thresholds of log/http alerts are PROPOSALS for launch volume (< 1k transactions/month, docs/06-observability.md §3);
+# in-app thresholds are the code's (ALERT_THRESHOLDS is the single source of truth — the test fails if they drift).
+version: 1
+
+severity_policy:
+  CRITICAL: "page on-call now, 24/7 (push/phone); acknowledge ≤ 15 min"
+  HIGH: "page 07:00–23:00 WIB, otherwise first thing in the morning; acknowledge ≤ 1 h"
+  MEDIUM: "chat channel / ticket; handle next business day"
+
+hosts:
+  production: "https://jastipkita-api.antarkitaindonesia.com"
+  staging: "https://jastipkita-api-staging.antarkitaindonesia.com"
+
+alerts:
+  # ------------------------------------------------------------------ external HTTP checks (free uptime checker)
+  - id: API_DOWN
+    severity: CRITICAL
+    source:
+      type: http_check
+      path: /v1/health
+      expect: 'HTTP 200 and body contains "status":"ok"'
+    condition: "status != 200, timeout, or body without \"status\":\"ok\" (DB probe failed → \"degraded\" with HTTP 200)"
+    threshold: 2 consecutive failed checks
+    window: check every 1–5 min from ≥ 2 regions
+    runbook: docs/runbooks/db-restore.md
+    status: NOT_WIRED
+
+  - id: API_SLOW
+    severity: MEDIUM
+    source:
+      type: http_check
+      path: /v1/health
+      expect: response time < 2000 ms
+    condition: response time of /v1/health ≥ 2000 ms
+    threshold: 3 consecutive checks
+    window: check every 5 min
+    runbook: docs/06-observability.md
+    status: NOT_WIRED
+
+  - id: WORKER_STALE
+    severity: HIGH
+    source:
+      type: http_check
+      path: /v1/health/worker
+      expect: HTTP 200 (503 = no scheduled job finished within 3 cron intervals)
+    condition: "HTTP 503: Cron Trigger / worker loop stopped — this also silences every in-app alert below"
+    threshold: 2 consecutive failed checks
+    window: check every 5 min (production cron */5 → stale after 15 min; staging */15 → 45 min)
+    runbook: docs/06-observability.md
+    status: NOT_WIRED
+
+  - id: INTEGRATION_NOT_LIVE
+    severity: HIGH
+    source:
+      type: http_check
+      path: /v1/health
+      expect: 'production body contains "payments":"LIVE"'
+    condition: production reports payments MOCK/SANDBOX (wrong secrets deployed)
+    threshold: 1 check
+    window: check every 15 min (production only)
+    runbook: docs/runbooks/payment-incident.md
+    status: NOT_WIRED
+
+  # ------------------------------------------------------------------ log-based (Workers Logs JSON lines)
+  - id: HTTP_5XX_RATE
+    severity: HIGH
+    source:
+      type: log
+      event: "http.request"
+      filter: status >= 500
+    condition: 5xx ÷ all http.request lines > 2 % (only with ≥ 50 requests in the window)
+    threshold: "> 0.02"
+    window: 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: NOT_WIRED
+
+  - id: HTTP_UNHANDLED_ERROR
+    severity: HIGH
+    source:
+      type: log
+      event: "http.unhandled_error"
+    condition: any unhandled exception (500 INTERNAL)
+    threshold: ">= 3"
+    window: 10 min
+    runbook: docs/runbooks/security-incident.md
+    status: NOT_WIRED
+
+  - id: HTTP_LATENCY_P95
+    severity: MEDIUM
+    source:
+      type: log
+      event: "http.request"
+      filter: path != /v1/health and path != /v1/health/worker
+    condition: p95 of field `ms` > 1500
+    threshold: "> 1500 ms"
+    window: 10 min (only with ≥ 100 requests)
+    runbook: docs/06-observability.md
+    status: NOT_WIRED
+
+  - id: PAYMENT_AMOUNT_MISMATCH
+    severity: CRITICAL
+    source:
+      type: log
+      event: "ALERT payment.amount_mismatch"
+    condition: provider amount ≠ expected amount for a payment (payment is NOT secured; customer money involved)
+    threshold: ">= 1"
+    window: 1 min
+    runbook: docs/runbooks/payment-incident.md
+    status: NOT_WIRED
+
+  - id: PAYMENT_WEBHOOK_NOT_CONFIRMED
+    severity: CRITICAL
+    source:
+      type: log
+      event: "ALERT payment.webhook_not_confirmed_by_provider"
+    condition: a webhook claimed a payment the provider API does not confirm (forged or replayed webhook)
+    threshold: ">= 1"
+    window: 1 min
+    runbook: docs/runbooks/security-incident.md
+    status: NOT_WIRED
+
+  - id: RECONCILIATION_MISMATCH
+    severity: HIGH
+    source:
+      type: log
+      event: "ALERT reconciliation.mismatch"
+    condition: daily reconciliation found ledger ≠ provider differences
+    threshold: ">= 1"
+    window: 24 h
+    runbook: docs/runbooks/payment-incident.md
+    status: NOT_WIRED
+
+  - id: TRIP_CANCELLED_WITH_PURCHASED_TX
+    severity: MEDIUM
+    source:
+      type: log
+      event: "ALERT trip.cancelled_with_purchased_transaction"
+    condition: a traveler cancelled a trip after buying goods for a buyer (manual follow-up)
+    threshold: ">= 1"
+    window: 1 h
+    runbook: docs/runbooks/dispute-sla-breach.md
+    status: NOT_WIRED
+
+  - id: AUDIT_CHAIN_BROKEN_LOG
+    severity: CRITICAL
+    source:
+      type: log
+      event: "admin.audit_chain_broken"
+    condition: nightly verify_audit_chain() failed
+    threshold: ">= 1"
+    window: 24 h
+    runbook: docs/runbooks/security-incident.md
+    status: NOT_WIRED
+
+  - id: AUDIT_CHECKPOINT_REFUSED
+    severity: CRITICAL
+    source:
+      type: log
+      event: "ALERT audit.checkpoint_refused"
+    condition: daily audit checkpoint refused (chain / previous WORM object does not match) — T12
+    threshold: ">= 1"
+    window: 24 h
+    runbook: docs/runbooks/security-incident.md
+    status: NOT_WIRED
+
+  - id: IN_APP_ALERT_OPENED
+    severity: from_tier
+    source:
+      type: log
+      event: "ALERT ops.alert_opened"
+      filter: "fields: code, severity, value, threshold (logged once per opening, after COMMIT)"
+    condition: any in-app alert below opened — route by its `severity` field (CRITICAL/HIGH = level error, MEDIUM = warn)
+    threshold: ">= 1"
+    window: 5 min
+    runbook: docs/06-observability.md
+    status: NOT_WIRED
+
+  - id: WORKER_TICK_FAILED
+    severity: HIGH
+    source:
+      type: log
+      event: "worker.tick_failed"
+    condition: a whole worker tick threw (DB unreachable, bug before any job ran)
+    threshold: ">= 2"
+    window: 15 min
+    runbook: docs/06-observability.md
+    status: NOT_WIRED
+
+  - id: JOB_FAILURES
+    severity: MEDIUM
+    source:
+      type: log
+      event: "job.failed"
+    condition: background job attempts failing (retried with backoff; DEAD is covered by JOBS_DEAD)
+    threshold: ">= 10"
+    window: 15 min
+    runbook: docs/06-observability.md
+    status: NOT_WIRED
+
+  - id: WEBHOOK_INVALID_TOKEN_BURST
+    severity: HIGH
+    source:
+      type: log
+      event: "webhook.invalid_token"
+    condition: burst of webhook calls with a wrong x-callback-token (probing / forged webhooks / rotated token not deployed)
+    threshold: ">= 10"
+    window: 10 min
+    runbook: docs/runbooks/secret-rotation.md#4-xendit-secret-key--webhook-token
+    status: NOT_WIRED
+
+  - id: WEBHOOK_PROCESSING_FAILED
+    severity: HIGH
+    source:
+      type: log
+      event: "webhook.processing_failed"
+    condition: a verified payment webhook failed to process (provider will retry; payment may stay unsecured)
+    threshold: ">= 1"
+    window: 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: NOT_WIRED
+
+  - id: OTP_DELIVERY_FAILED
+    severity: HIGH
+    source:
+      type: log
+      event: "otp.delivery_failed"
+    condition: users cannot receive login codes (e-mail/SMS provider down or key revoked)
+    threshold: ">= 5"
+    window: 15 min
+    runbook: docs/runbooks/secret-rotation.md#6-resend-twilio-fcm
+    status: NOT_WIRED
+
+  - id: OUTBOX_HANDLER_FAILURES
+    severity: MEDIUM
+    source:
+      type: log
+      event: "outbox.handler_failed"
+    condition: outbox consumers failing (notifications, protection binding, cancellations)
+    threshold: ">= 20"
+    window: 15 min
+    runbook: docs/06-observability.md
+    status: NOT_WIRED
+
+  - id: FILE_SCAN_ERROR
+    severity: MEDIUM
+    source:
+      type: log
+      event: "files.scan_error"
+    condition: malware scanner unreachable/erroring (uploads stay quarantined)
+    threshold: ">= 1"
+    window: 15 min
+    runbook: docs/runbooks/security-incident.md
+    status: NOT_WIRED
+
+  # ------------------------------------------------------------------ in-app alerts (admin.alerts_evaluate, every 5 min)
+  # Visible in Admin (GET /v1/admin/system/alerts); HIGH/CRITICAL openings also write security_events OPS_ALERT and every
+  # opening logs "ALERT ops.alert_opened" (IN_APP_ALERT_OPENED above) — that log line is the hook for external paging.
+  - id: OUTBOX_BACKLOG
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: OUTBOX_BACKLOG
+    thresholds: { medium: 100, high: 500 }
+    condition: unpublished outbox events
+    window: evaluated every 5 min
+    runbook: docs/06-observability.md
+    status: IN_APP
+
+  - id: OUTBOX_STALE
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: OUTBOX_STALE
+    thresholds: { medium: 300, high: 900 }
+    condition: age (s) of the oldest unpublished outbox event — outbox lag
+    window: evaluated every 5 min
+    runbook: docs/06-observability.md
+    status: IN_APP
+
+  - id: JOBS_DEAD
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: JOBS_DEAD
+    thresholds: { high: 1 }
+    condition: jobs DEAD (max attempts) in 24 h
+    window: evaluated every 5 min
+    runbook: docs/06-observability.md
+    status: IN_APP
+
+  - id: JOBS_OVERDUE
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: JOBS_OVERDUE
+    thresholds: { medium: 20 }
+    condition: QUEUED jobs more than 10 min overdue — job queue
+    window: evaluated every 5 min
+    runbook: docs/06-observability.md
+    status: IN_APP
+
+  - id: JOBS_LEASE_EXPIRED
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: JOBS_LEASE_EXPIRED
+    thresholds: { medium: 1 }
+    condition: RUNNING jobs with an expired lease (crashed worker)
+    window: evaluated every 5 min
+    runbook: docs/06-observability.md
+    status: IN_APP
+
+  - id: WEBHOOK_FAILURES
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: WEBHOOK_FAILURES
+    thresholds: { medium: 1, high: 5 }
+    condition: payment webhooks with processing_error in 24 h
+    window: evaluated every 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: IN_APP
+
+  - id: WEBHOOK_BACKLOG
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: WEBHOOK_BACKLOG
+    thresholds: { high: 1 }
+    condition: payment webhooks unprocessed for more than 10 min
+    window: evaluated every 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: IN_APP
+
+  - id: WEBHOOK_SIGNATURE_INVALID
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: WEBHOOK_SIGNATURE_INVALID
+    thresholds: { medium: 3, high: 10 }
+    condition: webhooks with an invalid token in 24 h
+    window: evaluated every 5 min
+    runbook: docs/runbooks/security-incident.md
+    status: IN_APP
+
+  - id: REFUND_FAILURES
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: REFUND_FAILURES
+    thresholds: { high: 1 }
+    condition: refunds in FAILED
+    window: evaluated every 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: IN_APP
+
+  - id: REFUND_STUCK
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: REFUND_STUCK
+    thresholds: { medium: 1 }
+    condition: refunds PROCESSING for more than 1 h
+    window: evaluated every 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: IN_APP
+
+  - id: REFUND_APPROVAL_BACKLOG
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: REFUND_APPROVAL_BACKLOG
+    thresholds: { medium: 1 }
+    condition: refunds PENDING_APPROVAL for more than 24 h
+    window: evaluated every 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: IN_APP
+
+  - id: PAYOUT_FAILURES
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: PAYOUT_FAILURES
+    thresholds: { high: 1 }
+    condition: payouts in FAILED
+    window: evaluated every 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: IN_APP
+
+  - id: PAYOUT_STUCK
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: PAYOUT_STUCK
+    thresholds: { medium: 1 }
+    condition: payouts PROCESSING for more than 1 h
+    window: evaluated every 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: IN_APP
+
+  - id: PAYOUT_HOLD_AGING
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: PAYOUT_HOLD_AGING
+    thresholds: { medium: 1 }
+    condition: payouts ON_HOLD for more than 48 h
+    window: evaluated every 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: IN_APP
+
+  - id: NOTIFICATION_FAILURE_RATE
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: NOTIFICATION_FAILURE_RATE
+    thresholds: { medium: 0.05, high: 0.2, min_sample: 20 }
+    condition: failed ÷ (sent + failed) notification deliveries in 24 h (strict >)
+    window: evaluated every 5 min
+    runbook: docs/runbooks/secret-rotation.md#6-resend-twilio-fcm
+    status: IN_APP
+
+  - id: SECURITY_EVENTS_HIGH
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: SECURITY_EVENTS_HIGH
+    thresholds: { medium: 1, high: 10 }
+    condition: HIGH/CRITICAL security events in 24 h (any CRITICAL → CRITICAL; OPS_ALERT excluded)
+    window: evaluated every 5 min
+    runbook: docs/runbooks/security-incident.md
+    status: IN_APP
+
+  - id: AUDIT_CHAIN_BROKEN
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: AUDIT_CHAIN_BROKEN
+    thresholds: { critical: 1 }
+    condition: latest nightly verify_audit_chain() is DOWN
+    window: evaluated every 5 min
+    runbook: docs/runbooks/security-incident.md
+    status: IN_APP
+
+  - id: DB_CONNECTIONS
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: DB_CONNECTIONS
+    thresholds: { medium: 0.7, high: 0.85 }
+    condition: connections ÷ max_connections (strict >)
+    window: evaluated every 5 min
+    runbook: docs/runbooks/db-restore.md
+    status: IN_APP
+
+  - id: DISPUTE_SLA_BREACHED
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: DISPUTE_SLA_BREACHED
+    thresholds: { medium: 1 }
+    condition: open disputes with an SLA breach flag
+    window: evaluated every 5 min
+    runbook: docs/runbooks/dispute-sla-breach.md
+    status: IN_APP
+
+  - id: SUPPORT_SLA_BREACHED
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: SUPPORT_SLA_BREACHED
+    thresholds: { medium: 5 }
+    condition: open tickets past sla_due_at without a first response
+    window: evaluated every 5 min
+    runbook: docs/runbooks/dispute-sla-breach.md
+    status: IN_APP
+
+  - id: INTEGRATION_NOT_LIVE_IN_PRODUCTION
+    severity: from_tier
+    source:
+      type: in_app_alert
+      code: INTEGRATION_NOT_LIVE_IN_PRODUCTION
+    thresholds: { high: 1 }
+    condition: APP_ENV=production while an integration is MOCK/SANDBOX
+    window: evaluated every 5 min
+    runbook: docs/runbooks/payment-incident.md
+    status: IN_APP

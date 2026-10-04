@@ -199,7 +199,7 @@ export class MemoryStorageProvider implements StorageProvider {
   readonly mode = 'MOCK' as const;
   readonly objects = new Map<string, { body: Uint8Array; contentType: string }>();
   private readonly pending = new Map<string, PendingUpload>();
-  private readonly downloads = new Map<string, { key: string; expiresAt: Date; filename?: string }>();
+  private readonly downloads = new Map<string, { key: string; expiresAt: Date; filename?: string; contentType?: string; disposition?: 'inline' | 'attachment' }>();
 
   constructor(private readonly apiBaseUrl: string) {}
 
@@ -222,16 +222,24 @@ export class MemoryStorageProvider implements StorageProvider {
     return { ok: true, key: p.key };
   }
 
-  async presignDownload(input: { key: string; expiresSec: number; filename?: string }): Promise<string> {
+  /** Same contract as S3 (SEC-18): the dev download route serves the pinned type/disposition + nosniff/CSP. */
+  async presignDownload(input: { key: string; expiresSec: number; filename?: string; contentType?: string; disposition?: 'inline' | 'attachment' }): Promise<string> {
     const token = randomToken(24);
-    this.downloads.set(token, { key: input.key, expiresAt: new Date(Date.now() + input.expiresSec * 1000), ...(input.filename ? { filename: input.filename } : {}) });
+    this.downloads.set(token, {
+      key: input.key,
+      expiresAt: new Date(Date.now() + input.expiresSec * 1000),
+      ...(input.filename ? { filename: input.filename } : {}),
+      ...(input.contentType ? { contentType: input.contentType } : {}),
+      ...(input.disposition ? { disposition: input.disposition } : {}),
+    });
     return `${this.apiBaseUrl}/v1/dev/storage/download/${token}`;
   }
 
-  resolveDownload(token: string): { key: string; filename?: string } | null {
+  resolveDownload(token: string): { key: string; filename?: string; contentType?: string; disposition?: 'inline' | 'attachment' } | null {
     const d = this.downloads.get(token);
     if (!d || d.expiresAt.getTime() < Date.now()) return null;
-    return { key: d.key, ...(d.filename ? { filename: d.filename } : {}) };
+    const { expiresAt: _e, ...rest } = d;
+    return rest;
   }
 
   async put(key: string, body: Uint8Array, contentType: string) {

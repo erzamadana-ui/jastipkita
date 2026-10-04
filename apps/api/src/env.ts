@@ -49,6 +49,23 @@ export const EnvSchema = z
 
     GOOGLE_CLIENT_IDS: csv,
     APPLE_CLIENT_IDS: csv,
+    /**
+     * SEC-15: providers whose ID tokens MUST carry a nonce (csv of GOOGLE, APPLE; `none` = no provider).
+     * Unset/empty = default `APPLE` (every Apple client sends rawNonce; mobile Google does not send a nonce yet).
+     * Production must keep APPLE.
+     */
+    OAUTH_REQUIRE_NONCE: z
+      .string()
+      .default('')
+      .refine((v) => /^\s*(none|((GOOGLE|APPLE)\s*(,\s*(GOOGLE|APPLE)\s*)*))?\s*$/i.test(v), {
+        message: 'OAUTH_REQUIRE_NONCE must be a csv of GOOGLE, APPLE (or `none`)',
+      })
+      .transform((v): ('GOOGLE' | 'APPLE')[] => {
+        const t = v.trim().toUpperCase();
+        if (!t) return ['APPLE'];
+        if (t === 'NONE') return [];
+        return [...new Set(t.split(',').map((s) => s.trim() as 'GOOGLE' | 'APPLE'))];
+      }),
     OTP_DEV_ECHO: bool.default(false),
 
     PAYMENT_PROVIDER: z.enum(['mock', 'xendit']).default('mock'),
@@ -101,6 +118,21 @@ export const EnvSchema = z
      */
     SETTLEMENT_SECRETS_JSON: z.string().default('{}'),
 
+    /**
+     * Published consumer-complaint channels (GET /v1/support/complaint-info, Permendag 19/2026). Public values, not
+     * secrets. Empty → the API answers null and clients show "segera diumumkan". WhatsApp: digits, e.g. 628xxxxxxxxxx.
+     */
+    SUPPORT_WHATSAPP: z
+      .string()
+      .trim()
+      .default('')
+      .refine((v) => v === '' || /^\+?[0-9][0-9 ()-]{6,22}$/.test(v), 'phone number, e.g. 628xxxxxxxxxx'),
+    SUPPORT_EMAIL: z
+      .string()
+      .trim()
+      .default('')
+      .refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'e-mail address'),
+
     WORKER_ENABLED: bool.default(true),
     WORKER_ID: z.string().default('worker-1'),
   })
@@ -108,6 +140,9 @@ export const EnvSchema = z
     const prodLike = env.APP_ENV === 'production' || env.APP_ENV === 'staging';
     if (prodLike && env.OTP_DEV_ECHO) {
       ctx.addIssue({ code: 'custom', path: ['OTP_DEV_ECHO'], message: 'OTP_DEV_ECHO is forbidden outside development/test' });
+    }
+    if (env.APP_ENV === 'production' && !env.OAUTH_REQUIRE_NONCE.includes('APPLE')) {
+      ctx.addIssue({ code: 'custom', path: ['OAUTH_REQUIRE_NONCE'], message: 'production requires APPLE in OAUTH_REQUIRE_NONCE (SEC-15)' });
     }
     if (env.APP_ENV === 'production' && env.PAYMENT_PROVIDER === 'mock') {
       ctx.addIssue({ code: 'custom', path: ['PAYMENT_PROVIDER'], message: 'mock payment provider is forbidden in production' });

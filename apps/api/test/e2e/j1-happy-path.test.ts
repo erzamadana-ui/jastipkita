@@ -189,7 +189,14 @@ describe('J1 happy path (HTTP only)', () => {
     expect(c.transactionStatus).toBe('COMPLETED');
     const scheduled = await ok(api(t, traveler, 'GET', '/v1/payouts/mine'));
     expect(scheduled.data[0].status).toBe('SCHEDULED');
-    await tick(t, 5); // next money.process_payouts window
+    // new payout account cooldown (money.md §5.7): the account was added during onboarding, < 24 h ago
+    const cooldownUntil = scheduled.data[0].cooldownUntil as string;
+    expect(cooldownUntil).toBeTruthy();
+    expect(scheduled.data[0].scheduledFor).toBe(cooldownUntil);
+    await tick(t, 5); // next money.process_payouts window: still waiting
+    expect((await ok(api(t, traveler, 'GET', '/v1/payouts/mine'))).data[0].status).toBe('SCHEDULED');
+    t.clock.set(new Date(Date.parse(cooldownUntil) + 60_000));
+    await tick(t, 5); // first payout run after the cooldown
     const po = await ok(api(t, traveler, 'GET', '/v1/payouts/mine'));
     expect(po.data[0]).toMatchObject({ status: 'PAID' });
     expect(po.data[0].destination.accountMask).toMatch(/^\*{4}\d{4}$/);

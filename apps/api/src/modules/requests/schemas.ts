@@ -80,7 +80,10 @@ export const RequestCreateBody = z
   .object({
     sourceType: z.enum(['URL', 'PHOTO', 'SEARCH', 'MANUAL']).default('MANUAL'),
     ...RequestFields,
-    extraction: z.record(z.string(), z.unknown()).optional(),
+    extraction: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .openapi({ description: 'Metadata of the applied POST /requests/extract result, e.g. {mode, confidence}; non-empty with sourceType URL/PHOTO/SEARCH → `autoFill` label' }),
     publish: z.boolean().optional().openapi({ description: 'true → create directly as OPEN (all publish checks apply)' }),
   })
   .openapi('RequestCreate');
@@ -122,12 +125,25 @@ const Image = z
   })
   .openapi('RequestImage');
 
+export const AutoFillSchema = z
+  .object({
+    sourceType: z.enum(['URL', 'PHOTO', 'SEARCH']),
+    mode: z.enum(['MOCK', 'SANDBOX', 'LIVE']).nullable().openapi({ description: 'Extraction provider mode the client applied (from `extraction.mode`)' }),
+  })
+  .nullable()
+  .openapi('RequestAutoFill', {
+    description:
+      'Non-null when the product data was auto-filled from POST /v1/requests/extract (source URL/PHOTO/SEARCH + non-empty `extraction`). ' +
+      'Permendag 19/2026 AI-content label: clients show "Diisi otomatis (AI/ekstraksi otomatis) — periksa kembali" next to the product data.',
+  });
+
 export const RequestOwnerSchema = z
   .object({
     id: z.string().uuid(),
     status: RequestStatusEnum,
     version: z.number().int(),
     sourceType: z.enum(['URL', 'PHOTO', 'SEARCH', 'MANUAL']),
+    autoFill: AutoFillSchema,
     productUrl: z.string().nullable(),
     productName: z.string(),
     merchantName: z.string().nullable(),
@@ -167,6 +183,7 @@ export const RequestListingSchema = z
   .object({
     id: z.string().uuid(),
     status: RequestStatusEnum,
+    autoFill: AutoFillSchema,
     productUrl: z.string().nullable(),
     productName: z.string(),
     merchantName: z.string().nullable(),

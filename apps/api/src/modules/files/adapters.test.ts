@@ -70,12 +70,40 @@ describe('S3StorageProvider (aws4fetch SigV4)', () => {
     expect(up.headers).toEqual({ 'content-type': 'image/jpeg' });
     const res = await fetch(up.url, { method: 'PUT', headers: up.headers, body: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]) });
     expect(res.status).toBe(200);
-    const dl = await p.presignDownload({ key: 'receipt/x.jpg', expiresSec: 300, filename: 'receipt.jpg' });
+    const dl = await p.presignDownload({ key: 'receipt/x.jpg', expiresSec: 300, filename: 'receipt.jpg', contentType: 'image/jpeg' });
     const d = new URL(dl);
     expect(d.searchParams.get('X-Amz-Expires')).toBe('300');
     expect(d.searchParams.get('response-content-disposition')).toBe('inline; filename="receipt.jpg"');
+    expect(d.searchParams.get('response-content-type')).toBe('image/jpeg');
     const got = await fetch(dl);
     expect(new Uint8Array(await got.arrayBuffer())).toEqual(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]));
+  });
+
+  it('SEC-18: presigned GET pins response-content-type / response-content-disposition (attachment unless raster image), signed', async () => {
+    const fixed = new Date('2026-10-04T03:00:00Z');
+    const p = new S3StorageProvider({ endpoint, bucket: 'jk-files', region: 'auto', accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY', now: () => fixed });
+    const q = async (input: Parameters<S3StorageProvider['presignDownload']>[0]) => new URL(await p.presignDownload(input)).searchParams;
+    const pdf = await q({ key: 'receipt/a.pdf', expiresSec: 60, filename: 'receipt-1.pdf', contentType: 'application/pdf', disposition: 'inline' });
+    expect(pdf.get('response-content-disposition')).toBe('attachment; filename="receipt-1.pdf"');
+    expect(pdf.get('response-content-type')).toBe('application/pdf');
+    const mp4 = await q({ key: 'evidence/a.mp4', expiresSec: 60, contentType: 'video/mp4' });
+    expect(mp4.get('response-content-disposition')).toBe('attachment');
+    // unknown type (caller did not say) → attachment, no type override
+    const blind = await q({ key: 'evidence/a.jpg', expiresSec: 60 });
+    expect(blind.get('response-content-disposition')).toBe('attachment');
+    expect(blind.has('response-content-type')).toBe(false);
+    // an image may still be forced to download; header-breaking filenames are sanitized
+    const img = await q({ key: 'avatar/a.png', expiresSec: 60, contentType: 'image/png', disposition: 'attachment', filename: 'a"b\r\n.png' });
+    expect(img.get('response-content-disposition')).toBe('attachment; filename="a_b__.png"');
+    for (const t of ['image/jpeg', 'image/png', 'image/webp', 'image/heic']) {
+      expect((await q({ key: 'x', expiresSec: 60, contentType: t })).get('response-content-disposition')).toBe('inline');
+    }
+    expect((await q({ key: 'x', expiresSec: 60, contentType: 'image/svg+xml' })).get('response-content-disposition')).toBe('attachment');
+    // the overrides are covered by the SigV4 query signature (changing them changes the signature)
+    const a = await q({ key: 'receipt/a.pdf', expiresSec: 60, contentType: 'application/pdf' });
+    const b = await q({ key: 'receipt/a.pdf', expiresSec: 60, contentType: 'image/jpeg' });
+    expect(a.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+    expect(a.get('X-Amz-Signature')).not.toBe(b.get('X-Amz-Signature'));
   });
 
   it('virtual-hosted endpoints via {bucket}', () => {

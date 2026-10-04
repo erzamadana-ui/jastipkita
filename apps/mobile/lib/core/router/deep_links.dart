@@ -33,6 +33,7 @@ abstract final class Routes {
   static const String support = '/support';
   static const String tickets = '/support/tickets';
   static const String newTicket = '/support/tickets/new';
+  static const String complaint = '/support/complaint';
   static const String settings = '/settings';
   static const String editProfile = '/profile/edit';
   static const String notificationSettings = '/settings/notifications';
@@ -111,6 +112,7 @@ String? normalizeDeepLink(Uri uri) {
     case 'account':
       return segments.length >= 2 && segments[1] == 'verification' ? Routes.kyc : Routes.profile;
     case 'support':
+      if (segments.length >= 2 && segments[1] == 'complaint') return Routes.complaint;
       final ticketId = idAt(2);
       if (segments.length >= 3 && segments[1] == 'tickets' && ticketId != null) return Routes.ticket(ticketId);
       return Routes.support;

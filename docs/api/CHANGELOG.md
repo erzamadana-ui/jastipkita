@@ -8,6 +8,103 @@ Legend: **ADD** backward-compatible addition · **CHG** changed value/behaviour 
 
 ---
 
+## 2026-10-04
+
+OpenAPI regeneration pending (lead). Entries are grouped per workstream; agents append their own bullets.
+
+### Regulatory B1 — consumer complaint channel (L12) & AI-content label (L13), Permendag 19/2026 · UU 8/1999
+- **DB** `0130_consumer_complaints.sql`: `support_tickets.category` accepts `COMPLAINT` (CHECK swapped NOT VALID → VALIDATE, additive).
+- **ADD** `GET /v1/support/complaint-info` (public, 120 req/min/IP, `Cache-Control: public, max-age=300`) → `ComplaintInfo {channels, sla,
+  escalation, disputeFlow, legalBasis}`: JastipKita channels from new optional env `SUPPORT_WHATSAPP` / `SUPPORT_EMAIL` (null when unset),
+  first-response SLA by priority from config `support.sla`, government escalation (Ditjen PKTN Kemendag, verified 2026-10-04) — engagement.md §8.1.
+- **ADD** `POST /v1/support/tickets` category `COMPLAINT` (default priority `HIGH`) and optional body `priority` `LOW | NORMAL | HIGH`
+  (`URGENT` stays agent-only → 400). `SupportTicket.category` may now be `COMPLAINT` — clients must render unknown/new categories gracefully.
+- **CHG** `POST /v1/support/tickets`: `slaDueAt` now uses the ACTIVE `support.sla` config (was a hard-coded table with the same default
+  values), consistent with the admin queue. `support.ticket_updated` payload adds `category`.
+- **ADD** `RequestOwner.autoFill` / `RequestListing.autoFill` (`RequestAutoFill {sourceType, mode} | null`): set when product data came
+  from `POST /v1/requests/extract` (sourceType URL/PHOTO/SEARCH + non-empty `extraction`). Show the AI-content label when non-null — marketplace.md §2.2.
+- Mobile (same change set): *Bantuan → Pengaduan konsumen* screen (files COMPLAINT, shows SLA + escalation), auto-fill labels in the
+  create-request form and on request detail. Web: `/pengaduan/`, `/en/complaints/` (footer + help center links).
+
+### Auth A1 — web refresh token in an HttpOnly cookie (SEC-14) · OAuth nonce required + single use (SEC-15)
+Mobile & admin: **no action needed** unless noted (body transport is unchanged and stays the default).
+- **ADD** request header `X-JK-Token-Transport: cookie | body` on `POST /v1/auth/{otp/verify,google,apple,refresh,logout}` (web only).
+  `cookie` → the API sets `jk_rt` (`HttpOnly; Secure; SameSite=Strict; Path=/v1/auth; Max-Age = REFRESH_TOKEN_TTL_DAYS`, no `Domain`) and
+  **omits** `tokens.refreshToken` from the body; refresh/logout read the cookie. Requires an `Origin` in the web allow-list
+  (`WEB_BASE_URL` origin + `CORS_ORIGINS`) → else `403 ORIGIN_NOT_ALLOWED` (checked before any side effect). identity.md §3.3.
+- **CHG (schema only)** `Tokens.refreshToken` is now **optional** in OpenAPI: always present with body transport, absent only with
+  cookie transport. Generated TS clients: guard before storing (admin `api/session.ts` already does). Mobile (hand-written) unaffected.
+- **CHG** `POST /v1/auth/refresh`: body optional (`Refresh.refreshToken` optional); cookie transport without a cookie → `401 REFRESH_MISSING`;
+  a failed cookie refresh clears the cookie. Body transport without a token → `400 VALIDATION_ERROR` as before.
+- **CHG** `POST /v1/auth/logout`: bearer no longer mandatory — accepts the bearer (still verified strictly when sent) and/or a refresh
+  token (`Logout {refreshToken?}` body, or the cookie); no credential → `401`; a token whose session already ended → `200` (idempotent).
+- **CHG** CORS: `Access-Control-Allow-Credentials: true` for the web origins only (admin stays without credentials, never `*`);
+  `X-JK-Token-Transport` added to the allowed request headers. Token responses carry `Cache-Control: no-store`.
+- **CHG** `POST /v1/auth/apple`: a nonce is **required** by default (`rawNonce`, or the legacy hashed `nonce`) → `401 OAUTH_NONCE_REQUIRED
+  {provider}`. The mobile app already always sends `rawNonce`.
+- **ADD** env `OAUTH_REQUIRE_NONCE` (csv `GOOGLE,APPLE` | `none`; empty = `APPLE`; production must include `APPLE`). Google stays optional
+  until the mobile Google flow sends a nonce (web sends one now) — **Eng-Mobile:** pass a nonce to Google sign-in, then ops adds `GOOGLE`.
+- **CHG** `POST /v1/auth/google`: `nonce` min length 16. A verified nonce (either provider) makes the ID token **single use**: replay →
+  `401 OAUTH_TOKEN_INVALID {reason: NONCE_REUSED}`. `422 CONSENT_REQUIRED` does not consume it (re-submitting the same token with consents works).
+- **DB** `0110_oauth_nonce_replay.sql`: table `oauth_nonce_uses (provider, nonce_hash, expires_at)` — no PII, purged after expiry.
+- **DB** seed `0200_legal_documents.sql` regenerated: the generator now uses each document's frontmatter `version`; `COOKIES` → `0.3-template`
+  (new strictly-necessary cookie `jk_rt`, sessionStorage `jk:refresh` removed). Other documents stay `0.1-template`.
+
+### Money & marketplace A2 — new payout account cooldown · SEC-18 file responses · SEC-19 week precision for anonymous trip discovery
+Decisions by the CEO on the Commissioner's delegation (2026-10-04). **Mobile:** read `cooldownUntil` / `payoutsFrom` (optional
+display) and make sure discovery always sends the bearer (it does today). **Web:** done (week ranges). **Admin:** done (payout list).
+- **ADD** config `money.policy.newPayoutAccountCooldownHours` (int 0–720, default **24**; optional in versions stored before today —
+  readers merge the default). A payout account added, verified or made default less than N hours ago receives no payout: the payout is
+  scheduled at `max(normal schedule, ready time)` with ready time = latest of `created_at` / `verified_at` / `default_since` + N, and the
+  processor re-checks it (money.md §5.7).
+- **DB** `0120_payout_account_cooldown.sql`: `payout_accounts.default_since` (when the account became the default, NULL otherwise),
+  maintained by trigger `trg_payout_account_default_since` for every writer (explicit value of the same statement wins, else `now()`;
+  immutable while the account stays default) + CHECK `is_default = (default_since IS NOT NULL)`; existing defaults backfilled
+  (no retroactive cooldown). Seed `0001_reference.sql` regenerated (new `money.policy` key).
+- **ADD** `GET /v1/payouts/mine` → `data[].cooldownUntil` (ISO or null); `GET /v1/admin/payouts` → `cooldownUntil` (SCHEDULED / ON_HOLD /
+  FAILED only); `PayoutAccount.payoutsFrom` on `GET/POST /v1/kyc/payout-accounts` and `POST …/{id}/default`.
+- **CHG** a default change (`POST /v1/kyc/payout-accounts/{id}/default`, adding an account as default, removing the default → another
+  promoted) **re-points** the traveler's SCHEDULED / ON_HOLD / FAILED payouts to the new default and pushes SCHEDULED ones to its ready
+  time (audit `payout.destination_changed`; event `payout.scheduled {kind: DESTINATION_CHANGED, cooldownUntil}`). The old account is then
+  no longer "in use" and can be removed. The processor applies the same rule to default changes made outside the API (admin override):
+  re-point + defer (`payout.scheduled {kind: ACCOUNT_COOLDOWN}`, audit `payout.cooldown_deferred`). `processPayouts()` result adds `deferred`.
+- **CHG** `payout.scheduled` payload adds `cooldownUntil` (+ `scheduledFor` everywhere); the traveler notification says when the
+  payout is released and why ("rekening payout baru"), and warns on a destination change ("Bukan kamu?").
+- **CHG** (SEC-18) file responses: `Content-Disposition: inline` **only** for raster images (jpeg/png/webp/heic) — PDF, MP4, exports and
+  unknown types are `attachment`; responses the API serves (`/v1/files/{id}/content`, dev storage) add `X-Content-Type-Options: nosniff` and
+  `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox` (a route's own CSP now wins over the API-wide one).
+  Presigned S3/R2 GET URLs pin `response-content-type` + `response-content-disposition` (signed); a presign without a known type is
+  `attachment`. `StorageProvider.presignDownload` takes optional `contentType` / `disposition`.
+- **ADD/CHG** (SEC-19) `TripPublic` (discovery, trip detail public view, matching/offers) adds `datePrecision: DAY | WEEK`,
+  `departureWindow` / `arrivalWindow` `{from, to}`. `GET /v1/trips` and `GET /v1/trips/{id}` without a bearer answer **WEEK**: windows =
+  ISO week Mon–Sun and `departureDate` / `arrivalDate` = the window's Monday (**not** the exact date — render the window); date filters are
+  evaluated per whole week, results ordered by (week, id). With a valid bearer of an ACTIVE account: **DAY**, exact dates as before.
+  A bearer that does not verify now answers `401` on these two routes (was: silently anonymous) so the app refreshes and retries;
+  non-ACTIVE accounts are served like anonymous visitors. Anonymous responses `Cache-Control: public, max-age=30`, signed-in
+  `private, no-store`, both `Vary: Authorization`. Cursors are precision-specific.
+
+### Operations D — audit checkpoints (T12), worker heartbeat & alerting as code (T6), restore drill (T5)
+- **DB** `0140_audit_checkpoints.sql`: append-only `audit_checkpoints` (one row per UTC day: `last_id`, `last_hash`, `row_count`,
+  `storage_key` `audit-checkpoints/YYYY/MM/DD.json`, `object_sha256`, `prev_object_sha256`, `storage_mode`); jk_app SELECT/INSERT only.
+  The unused `audit_chain_checkpoints` (0004) is marked superseded (kept, not dropped).
+- **ADD** `GET /v1/admin/infra/audit/checkpoints/verify` (`infra.db.read`, read-only) → `status OK | BROKEN | NO_CHECKPOINT`, `checkpoint`,
+  `anchor {hashMatches, rowCountMatches}`, `segment {fromId, toId, rowsSinceCheckpoint, brokenAtId}`, `history`, `storage {status MATCH |
+  MISMATCH | MISSING | ERROR | SKIPPED, mode, key}`, `findings[]`, `warnings[]`, `recent[]` (last 10) — admin.md §6. Admin web: card
+  "Checkpoint rantai audit (WORM)" in DB & Infra Center → Backup & restore (calls the route with a raw authenticated GET until
+  `schema.d.ts` is regenerated).
+- **ADD** `GET /v1/health/worker` (public, 60 req/min/IP, `Cache-Control: no-store`) → `WorkerHeartbeat {status ok|stale,
+  lastScheduledJobAt, ageSec, staleAfterSec, checkedAt}`; **503** when no scheduled job finished within 3 cron intervals (production
+  900 s, other environments 2700 s). For external uptime checkers; no sensitive data.
+- **ADD** worker job `infra.audit_checkpoint` (daily, new job group `jobs/infra.ts`): verifies the chain since the previous checkpoint,
+  then stores the head in `audit_checkpoints` + storage; a broken chain is never anchored (CRITICAL `AUDIT_CHAIN_BROKEN` security event,
+  log `ALERT audit.checkpoint_refused`). Audit action `infra.audit_checkpoint_created`.
+- **ADD** log line `ALERT ops.alert_opened` (`code`, `severity`, `value`, `threshold`) once per in-app alert opening, after COMMIT
+  (`admin.alerts_evaluate`) — the hook for log-based paging (`infra/monitoring/alerts.yaml`).
+- Ops tooling (no API change): `db/scripts/restore-test.sh` (dump → restore into a fresh DB → 8 integrity checks → report,
+  optional `db_operations` RESTORE_TEST row), `infra/monitoring/alerts.yaml`, runbooks `secret-rotation.md`, `cloudflare-waf.md`.
+
+---
+
 ## 2026-09-28 (sore) — SEC-16 / SEC-17 / SEC-20, effective permissions, admin reconciliation
 
 OpenAPI regenerated (256 paths). No client action required; admin web already consumes `permissions` and the reconciliation routes.

@@ -20,9 +20,9 @@ dates (`YYYY-MM-DD`: trip dates, `neededBy`, rule dates) are **WIB (Asia/Jakarta
 | `POST /v1/fx/locks` {base, quote} | 🔒 | ACTIVE `fx_locks` row, window & markup from config |
 | `POST /v1/customs/estimate` | public | calculator; NON_PERSONAL default + PERSONAL comparison |
 | `POST /v1/restricted/check` | public | classification + ID/EN messages (`locale` body field or `Accept-Language`) |
-| `GET /v1/trips` | public | discovery (ACTIVE, not departed); no PII |
+| `GET /v1/trips` | optional | discovery (ACTIVE, not departed); no PII; anonymous → dates at ISO-week precision, signed-in → exact (SEC-19, §2.1a) |
 | `POST /v1/trips` · `GET /v1/trips/mine` · `PATCH /v1/trips/{id}` | 🔒 | create DRAFT, own list, status-dependent edits |
-| `GET /v1/trips/{id}` | optional | owner → `view: OWNER`; others → `view: PUBLIC` for ACTIVE/FULL/TRAVELING/COMPLETED, else 404 |
+| `GET /v1/trips/{id}` | optional | owner → `view: OWNER`; others → `view: PUBLIC` for ACTIVE/FULL/TRAVELING/COMPLETED, else 404; public view week-coarsened for anonymous visitors (§2.1a) |
 | `POST /v1/trips/{id}/verification` | 🔒 | TRIP_DOC file (owned, scan CLEAN) → `trip_verifications` PENDING; DRAFT → VERIFICATION_PENDING |
 | `POST /v1/trips/{id}/publish` | 🔒 K3 | VERIFIED → ACTIVE; DRAFT/VERIFICATION_PENDING → ACTIVE only if `trips.allowUnverifiedActive` |
 | `POST /v1/trips/{id}/depart\|complete\|cancel` | 🔒 | via `transition_trip`; cancel → `trip.cancelled` event (money settles every open transaction, money.md §5.1); `409 TRIP_HAS_PURCHASED_TRANSACTIONS {transactionIds}` when goods were already bought |
@@ -85,8 +85,40 @@ any non-terminal ──cancel──▶ CANCELLED   (pending offers WITHDRAWN; op
   are locked (`REQUEST_HAS_PENDING_OFFERS`). Optional optimistic lock via `version`.
 - Traveler/listing view never includes `notes`, buyer e-mail/phone/name — only the buyer's public profile (first name +
   initial, badge, rating as buyer, completed count).
+- `autoFill` (owner **and** listing view, also in offers / recommendations): `{sourceType: URL|PHOTO|SEARCH, mode: MOCK|SANDBOX|LIVE|null}`
+  when the product data came from `POST /requests/extract`, else `null`. Rule: `sourceType ≠ MANUAL` **and** the create body carried a
+  non-empty `extraction` object (the app sends `{mode, confidence}` of the draft it applied; `mode` outside the enum → `null`). Derived
+  from `requests.source_type` + `requests.extraction` (0007) — no extra column; it survives edits (the request was still created from
+  extraction). **L13 / Permendag 19/2026 AI-content label:** clients show *"Diisi otomatis (AI/ekstraksi otomatis) — periksa kembali
+  sebelum menitip"* next to auto-filled fields in the create form and a small label on the request detail. The wording says
+  "AI/ekstraksi otomatis" because the current `heuristic` provider parses merchant metadata and is not an AI model (no AI claim beyond
+  what runs); the photo path is designed for an AI provider.
 - `images[]` = `{fileId, url, contentUrl}`: `url` is always absolute (merchant image URL, or `${API_BASE_URL}/v1/files/{id}/content`
   for uploaded photos); `contentUrl` is the API URL for uploaded photos (null for merchant URLs).
+
+### 2.1a Trip date precision for anonymous visitors (SEC-19, decision 2026-10-04)
+Anonymous visitors see trip dates at **week** precision, signed-in users see **exact** dates. Every `TripPublic` (discovery, the
+public trip detail, matching recommendations, offers) carries:
+
+| Field | DAY (bearer of an ACTIVE account) | WEEK (no bearer; non-ACTIVE account) |
+|---|---|---|
+| `datePrecision` | `DAY` | `WEEK` |
+| `departureWindow` / `arrivalWindow` `{from, to}` | `from = to =` the exact date | ISO week (Monday–Sunday) containing the date |
+| `departureDate` / `arrivalDate` | exact date | **the window's Monday** (kept for older clients — never present it as the exact date) |
+
+- Trip dates are itinerary calendar dates (DB `date`), so the week is the ISO week of that date; "today" is the Asia/Jakarta date.
+- WEEK requests: date filters work per whole week — `departureFrom` → Monday of its week, `departureTo` / `arrivalBy` → Sunday of their
+  week, and "not departed yet" starts at the Monday of the current week — so a day-precise filter cannot single out one day; results
+  are ordered by (departure week, trip id), keyset cursor on the same key (cursors are precision-specific).
+- Bearer handling on `GET /v1/trips` and `GET /v1/trips/{id}`: no `Authorization` header → anonymous; a header that does not verify →
+  `401` (the app refreshes and retries instead of silently receiving coarse dates); suspended/deleting accounts → served as anonymous.
+- Caching: anonymous `Cache-Control: public, max-age=30`, signed-in `private, no-store`, both `Vary: Authorization`.
+- Clients: the web island (anonymous) renders "12–18 Okt 2026" ranges + a note that exact dates appear after login in the app; the
+  mobile app is signed-in only (discovery screens sit behind the auth redirect and every call carries the bearer) → always DAY.
+- **Residual (accepted):** a listing disappears when the trip leaves `ACTIVE` (the traveler departs or the automation job sets
+  `TRAVELING` on the departure date, or it becomes `FULL`), so someone polling daily can still infer the departure day; a public trip
+  detail with status `TRAVELING` tells that the traveler is abroad now (by design of the listing); first name + initial and the city
+  pair remain visible.
 
 ### Public profile (`PublicProfile`) — discovery, recommendations, offers, request listings
 `{id, displayName (first name + last initial), trustBadge {tier, label} (from the KYC level), trustScore (0–100), trustTier

@@ -12,10 +12,23 @@ const BASE = '/jastipkita';
 const here = dirname(fileURLToPath(import.meta.url));
 const tosVersion = /^version:\s*"?([^"\n]+)"?/m.exec(readFileSync(resolve(here, '../../../docs/legal/terms-of-service.md'), 'utf8'))![1]!;
 
-const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS' };
+/**
+ * CORS like the real API: the auth endpoints are credentialed (cookie transport, SEC-14), so the mock echoes the exact
+ * Origin with Access-Control-Allow-Credentials and the requested headers (a `*` wildcard is invalid with credentials).
+ */
+function cors(route: Route): Record<string, string> {
+  const h = route.request().headers();
+  return {
+    'access-control-allow-origin': h['origin'] ?? '*',
+    'access-control-allow-credentials': 'true',
+    'access-control-allow-headers': h['access-control-request-headers'] ?? 'content-type,authorization,x-jk-token-transport',
+    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    vary: 'Origin',
+  };
+}
 async function json(route: Route, status: number, body: unknown) {
-  if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
-  return route.fulfill({ status, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors(route) });
+  return route.fulfill({ status, headers: { ...cors(route), 'content-type': 'application/json' }, body: JSON.stringify(body) });
 }
 const apiError = (code: string, message: string, details: Record<string, unknown> = {}) => ({ error: { code, message, details, requestId: 'test' } });
 function requirement(type: string, required: boolean, version: string) {
@@ -148,55 +161,105 @@ test('trip discovery renders trustScore / trustTier / kycLevel from PublicProfil
   await expect(card).toContainText('Belum ada ulasan');
 });
 
-test('web session: access token only in memory, refresh token in sessionStorage (jk:), all jk: keys cleared on logout', async ({ page }) => {
+const ME = { id: 'u1', email: 'baru@example.com', emailVerified: true, phone: null, phoneVerified: false, displayName: 'Rina M.', avatarFileId: null, locale: 'id', countryCode: 'ID', status: 'ACTIVE', kycLevel: 2, activeMode: 'BUYER', trustScore: 50, referralCode: 'RINA-1234', transactionEmail: null, roles: [], mfaEnabled: false, deletionScheduledFor: null, createdAt: '2026-09-28T00:00:00Z' };
+/** Cookie-transport token payload: the API omits refreshToken from the body (it is in the HttpOnly jk_rt cookie). */
+const cookieTokens = (access: string) => ({ tokenType: 'Bearer', accessToken: access, accessTokenExpiresAt: new Date(Date.now() + 900_000).toISOString(), refreshTokenExpiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(), sessionId: 's' });
+
+test('web session (SEC-14 cookie transport): no refresh token in web storage, silent restore via the cookie, logout revokes + wipes jk: keys', async ({ page }) => {
   await offlineByDefault(page);
   await mockOtp(page);
-  await page.route('**/v1/auth/otp/verify', (r) =>
-    json(r, 200, { purpose: 'LOGIN', verified: true, isNewUser: false, user: {}, tokens: { tokenType: 'Bearer', accessToken: 'access-1', accessTokenExpiresAt: new Date(Date.now() + 900_000).toISOString(), refreshToken: 'refresh-token-000000000001', refreshTokenExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), sessionId: 's' } }),
-  );
-  const refreshBodies: unknown[] = [];
+  const verifyHeaders: Record<string, string>[] = [];
+  await page.route('**/v1/auth/otp/verify', (r) => {
+    if (r.request().method() === 'OPTIONS') return json(r, 204, null);
+    verifyHeaders.push(r.request().headers());
+    return json(r, 200, { purpose: 'LOGIN', verified: true, isNewUser: false, user: {}, tokens: cookieTokens('access-1') });
+  });
+  let signedIn = false;
+  const refreshCalls: Array<{ body: string | null; transport: string | undefined }> = [];
   await page.route('**/v1/auth/refresh', (r) => {
     if (r.request().method() === 'OPTIONS') return json(r, 204, null);
-    refreshBodies.push(r.request().postDataJSON());
-    return json(r, 200, { tokens: { tokenType: 'Bearer', accessToken: 'access-2', accessTokenExpiresAt: new Date(Date.now() + 900_000).toISOString(), refreshToken: 'refresh-token-000000000002', refreshTokenExpiresAt: new Date(Date.now() + 86_400_000).toISOString(), sessionId: 's' } });
+    refreshCalls.push({ body: r.request().postData(), transport: r.request().headers()['x-jk-token-transport'] });
+    if (!signedIn) return json(r, 401, apiError('REFRESH_MISSING', 'Sesi tidak ditemukan, silakan masuk kembali'));
+    return json(r, 200, { tokens: cookieTokens('access-2') });
   });
-  const authHeaders: string[] = [];
+  const meCalls: Array<{ auth: string; transport: string | undefined }> = [];
   await page.unroute('**/v1/me');
   await page.route('**/v1/me', (r) => {
     if (r.request().method() === 'OPTIONS') return json(r, 204, null);
-    authHeaders.push(r.request().headers()['authorization'] ?? '');
-    return json(r, 200, { id: 'u1', email: 'baru@example.com', emailVerified: true, phone: null, phoneVerified: false, displayName: 'Rina M.', avatarFileId: null, locale: 'id', countryCode: 'ID', status: 'ACTIVE', kycLevel: 2, activeMode: 'BUYER', trustScore: 50, referralCode: 'RINA-1234', transactionEmail: null, roles: [], mfaEnabled: false, deletionScheduledFor: null, createdAt: '2026-09-28T00:00:00Z' });
+    meCalls.push({ auth: r.request().headers()['authorization'] ?? '', transport: r.request().headers()['x-jk-token-transport'] });
+    return json(r, 200, ME);
   });
-  let logoutAuth = '';
+  const logouts: Array<{ auth: string; transport: string | undefined; body: string | null }> = [];
   await page.route('**/v1/auth/logout', (r) => {
     if (r.request().method() === 'OPTIONS') return json(r, 204, null);
-    logoutAuth = r.request().headers()['authorization'] ?? '';
+    logouts.push({ auth: r.request().headers()['authorization'] ?? '', transport: r.request().headers()['x-jk-token-transport'], body: r.request().postData() });
+    signedIn = false;
     return json(r, 200, { ok: true });
   });
 
   await page.goto(`${BASE}/masuk/`);
+  // anonymous visitor: one silent restore attempt, answered "no session"
+  await expect.poll(() => refreshCalls.length).toBe(1);
+  // a refresh token left by an older build must disappear on the next page load
+  await page.evaluate(() => sessionStorage.setItem('jk:refresh', 'legacy-refresh-token-0001'));
   await page.click('[data-consent-choice="necessary"]');
   await page.fill('#destination', 'lama@example.com');
   await page.click('#req-btn');
   await page.fill('#code', '123456');
+  signedIn = true; // from now on the browser holds the (mocked) HttpOnly cookie
   await page.click('#ver-btn');
   await expect(page).toHaveURL(/\/jastipkita\/akun\/$/);
   await expect(page.locator('#acc-name')).toHaveText('Rina M.');
 
-  // new page load: the access token was NOT persisted; the tab's refresh token was rotated for a new one
-  expect(refreshBodies).toEqual([{ refreshToken: 'refresh-token-000000000001' }]);
-  expect(authHeaders).toEqual(['Bearer access-2']);
+  expect(verifyHeaders[0]!['x-jk-token-transport']).toBe('cookie');
+  // new page load: the access token was not persisted; the session came back through the cookie (no body)
+  expect(refreshCalls).toHaveLength(2);
+  for (const c of refreshCalls) expect(c).toEqual({ body: null, transport: 'cookie' });
+  expect(meCalls).toEqual([{ auth: 'Bearer access-2', transport: undefined }]); // non-auth endpoints stay cookie-less
   const storage = await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage } }));
-  expect(storage.session['jk:refresh']).toBe('refresh-token-000000000002');
+  expect(Object.keys(storage.session)).not.toContain('jk:refresh');
+  expect(Object.keys(storage.local)).not.toContain('jk:refresh');
   for (const [k, v] of [...Object.entries(storage.local), ...Object.entries(storage.session)]) {
     expect(k.startsWith('jk:'), k).toBe(true);
-    expect(String(v)).not.toContain('access-');
+    expect(String(v)).not.toMatch(/access-|refresh/);
   }
-  expect(Object.keys(storage.local)).not.toContain('jk:refresh');
 
   await page.click('#acc-logout');
   await expect(page.locator('#acc-signed-out')).toBeVisible();
-  expect(logoutAuth).toBe('Bearer access-2');
+  expect(logouts).toEqual([{ auth: 'Bearer access-2', transport: 'cookie', body: null }]);
   const after = await page.evaluate(() => [...Object.keys(localStorage), ...Object.keys(sessionStorage)].filter((k) => k.startsWith('jk:')));
   expect(after).toEqual([]); // logout wipes every jk: key (session + preferences)
+  expect(refreshCalls).toHaveLength(3); // the reload tried once more and got "no session"
+});
+
+test('signed-in visitor on /masuk/ is sent to the account page by the silent restore', async ({ page }) => {
+  await offlineByDefault(page);
+  await page.route('**/v1/auth/refresh', (r) => json(r, 200, { tokens: cookieTokens('access-9') }));
+  await page.route('**/v1/me', (r) => json(r, 200, ME));
+  await page.goto(`${BASE}/masuk/`);
+  await expect(page).toHaveURL(/\/jastipkita\/akun\/$/);
+  await expect(page.locator('#acc-name')).toHaveText('Rina M.');
+});
+
+test('refreshes are serialized across tabs (one rotating cookie → no reuse-detection logout)', async ({ context }) => {
+  await context.route(/^https?:\/\/(?!localhost)/, (r) => r.abort('internetdisconnected'));
+  let inFlight = 0;
+  let maxInFlight = 0;
+  let calls = 0;
+  await context.route('**/v1/auth/refresh', async (r) => {
+    if (r.request().method() === 'OPTIONS') return json(r, 204, null);
+    calls++;
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((res) => setTimeout(res, 400));
+    inFlight--;
+    return json(r, 200, { tokens: cookieTokens(`access-tab-${calls}`) });
+  });
+  await context.route('**/v1/me', (r) => json(r, 200, ME));
+  const [a, b] = [await context.newPage(), await context.newPage()];
+  await Promise.all([a.goto(`${BASE}/akun/`), b.goto(`${BASE}/akun/`)]);
+  await expect(a.locator('#acc-name')).toHaveText('Rina M.');
+  await expect(b.locator('#acc-name')).toHaveText('Rina M.');
+  expect(calls).toBe(2);
+  expect(maxInFlight).toBe(1);
 });

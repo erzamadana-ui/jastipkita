@@ -25,9 +25,12 @@ describe('Sign in with Apple — rawNonce', () => {
     const res = await apple({ identityToken, rawNonce, consents: CONSENTS });
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.isNewUser).toBe(true);
-    // the (already hashed) legacy `nonce` field may accompany it when it is the same hash
-    const again = await apple({ identityToken, rawNonce, nonce: sha256hex(rawNonce) });
+    // the (already hashed) legacy `nonce` field may accompany it when it is the same hash (fresh token: nonces are single use)
+    const raw2 = 'r8Wm3lQ1-Ys9tU2v_Mn5Ad0Je4Gc7Hz6';
+    const tok2 = await keys.sign('APPLE', { sub: 'apple-nonce-1', email: 'n1@privaterelay.appleid.com', email_verified: 'true', nonce: sha256hex(raw2) });
+    const again = await apple({ identityToken: tok2, rawNonce: raw2, nonce: sha256hex(raw2) });
     expect(again.status).toBe(200);
+    expect(again.body.isNewUser).toBe(false);
   });
 
   it('rejects a mismatching, missing or raw (unhashed) nonce claim with NONCE_MISMATCH', async () => {

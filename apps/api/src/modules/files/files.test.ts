@@ -199,6 +199,58 @@ describe('files: upload → complete', () => {
     expect((await t.request('POST', `/v1/files/${c.body.fileId}/complete`, { token: buyer.accessToken })).body.error.code).toBe('UPLOAD_MISSING');
   });
 
+  it('SEC-18: only raster images render inline; PDFs/videos/unknown download as attachment with nosniff + sandbox CSP', async () => {
+    const u = await t.createUser({ kycLevel: 2 });
+    const CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
+    const fetchUrl = async (fileId: string) => {
+      const dl = await t.request('GET', `/v1/files/${fileId}/url`, { token: u.accessToken });
+      expect(dl.status).toBe(200);
+      const url = new URL(dl.body.url);
+      return t.app.request(url.pathname + url.search, dl.body.requiresAuth ? { headers: { authorization: `Bearer ${u.accessToken}` } } : {});
+    };
+
+    // raster image via presigned (dev storage) URL → inline, pinned type
+    const img = await upload(u.accessToken, 'PRODUCT_PHOTO', 'image/jpeg', JPEG());
+    const ri = await fetchUrl(img.fileId);
+    expect(ri.status).toBe(200);
+    expect(ri.headers.get('content-type')).toBe('image/jpeg');
+    expect(ri.headers.get('content-disposition')).toMatch(/^inline; filename="product_photo-[0-9a-f]{8}\.jpg"$/);
+    expect(ri.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(ri.headers.get('content-security-policy')).toBe(CSP);
+
+    // PDF receipt (polyglot candidate) via presigned URL → attachment
+    const pdf = await upload(u.accessToken, 'RECEIPT', 'application/pdf', PDF());
+    const rp = await fetchUrl(pdf.fileId);
+    expect(rp.headers.get('content-type')).toBe('application/pdf');
+    expect(rp.headers.get('content-disposition')).toMatch(/^attachment; filename="receipt-[0-9a-f]{8}\.pdf"$/);
+    expect(rp.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(rp.headers.get('content-security-policy')).toBe(CSP);
+
+    // encrypted TRIP_DOC PDF streamed by the API (/content) → attachment, never inline
+    const doc = await upload(u.accessToken, 'TRIP_DOC', 'application/pdf', PDF());
+    const rd = await fetchUrl(doc.fileId);
+    expect(new URL((await t.request('GET', `/v1/files/${doc.fileId}/url`, { token: u.accessToken })).body.url).pathname).toBe(`/v1/files/${doc.fileId}/content`);
+    expect(rd.status).toBe(200);
+    expect(rd.headers.get('content-disposition')).toMatch(/^attachment; /);
+    expect(rd.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(rd.headers.get('content-security-policy')).toBe(CSP);
+    expect(new Uint8Array(await rd.arrayBuffer())).toEqual(PDF());
+
+    // MP4 evidence → attachment
+    const mp4 = new Uint8Array([0, 0, 0, 0x18, ...new TextEncoder().encode('ftypisom'), 0, 0, 2, 0, ...new TextEncoder().encode('isomiso2')]);
+    const vid = await upload(u.accessToken, 'EVIDENCE', 'video/mp4', mp4);
+    const rv = await fetchUrl(vid.fileId);
+    expect(rv.headers.get('content-type')).toBe('video/mp4');
+    expect(rv.headers.get('content-disposition')).toMatch(/^attachment; /);
+
+    // a presign without a known type (e.g. dispute evidence links) is never inline, even for an image object
+    const [row] = await t.adminSql<{ storage_key: string }[]>`SELECT storage_key FROM files WHERE id = ${img.fileId}`;
+    const blind = new URL(await t.deps.providers.storage.presignDownload({ key: row!.storage_key, expiresSec: 60 }));
+    const rb = await t.app.request(blind.pathname);
+    expect(rb.headers.get('content-disposition')).toBe('attachment');
+    expect(rb.headers.get('content-security-policy')).toBe(CSP);
+  });
+
   it('dev storage routes reject unknown tokens', async () => {
     const put = await t.app.request('/v1/dev/storage/upload/not-a-real-token-123', { method: 'PUT', headers: { 'content-type': 'image/jpeg' }, body: JPEG() });
     expect(put.status).toBe(400);

@@ -25,6 +25,7 @@ class PickerField<T> extends StatelessWidget {
     this.value,
     this.hint,
     this.errorText,
+    this.helper,
     this.enabled = true,
   });
 
@@ -34,6 +35,9 @@ class PickerField<T> extends StatelessWidget {
   final T? value;
   final String? hint;
   final String? errorText;
+
+  /// Helper line below the field (e.g. the "auto-filled — please check" label).
+  final String? helper;
   final bool enabled;
 
   String? get _selectedLabel {
@@ -88,6 +92,7 @@ class PickerField<T> extends StatelessWidget {
                 context,
                 hint: hint ?? context.l10n.pickerChoose,
                 errorText: errorText,
+                helperText: helper,
                 suffixIcon: const Icon(Icons.expand_more),
               ),
               child: selected == null

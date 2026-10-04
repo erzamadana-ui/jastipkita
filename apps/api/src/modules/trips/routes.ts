@@ -1,7 +1,8 @@
 import { createRoute } from '@hono/zod-openapi';
-import type { App } from '../../context';
+import type { MiddlewareHandler } from 'hono';
+import type { App, AppEnv } from '../../context';
 import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../lib/openapi';
-import { optionalAuth, requireAuth } from '../../middleware/auth';
+import { requireAuth, requireAuthWith } from '../../middleware/auth';
 import { rateLimit } from '../../middleware/rate-limit';
 import { requireAuthContext } from '../catalog/shared';
 import {
@@ -19,6 +20,26 @@ import {
 } from './schemas';
 import * as svc from './service';
 
+/**
+ * Optional bearer for public trip reads (SEC-19): no Authorization header → anonymous (WEEK precision); a header that
+ * does not verify → 401 (clients refresh and retry instead of silently getting coarse dates); a non-ACTIVE account
+ * is served like an anonymous visitor.
+ */
+const verifyAnyStatus = requireAuthWith(['ACTIVE', 'SUSPENDED', 'PENDING_DELETION', 'DELETED']);
+const viewerAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (!c.req.header('authorization')) return next();
+  return verifyAnyStatus(c, async () => {
+    if (c.get('auth')?.status !== 'ACTIVE') c.set('auth', undefined);
+    await next();
+  });
+};
+
+/** Anonymous responses are cacheable (identical for everyone); signed-in ones carry exact dates and are private. */
+function cacheFor(c: { header: (k: string, v: string) => void }, signedIn: boolean) {
+  c.header('cache-control', signedIn ? 'private, no-store' : 'public, max-age=30');
+  c.header('vary', 'Authorization');
+}
+
 export function registerTrips(app: App): void {
   const r = createRouter();
 
@@ -28,15 +49,22 @@ export function registerTrips(app: App): void {
       path: '/v1/trips',
       tags: ['Trips'],
       summary: 'Public trip discovery (ACTIVE trips; no PII — first name + initial, badge, rating)',
-      middleware: [rateLimit({ name: 'trips.discover', limit: 120, windowSec: 60 })] as const,
+      description:
+        'Optional bearer. SEC-19: anonymous requests get `datePrecision: WEEK` — dates coarsened to the ISO week (Mon–Sun, ' +
+        '`departureWindow` / `arrivalWindow`, `departureDate`/`arrivalDate` = window start), date filters evaluated per whole week ' +
+        'and results ordered by week then id. Signed-in users get exact dates (`DAY`). An Authorization header that does not ' +
+        'verify answers 401 (refresh and retry). Anonymous responses: `Cache-Control: public, max-age=30`; signed-in: `private, no-store`.',
+      security: [{}, ...bearer],
+      middleware: [rateLimit({ name: 'trips.discover', limit: 120, windowSec: 60 }), viewerAuth] as const,
       request: { query: DiscoveryQuery },
-      responses: { 200: jsonContent(TripPublicPageSchema), 400: errorResponses[400], 429: errorResponses[429] },
+      responses: { 200: jsonContent(TripPublicPageSchema), 400: errorResponses[400], 401: errorResponses[401], 429: errorResponses[429] },
     }),
     async (c) => {
       const deps = c.get('deps');
       const q = c.req.valid('query');
-      const out = await svc.discoverTrips(deps, q);
-      c.header('cache-control', 'public, max-age=30');
+      const precision = svc.datePrecisionFor(c.get('auth'));
+      const out = await svc.discoverTrips(deps, q, precision);
+      cacheFor(c, precision === 'DAY');
       return c.json(out, 200);
     },
   );
@@ -93,11 +121,18 @@ export function registerTrips(app: App): void {
       path: '/v1/trips/{id}',
       tags: ['Trips'],
       summary: 'Trip detail — owner sees everything; others get the public view of listed trips',
-      middleware: [optionalAuth] as const,
+      description: 'Optional bearer. Public view: exact dates for signed-in users, ISO-week precision for anonymous visitors (SEC-19, see GET /v1/trips).',
+      security: [{}, ...bearer],
+      middleware: [viewerAuth] as const,
       request: { params: IdParam },
-      responses: { 200: jsonContent(TripViewSchema), 400: errorResponses[400], 404: errorResponses[404] },
+      responses: { 200: jsonContent(TripViewSchema), 400: errorResponses[400], 401: errorResponses[401], 404: errorResponses[404] },
     }),
-    async (c) => c.json(await svc.getTripView(c.get('deps'), c.get('auth'), c.req.valid('param').id), 200),
+    async (c) => {
+      const auth = c.get('auth');
+      const out = await svc.getTripView(c.get('deps'), auth, c.req.valid('param').id);
+      cacheFor(c, !!auth);
+      return c.json(out, 200);
+    },
   );
 
   r.openapi(

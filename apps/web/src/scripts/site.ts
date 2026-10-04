@@ -4,7 +4,8 @@
  * explicit user action, and removed on logout (session.clear()):
  *   jk:consent  — the visitor's cookie/analytics choice ("necessary" | "analytics")   [localStorage]
  *   jk:theme    — theme the visitor picked with the toggle                           [localStorage]
- * (jk:refresh / jk:device live in sessionStorage — see src/lib/api.ts.)
+ * (jk:device lives in sessionStorage — see src/lib/api.ts. The refresh token is NOT in web storage: the API keeps it in
+ * the HttpOnly cookie `jk_rt` on its own host — SEC-14 cookie transport.)
  * No analytics or third-party trackers are loaded, regardless of consent.
  */
 
@@ -23,10 +24,11 @@ function safeSet(key: string, value: string): void {
   }
 }
 
-// One-time cleanup of pre-release unscoped keys (never shipped publicly, but may exist on test devices).
+// One-time cleanup of pre-release unscoped keys (never shipped publicly, but may exist on test devices) and of the
+// refresh token that older builds kept in sessionStorage (`jk:refresh`, replaced by the HttpOnly cookie).
 try {
   for (const k of ['jk-consent', 'jk-theme']) localStorage.removeItem(k);
-  for (const k of ['jk-session', 'jk-device']) sessionStorage.removeItem(k);
+  for (const k of ['jk-session', 'jk-device', 'jk:refresh']) sessionStorage.removeItem(k);
 } catch {
   /* storage unavailable */
 }

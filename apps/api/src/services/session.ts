@@ -136,6 +136,16 @@ export async function revokeSession(db: Db, sessionId: string, reason: 'LOGOUT' 
   await db`UPDATE refresh_tokens SET revoked_at = ${now}, revoked_reason = ${reason} WHERE family_id = ${sessionId} AND revoked_at IS NULL`;
 }
 
+/**
+ * Session family (and owner) of a refresh token in any state, or null when unknown. Used by logout with a refresh
+ * token (body or the web `jk_rt` cookie); never rotates and never triggers reuse detection.
+ */
+export async function findRefreshTokenSession(db: Db, refreshToken: string): Promise<{ userId: string; sessionId: string } | null> {
+  const [r] = await db<{ user_id: string; family_id: string }[]>`
+    SELECT user_id, family_id FROM refresh_tokens WHERE token_hash = ${Buffer.from(await sha256(refreshToken))}`;
+  return r ? { userId: r.user_id, sessionId: r.family_id } : null;
+}
+
 /** SEC-13: login method + start time of a live session family (copied across rotations). */
 export async function sessionOrigin(db: Db, sessionId: string, userId: string): Promise<{ authMethod: string | null; startedAt: Date | null } | null> {
   const [r] = await db<{ auth_method: string | null; session_started_at: Date | null }[]>`

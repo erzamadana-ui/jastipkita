@@ -11,16 +11,25 @@
  */
 import type { AppDeps, AuthContext } from '../../context';
 import type { TxSql } from '../../db/sql';
-import { generateTotpSecret, numericCode, randomBytes, timingSafeEqual, totpUri, verifyTotp, base32Encode } from '../../lib/crypto';
+import { generateTotpSecret, numericCode, randomBytes, sha256, timingSafeEqual, totpUri, verifyTotp, base32Encode } from '../../lib/crypto';
 import { AppError, Errors } from '../../lib/errors';
 import { audit } from '../../services/audit';
 import { emitEvent } from '../../services/outbox';
-import { issueSession, markSessionMfaVerified, revokeSession, rotateRefreshToken, sessionOrigin, signAccessToken, type IssuedSession } from '../../services/session';
+import {
+  findRefreshTokenSession,
+  issueSession,
+  markSessionMfaVerified,
+  revokeSession,
+  rotateRefreshToken,
+  sessionOrigin,
+  signAccessToken,
+  type IssuedSession,
+} from '../../services/session';
 import { recomputeKycLevel } from '../kyc/level';
 import { fingerprintHash, insertConsents, loadProfile, missingSignupConsents, upsertUserDevice } from '../me/repository';
 import type { ConsentInput, DeviceInput, Profile } from '../me/schemas';
 import { buf, normalizeEmail, normalizePhone, SECURITY, securityEvent, u8, type RequestMeta } from './common';
-import { OAuthVerificationError, verifyIdToken, type OAuthProvider, type VerifiedIdentity } from './oauth';
+import { nonceRequired, OAuthVerificationError, verifyIdToken, type OAuthProvider, type VerifiedIdentity } from './oauth';
 import * as repo from './repository';
 import { inTx } from './repository';
 import { assessSignup, recordSignupRisk } from './risk';
@@ -365,6 +374,7 @@ function statusGate(deps: AppDeps, tx: TxSql, u: repo.LoginUserRow, method: stri
   return Promise.resolve(null);
 }
 
+const nonceReused = () => new AppError(401, 'OAUTH_TOKEN_INVALID', 'Token masuk tidak valid atau kedaluwarsa', { reason: 'NONCE_REUSED' });
 const consentRequired = (missing: string[]) =>
   Errors.unprocessable('CONSENT_REQUIRED', 'Setujui Syarat & Ketentuan dan Kebijakan Privasi untuk membuat akun', { required: missing });
 const signupBlocked = () => Errors.forbidden('Pendaftaran tidak dapat diproses saat ini. Hubungi dukungan pelanggan.', 'SIGNUP_BLOCKED');
@@ -523,14 +533,24 @@ export async function oauthLogin(
 ): Promise<LoginResult> {
   let id: VerifiedIdentity;
   try {
-    id = await verifyIdToken(deps, provider, input.token, { nonce: input.nonce, rawNonce: provider === 'APPLE' ? input.rawNonce : undefined });
+    id = await verifyIdToken(deps, provider, input.token, {
+      nonce: input.nonce,
+      rawNonce: provider === 'APPLE' ? input.rawNonce : undefined,
+      required: nonceRequired(deps, provider),
+    });
   } catch (err) {
     const reason = err instanceof OAuthVerificationError ? err.reason : 'SIGNATURE_INVALID';
     await securityEvent(deps, deps.sql, { type: 'LOGIN_FAILED', req: ctx.req, meta: { method: provider, reason } });
     if (reason === 'KEYS_UNAVAILABLE') throw Errors.unavailable('OAUTH_UNAVAILABLE', 'Layanan masuk sedang tidak tersedia, coba lagi');
     if (reason === 'NOT_CONFIGURED') throw Errors.unavailable('OAUTH_NOT_CONFIGURED', 'Metode masuk ini belum diaktifkan');
+    if (reason === 'NONCE_REQUIRED') {
+      // SEC-15: an outdated client (or a replayed bare token) — the provider requires a nonce.
+      throw new AppError(401, 'OAUTH_NONCE_REQUIRED', 'Permintaan masuk tidak lengkap (nonce wajib). Perbarui aplikasi lalu coba lagi.', { provider });
+    }
     throw new AppError(401, 'OAUTH_TOKEN_INVALID', 'Token masuk tidak valid atau kedaluwarsa', { reason });
   }
+  // SEC-15: a token whose nonce was verified is single use (recorded on success, below).
+  const nonceHash = id.nonce ? await sha256(`${provider}:${id.nonce.claim}`) : null;
   if (provider === 'GOOGLE' && !id.emailVerified) {
     await securityEvent(deps, deps.sql, { type: 'LOGIN_FAILED', req: ctx.req, meta: { method: provider, reason: 'EMAIL_UNVERIFIED' } });
     throw new AppError(401, 'OAUTH_EMAIL_UNVERIFIED', 'E-mail akun Google belum terverifikasi');
@@ -540,6 +560,10 @@ export async function oauthLogin(
 
   const outcome = await inTx(deps, async (tx): Promise<Outcome<LoginResult>> => {
     const now = deps.clock.now();
+    if (nonceHash && (await repo.oauthNonceUsed(tx, provider, nonceHash))) {
+      await securityEvent(deps, tx, { type: 'LOGIN_FAILED', severity: 'MEDIUM', req: ctx.req, meta: { method: provider, reason: 'NONCE_REUSED' } });
+      return fail(nonceReused());
+    }
     let userId = await repo.findSocialIdentity(tx, provider, id.subject);
     let isNewUser = false;
     if (userId) {
@@ -583,6 +607,8 @@ export async function oauthLogin(
     const gate = await statusGate(deps, tx, u, provider, ctx.req);
     if (gate) return fail(gate);
     if (!isNewUser && !u.display_name && displayName) await tx`UPDATE users SET display_name = ${displayName} WHERE id = ${userId}`;
+    // concurrent replay of the same token: the loser rolls back everything (no account, no session)
+    if (nonceHash && !(await repo.recordOauthNonce(tx, provider, nonceHash, id.nonce!.expiresAt, now))) throw nonceReused();
     const session = await finishLogin(deps, tx, userId, provider, input, ctx.req, isNewUser);
     return ok({ tokens: tokensOf(session), user: await loadProfile(tx, userId), isNewUser });
   });
@@ -609,11 +635,29 @@ async function unlinkSessionDevice(tx: TxSql, userId: string, sessionId: string,
                         WHERE o.user_id = ${userId} AND o.device_id = ud.device_id AND o.revoked_at IS NULL AND o.family_id <> ${sessionId})`;
 }
 
-export async function logout(deps: AppDeps, auth: AuthContext, req: RequestMeta) {
-  await inTx(deps, async (tx) => {
-    await revokeSession(tx, auth.sessionId, 'LOGOUT', deps.clock.now());
-    await unlinkSessionDevice(tx, auth.userId, auth.sessionId, deps.clock.now());
-    await securityEvent(deps, tx, { userId: auth.userId, type: 'LOGOUT', req, meta: { sessionId: auth.sessionId } });
+/**
+ * Revokes the caller's session: the bearer's session and/or the session of the presented refresh token (body, or the
+ * `jk_rt` cookie with cookie transport — lets a web tab without a live access token log out). A refresh token that no
+ * longer maps to a live session is a no-op (logout is idempotent). Returns the number of sessions revoked.
+ */
+export async function logout(deps: AppDeps, who: { auth?: AuthContext | undefined; refreshToken?: string | undefined }, req: RequestMeta): Promise<number> {
+  return inTx(deps, async (tx) => {
+    const now = deps.clock.now();
+    const sessions = new Map<string, { userId: string; via: 'ACCESS_TOKEN' | 'REFRESH_TOKEN' }>();
+    if (who.auth) sessions.set(who.auth.sessionId, { userId: who.auth.userId, via: 'ACCESS_TOKEN' });
+    if (who.refreshToken) {
+      const s = await findRefreshTokenSession(tx, who.refreshToken);
+      if (s && !sessions.has(s.sessionId)) sessions.set(s.sessionId, { userId: s.userId, via: 'REFRESH_TOKEN' });
+    }
+    let revoked = 0;
+    for (const [sessionId, { userId, via }] of sessions) {
+      if (!(await repo.sessionBelongsTo(tx, userId, sessionId))) continue; // already revoked / rotated away: nothing to do
+      await revokeSession(tx, sessionId, 'LOGOUT', now);
+      await unlinkSessionDevice(tx, userId, sessionId, now);
+      await securityEvent(deps, tx, { userId, type: 'LOGOUT', req, meta: { sessionId, via } });
+      revoked++;
+    }
+    return revoked;
   });
 }
 

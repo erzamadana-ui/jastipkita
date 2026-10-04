@@ -242,6 +242,7 @@ export async function evaluateAndPersistAlerts(deps: AppDeps): Promise<Record<st
   const alerts = evaluateAlerts(health, deps.env.APP_ENV);
   const now = deps.clock.now();
   let opened = 0;
+  const openedAlerts: Alert[] = []; // logged after COMMIT (infra/monitoring/alerts.yaml: log-based paging)
   let resolved = 0;
   await deps.sql.begin(async (tx) => {
     const open = await tx<{ id: string; code: string }[]>`SELECT id, code FROM admin_ops_alerts WHERE status = 'OPEN' FOR UPDATE`;
@@ -262,11 +263,15 @@ export async function evaluateAndPersistAlerts(deps: AppDeps): Promise<Record<st
       await tx`INSERT INTO admin_ops_alerts (code, severity, value, threshold, message, details, first_seen_at, last_seen_at)
                VALUES (${a.code}, ${a.severity}, ${a.value}, ${a.threshold}, ${a.message}, ${tx.json({ description: a.description } as never)}, ${now}, ${now})`;
       opened++;
+      openedAlerts.push(a);
       if (a.severity === 'HIGH' || a.severity === 'CRITICAL') {
         await tx`INSERT INTO security_events (type, severity, meta, created_at)
                  VALUES ('OPS_ALERT', ${a.severity}, ${tx.json({ code: a.code, value: a.value, threshold: a.threshold, message: a.message } as never)}, ${now})`;
       }
     }
   });
+  for (const a of openedAlerts) {
+    deps.logger[a.severity === 'HIGH' || a.severity === 'CRITICAL' ? 'error' : 'warn']('ALERT ops.alert_opened', { code: a.code, severity: a.severity, value: a.value, threshold: a.threshold });
+  }
   return { status: health.status, active: alerts.length, opened, resolved };
 }

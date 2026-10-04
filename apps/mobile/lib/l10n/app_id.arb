@@ -610,7 +610,29 @@
   "ticketMessage": "Pesan",
   "ticketLinked": "Tiket ini terhubung dengan transaksi terkait.",
   "ticketSubmit": "Kirim tiket",
-  "ticketSlaNote": "Kami biasanya membalas dalam 1×24 jam kerja. Jangan kirim PIN, OTP, atau kata sandi.",
+  "ticketSlaNote": "Target respons pertama mengikuti prioritas tiket dan tampil di tiket setelah dikirim. Jangan kirim PIN, OTP, atau kata sandi.",
+  "ticketCategoryComplaint": "Pengaduan konsumen",
+  "ticketPriorityUrgent": "Mendesak",
+  "ticketPriorityHigh": "Tinggi",
+  "ticketPriorityNormal": "Normal",
+  "ticketPriorityLow": "Rendah",
+  "complaintTitle": "Pengaduan konsumen",
+  "complaintEntrySubtitle": "Keluhan atas layanan, traveler, atau transaksi — ditangani dengan prioritas tinggi.",
+  "complaintIntro": "Sampaikan keluhanmu tentang layanan JastipKita, traveler, atau transaksi. Pengaduan dicatat sebagai tiket berprioritas tinggi dengan nomor TKT-… sebagai bukti.",
+  "complaintSlaTitle": "Target waktu respons",
+  "complaintSlaNote": "Ini batas respons pertama dari tim kami, bukan batas penyelesaian. Angka pra-peluncuran dan dapat berubah; target untuk pengaduanmu tampil di tiket.",
+  "complaintSlaUnavailable": "Target waktu respons belum bisa dimuat. Target untuk pengaduanmu tetap tampil di tiket setelah dikirim.",
+  "complaintFormTitle": "Tulis pengaduan",
+  "complaintIncludeHint": "Sertakan nomor transaksi (JK-…) bila ada, kronologi singkat (apa, kapan, siapa), dan penyelesaian yang kamu harapkan.",
+  "complaintSubmit": "Kirim pengaduan",
+  "complaintNoSecrets": "Jangan kirim PIN serah terima, kode OTP, kata sandi, atau nomor kartu.",
+  "complaintDisputeNote": "Masalah dengan barang yang sudah dibayar (tidak diterima, tidak sesuai, rusak)? Buka dispute dari halaman transaksi — dana tetap ditahan SafePay selama dispute berjalan.",
+  "complaintEscalationTitle": "Belum puas? Eskalasi ke pemerintah",
+  "complaintEscalationBody": "Bila penyelesaian kami belum memuaskan, kamu berhak mengadu ke instansi perlindungan konsumen:",
+  "complaintBpsk": "Sengketa juga dapat diselesaikan di luar pengadilan lewat BPSK di kabupaten/kota tempat tinggalmu (UU 8/1999).",
+  "autofillNotice": "Diisi otomatis dengan bantuan AI/ekstraksi otomatis — periksa kembali sebelum menitip.",
+  "autofillFieldHelper": "Diisi otomatis — periksa kembali",
+  "autofillDetailLabel": "Data produk diisi otomatis (AI/ekstraksi otomatis) — periksa kembali dengan halaman toko.",
   "checkoutTitle": "Pembayaran",
   "checkoutStep": "Langkah terakhir",
   "channelTitle": "Metode pembayaran",
@@ -1872,6 +1894,33 @@
       "count": {
         "type": "int",
         "example": "2"
+      }
+    }
+  },
+  "complaintSlaHours": "Respons pertama paling lambat {hours} jam sejak pengaduan dikirim.",
+  "@complaintSlaHours": {
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "complaintHoursShort": "{hours} jam",
+  "@complaintHoursShort": {
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "complaintEscalationVerified": "Kontak diverifikasi {date}; dapat berubah — cek situs resminya.",
+  "@complaintEscalationVerified": {
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "4 Okt 2026"
       }
     }
   }

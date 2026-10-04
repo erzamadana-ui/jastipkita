@@ -52,7 +52,7 @@ export interface paths {
         put?: never;
         /**
          * Verify a one-time code
-         * @description LOGIN → {tokens, user, isNewUser}; a new account requires `consents` (TOS + PRIVACY). VERIFY_PHONE (bearer auth) raises the account to level 2; VERIFY_EMAIL (bearer auth) sets the transaction e-mail. 5 wrong attempts lock the challenge.
+         * @description LOGIN → {tokens, user, isNewUser}; a new account requires `consents` (TOS + PRIVACY). VERIFY_PHONE (bearer auth) raises the account to level 2; VERIFY_EMAIL (bearer auth) sets the transaction e-mail. 5 wrong attempts lock the challenge. Web: send `X-JK-Token-Transport: cookie` (credentialed fetch from an allow-listed Origin) to receive the refresh token only as the HttpOnly cookie `jk_rt` (omitted from the body).
          */
         post: operations["postAuthOtpVerify"];
         delete?: never;
@@ -72,7 +72,7 @@ export interface paths {
         put?: never;
         /**
          * Sign in with Google (ID token)
-         * @description Verifies the ID token against Google JWKS (iss accounts.google.com, aud ∈ GOOGLE_CLIENT_IDS, email_verified). Links to an existing account with the same verified e-mail.
+         * @description Verifies the ID token against Google JWKS (iss accounts.google.com, aud ∈ GOOGLE_CLIENT_IDS, email_verified). Links to an existing account with the same verified e-mail. `nonce` is checked when sent (required when GOOGLE ∈ OAUTH_REQUIRE_NONCE → 401 OAUTH_NONCE_REQUIRED); a verified nonce makes the token single use. Web: send `X-JK-Token-Transport: cookie` (credentialed fetch from an allow-listed Origin) to receive the refresh token only as the HttpOnly cookie `jk_rt` (omitted from the body).
          */
         post: operations["postAuthGoogle"];
         delete?: never;
@@ -92,7 +92,7 @@ export interface paths {
         put?: never;
         /**
          * Sign in with Apple (identity token)
-         * @description Verifies against Apple JWKS (iss https://appleid.apple.com, aud ∈ APPLE_CLIENT_IDS). Private-relay e-mails are accepted; `fullName` is only sent by Apple on first authorization.
+         * @description Verifies against Apple JWKS (iss https://appleid.apple.com, aud ∈ APPLE_CLIENT_IDS). Private-relay e-mails are accepted; `fullName` is only sent by Apple on first authorization. A nonce is REQUIRED by default (`rawNonce`, or the legacy hashed `nonce`; OAUTH_REQUIRE_NONCE) → 401 OAUTH_NONCE_REQUIRED; the verified nonce makes the token single use. Web: send `X-JK-Token-Transport: cookie` (credentialed fetch from an allow-listed Origin) to receive the refresh token only as the HttpOnly cookie `jk_rt` (omitted from the body).
          */
         post: operations["postAuthApple"];
         delete?: never;
@@ -112,7 +112,7 @@ export interface paths {
         put?: never;
         /**
          * Rotate the refresh token
-         * @description Refresh tokens are single-use. Re-using a rotated token revokes the whole session family (theft detection).
+         * @description Refresh tokens are single-use. Re-using a rotated token revokes the whole session family (theft detection). Cookie transport (`X-JK-Token-Transport: cookie`, allow-listed Origin): the body may be empty — the `jk_rt` cookie is used, rotated and re-set; no cookie → 401 REFRESH_MISSING; a failed refresh also clears the cookie.
          */
         post: operations["postAuthRefresh"];
         delete?: never;
@@ -130,7 +130,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Log out (revoke the current session) */
+        /**
+         * Log out (revoke the current session)
+         * @description Revokes the bearer token's session and/or the session of the presented refresh token (`refreshToken` in the body, or the `jk_rt` cookie with `X-JK-Token-Transport: cookie` + allow-listed Origin). Cookie transport always clears the cookie. Without any credential → 401. Idempotent for a refresh token whose session already ended.
+         */
         post: operations["postAuthLogout"];
         delete?: never;
         options?: never;
@@ -418,7 +421,7 @@ export interface paths {
         };
         /**
          * Stream a file through the API (decrypts encrypted files)
-         * @description KYC documents require permission kyc.review; access is audited.
+         * @description KYC documents require permission kyc.review; access is audited. SEC-18: `Content-Disposition: inline` only for raster images (jpeg/png/webp/heic), `attachment` for everything else; always `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox`.
          */
         get: operations["getFilesByIdContent"];
         put?: never;
@@ -790,7 +793,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Public trip discovery (ACTIVE trips; no PII — first name + initial, badge, rating) */
+        /**
+         * Public trip discovery (ACTIVE trips; no PII — first name + initial, badge, rating)
+         * @description Optional bearer. SEC-19: anonymous requests get `datePrecision: WEEK` — dates coarsened to the ISO week (Mon–Sun, `departureWindow` / `arrivalWindow`, `departureDate`/`arrivalDate` = window start), date filters evaluated per whole week and results ordered by week then id. Signed-in users get exact dates (`DAY`). An Authorization header that does not verify answers 401 (refresh and retry). Anonymous responses: `Cache-Control: public, max-age=30`; signed-in: `private, no-store`.
+         */
         get: operations["getTrips"];
         put?: never;
         /** Create a trip (DRAFT) */
@@ -825,7 +831,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Trip detail — owner sees everything; others get the public view of listed trips */
+        /**
+         * Trip detail — owner sees everything; others get the public view of listed trips
+         * @description Optional bearer. Public view: exact dates for signed-in users, ISO-week precision for anonymous visitors (SEC-19, see GET /v1/trips).
+         */
         get: operations["getTripsById"];
         put?: never;
         post?: never;
@@ -2108,6 +2117,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/support/complaint-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consumer complaint channel (Permendag 19/2026): published channels, first-response SLA by priority, government escalation */
+        get: operations["getSupportComplaintInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/support/tickets": {
         parameters: {
             query?: never;
@@ -2118,7 +2144,7 @@ export interface paths {
         /** My support tickets */
         get: operations["getSupportTickets"];
         put?: never;
-        /** Create a support ticket (TKT-…), optionally linked to my transaction or dispute; SLA by priority */
+        /** Create a support ticket (TKT-…) or consumer complaint (category COMPLAINT, default HIGH), optionally linked to my transaction or dispute; SLA by priority (config support.sla) */
         post: operations["postSupportTickets"];
         delete?: never;
         options?: never;
@@ -4235,6 +4261,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/health/worker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public worker heartbeat for uptime checkers: age of the last finished scheduled job; 503 when older than 3 cron intervals (no sensitive data) */
+        get: operations["getHealthWorker"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/infra/db/health": {
         parameters: {
             query?: never;
@@ -4314,6 +4357,23 @@ export interface paths {
         put?: never;
         /** Connection test (3 × SELECT 1) — recorded as db_operations CONNECTION_TEST */
         post: operations["postAdminInfraDbConnectionTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/infra/audit/checkpoints/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read-only: recompute the audit hash chain since the latest daily checkpoint and compare with the checkpoint row and its WORM storage object → OK / BROKEN / NO_CHECKPOINT (+ findings, last 10 checkpoints) */
+        get: operations["getAdminInfraAuditCheckpointsVerify"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4603,7 +4663,8 @@ export interface components {
             tokenType: "Bearer";
             accessToken: string;
             accessTokenExpiresAt: string;
-            refreshToken: string;
+            /** @description Opaque, single-use (rotated on every refresh). Always present with the default body transport (mobile, admin). OMITTED when the request sent `X-JK-Token-Transport: cookie` (web): the token is then only in the HttpOnly cookie `jk_rt` set by the API host. */
+            refreshToken?: string;
             refreshTokenExpiresAt: string;
             /** Format: uuid */
             sessionId: string;
@@ -4643,6 +4704,7 @@ export interface components {
         };
         GoogleSignIn: {
             idToken: string;
+            /** @description Random value the client passed to Google (GIS `nonce`); the ID token `nonce` claim must equal it (constant-time) → 401 OAUTH_TOKEN_INVALID {reason: NONCE_MISMATCH}. A verified nonce makes the ID token single use (replay → {reason: NONCE_REUSED}). Required when GOOGLE ∈ OAUTH_REQUIRE_NONCE (401 OAUTH_NONCE_REQUIRED); optional by default (mobile does not send it yet). */
             nonce?: string;
             device?: components["schemas"]["DeviceInput"];
             /** @description Required when a new account is created: TOS and PRIVACY granted (MARKETING optional) */
@@ -4652,7 +4714,7 @@ export interface components {
             identityToken: string;
             /** @description Expected `nonce` claim, compared verbatim (i.e. the SHA-256 hex the app passed to Apple). Prefer rawNonce. */
             nonce?: string;
-            /** @description Raw nonce generated by the app. The app passes SHA-256(rawNonce) (lowercase hex) to Apple; the API requires the identity token `nonce` claim to equal that hash (constant-time) → 401 OAUTH_TOKEN_INVALID {reason: NONCE_MISMATCH} otherwise. */
+            /** @description Raw nonce generated by the app. The app passes SHA-256(rawNonce) (lowercase hex) to Apple; the API requires the identity token `nonce` claim to equal that hash (constant-time) → 401 OAUTH_TOKEN_INVALID {reason: NONCE_MISMATCH} otherwise. REQUIRED by default (APPLE ∈ OAUTH_REQUIRE_NONCE): a request with neither rawNonce nor nonce → 401 OAUTH_NONCE_REQUIRED. The verified nonce is single use (replay → {reason: NONCE_REUSED}). */
             rawNonce?: string;
             /** @description Apple sends the name only on the FIRST authorization; stored only when the account is created */
             fullName?: {
@@ -4667,11 +4729,16 @@ export interface components {
             tokens: components["schemas"]["Tokens"];
         };
         Refresh: {
-            refreshToken: string;
+            /** @description Required with body transport. With `X-JK-Token-Transport: cookie` it may be omitted (the body may be empty): the `jk_rt` cookie is used. */
+            refreshToken?: string;
         };
         Ok: {
             /** @enum {boolean} */
             ok: true;
+        };
+        Logout: {
+            /** @description Optional: revokes the session this refresh token belongs to (lets a client without a valid access token log out). Cookie transport reads `jk_rt` instead. */
+            refreshToken?: string;
         };
         Session: {
             /** Format: uuid */
@@ -4907,6 +4974,8 @@ export interface components {
             verificationStatus: "UNVERIFIED" | "PENDING" | "VERIFIED" | "FAILED" | "NAME_MISMATCH";
             isDefault: boolean;
             verifiedAt: string | null;
+            /** @description New-account cooldown (anti account-takeover, money.policy.newPayoutAccountCooldownHours): no payout is sent to this account before this time — latest of added / verified / made default + cooldown. null once it has passed. */
+            payoutsFrom: string | null;
             createdAt: string;
         };
         PayoutAccountInput: {
@@ -5308,8 +5377,17 @@ export interface components {
             originCity: string;
             destinationCountry: string;
             destinationCity: string;
+            /** @description DAY precision: exact date. WEEK precision (anonymous): Monday of the departure week — NOT the exact date; render departureWindow. */
             departureDate: string;
+            /** @description DAY precision: exact date. WEEK precision (anonymous): Monday of the arrival week — render arrivalWindow. */
             arrivalDate: string;
+            /**
+             * @description SEC-19: WEEK for anonymous requests (dates coarsened to the ISO week, Mon–Sun), DAY for signed-in users (exact dates).
+             * @enum {string}
+             */
+            datePrecision: "DAY" | "WEEK";
+            departureWindow: components["schemas"]["TripDateWindow"];
+            arrivalWindow: components["schemas"]["TripDateWindow"];
             capacityRemainingKg: number;
             itemsRemaining: number | null;
             fee: components["schemas"]["TripFee"];
@@ -5317,6 +5395,13 @@ export interface components {
             /** @description Travel document verified by JastipKita */
             verified: boolean;
             traveler: components["schemas"]["PublicProfile"];
+        };
+        /** @description Inclusive calendar-date window (YYYY-MM-DD). DAY precision: from = to = the exact date; WEEK: Monday–Sunday. */
+        TripDateWindow: {
+            /** @example 2026-10-12 */
+            from: string;
+            /** @example 2026-10-18 */
+            to: string;
         };
         TripFee: {
             /** @enum {string} */
@@ -5523,6 +5608,7 @@ export interface components {
             version: number;
             /** @enum {string} */
             sourceType: "URL" | "PHOTO" | "SEARCH" | "MANUAL";
+            autoFill: components["schemas"]["RequestAutoFill"];
             productUrl: string | null;
             productName: string;
             merchantName: string | null;
@@ -5559,6 +5645,16 @@ export interface components {
             createdAt: string;
             updatedAt: string;
         };
+        /** @description Non-null when the product data was auto-filled from POST /v1/requests/extract (source URL/PHOTO/SEARCH + non-empty `extraction`). Permendag 19/2026 AI-content label: clients show "Diisi otomatis (AI/ekstraksi otomatis) — periksa kembali" next to the product data. */
+        RequestAutoFill: {
+            /** @enum {string} */
+            sourceType: "URL" | "PHOTO" | "SEARCH";
+            /**
+             * @description Extraction provider mode the client applied (from `extraction.mode`)
+             * @enum {string|null}
+             */
+            mode: "MOCK" | "SANDBOX" | "LIVE" | null;
+        } | null;
         RequestImage: {
             /** Format: uuid */
             fileId: string | null;
@@ -5605,6 +5701,7 @@ export interface components {
             imageFileIds?: string[];
             /** @description Buyer acknowledges the restricted-item warning */
             acknowledgeRestriction?: boolean;
+            /** @description Metadata of the applied POST /requests/extract result, e.g. {mode, confidence}; non-empty with sourceType URL/PHOTO/SEARCH → `autoFill` label */
             extraction?: {
                 [key: string]: unknown;
             };
@@ -5624,6 +5721,7 @@ export interface components {
             id: string;
             /** @enum {string} */
             status: "DRAFT" | "OPEN" | "MATCHED" | "CLOSED" | "CANCELLED" | "EXPIRED";
+            autoFill: components["schemas"]["RequestAutoFill"];
             productUrl: string | null;
             productName: string;
             merchantName: string | null;
@@ -6503,6 +6601,8 @@ export interface components {
             status: "SCHEDULED" | "ON_HOLD" | "PROCESSING" | "PAID" | "FAILED" | "CANCELLED";
             holdReason: string | null;
             scheduledFor: string;
+            /** @description Set while the destination account is in its new-account cooldown (money.policy.newPayoutAccountCooldownHours): the payout is not sent before this time (ISO-8601) */
+            cooldownUntil: string | null;
             paidAt: string | null;
             destination: {
                 bankCode: string;
@@ -7030,6 +7130,83 @@ export interface components {
             tags: string[];
             updatedAt: string;
         };
+        ComplaintInfo: {
+            channels: {
+                inApp: {
+                    /** @enum {string} */
+                    ticketCategory: "COMPLAINT";
+                    /**
+                     * @description POST with category COMPLAINT (bearer)
+                     * @enum {string}
+                     */
+                    endpoint: "/v1/support/tickets";
+                };
+                /** @description Env SUPPORT_WHATSAPP; null while the channel is not announced yet */
+                whatsapp: {
+                    /** @example 628117805600 */
+                    number: string;
+                    url: string;
+                } | null;
+                /** @description Env SUPPORT_EMAIL; null while not announced yet */
+                email: string | null;
+                /** @description Public page with channels, SLA and process (WEB_BASE_URL/pengaduan/) */
+                webUrl: string;
+            };
+            sla: {
+                /**
+                 * @description Target = first public agent response (sla_due_at), not resolution
+                 * @enum {string}
+                 */
+                basis: "FIRST_RESPONSE";
+                /**
+                 * @description Default priority of a COMPLAINT ticket
+                 * @enum {string}
+                 */
+                complaintPriority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+                complaintFirstResponseHours: number;
+                hoursByPriority: {
+                    URGENT: number;
+                    HIGH: number;
+                    NORMAL: number;
+                    LOW: number;
+                };
+                /** @enum {string} */
+                configKey: "support.sla";
+                /** @description true while the SLA is an internal assumption (pre-launch), not a contractual commitment */
+                isAssumption: boolean;
+            };
+            escalation: {
+                authority: string;
+                unit: string;
+                ministry: string;
+                whatsapp: {
+                    number: string;
+                    display: string;
+                    url: string;
+                };
+                email: string;
+                phone: {
+                    number: string;
+                    display: string;
+                };
+                website: string;
+                verification: {
+                    /** @enum {string} */
+                    status: "VERIFIED" | "NEEDS_VERIFICATION";
+                    /** @description Date the contact data was checked against the sources (YYYY-MM-DD) */
+                    accessedAt: string;
+                    sources: string[];
+                };
+                /** @description Out-of-court dispute body under UU 8/1999 (BPSK) */
+                outOfCourt: string;
+            };
+            disputeFlow: {
+                /** @enum {string} */
+                endpoint: "/v1/transactions/{id}/disputes";
+                note: string;
+            };
+            legalBasis: string[];
+        };
         SupportTicketDetail: components["schemas"]["SupportTicket"] & {
             messages: {
                 /** Format: uuid */
@@ -7051,7 +7228,7 @@ export interface components {
             id: string;
             number: string;
             /** @enum {string} */
-            category: "TRANSACTION" | "DISPUTE" | "REFUND" | "ACCOUNT" | "PAYMENT" | "CUSTOMS" | "OTHER";
+            category: "TRANSACTION" | "DISPUTE" | "REFUND" | "ACCOUNT" | "PAYMENT" | "CUSTOMS" | "OTHER" | "COMPLAINT";
             subject: string;
             /** @enum {string} */
             status: "OPEN" | "PENDING_USER" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
@@ -7069,7 +7246,7 @@ export interface components {
         };
         CreateSupportTicket: {
             /** @enum {string} */
-            category: "TRANSACTION" | "DISPUTE" | "REFUND" | "ACCOUNT" | "PAYMENT" | "CUSTOMS" | "OTHER";
+            category: "TRANSACTION" | "DISPUTE" | "REFUND" | "ACCOUNT" | "PAYMENT" | "CUSTOMS" | "OTHER" | "COMPLAINT";
             subject: string;
             message: string;
             /** Format: uuid */
@@ -7077,6 +7254,11 @@ export interface components {
             /** Format: uuid */
             disputeId?: string;
             fileIds?: string[];
+            /**
+             * @description Optional. Default: HIGH for COMPLAINT / DISPUTE / REFUND / PAYMENT, NORMAL otherwise. URGENT is agent-only (400).
+             * @enum {string}
+             */
+            priority?: "LOW" | "NORMAL" | "HIGH";
         };
         SupportTicketPage: {
             data: components["schemas"]["SupportTicket"][];
@@ -7643,6 +7825,14 @@ export interface components {
              */
             effectiveAt?: string;
         };
+        WorkerHeartbeat: {
+            /** @enum {string} */
+            status: "ok" | "stale";
+            lastScheduledJobAt: string | null;
+            ageSec: number | null;
+            staleAfterSec: number;
+            checkedAt: string;
+        };
         AdminMigrationWorkflowStart: {
             targetVersion: string;
             description: string;
@@ -7781,7 +7971,10 @@ export interface operations {
     postAuthOtpVerify: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `cookie` (web): the refresh token is set as the HttpOnly cookie `jk_rt` (Secure; SameSite=Strict; Path=/v1/auth) and omitted from the JSON body; refresh/logout read it from the cookie. Requires an allow-listed `Origin` (403 ORIGIN_NOT_ALLOWED). Default `body` (mobile, admin). */
+                "x-jk-token-transport"?: "cookie" | "body";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7868,7 +8061,10 @@ export interface operations {
     postAuthGoogle: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `cookie` (web): the refresh token is set as the HttpOnly cookie `jk_rt` (Secure; SameSite=Strict; Path=/v1/auth) and omitted from the JSON body; refresh/logout read it from the cookie. Requires an allow-listed `Origin` (403 ORIGIN_NOT_ALLOWED). Default `body` (mobile, admin). */
+                "x-jk-token-transport"?: "cookie" | "body";
+            };
             path?: never;
             cookie?: never;
         };
@@ -7955,7 +8151,10 @@ export interface operations {
     postAuthApple: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `cookie` (web): the refresh token is set as the HttpOnly cookie `jk_rt` (Secure; SameSite=Strict; Path=/v1/auth) and omitted from the JSON body; refresh/logout read it from the cookie. Requires an allow-listed `Origin` (403 ORIGIN_NOT_ALLOWED). Default `body` (mobile, admin). */
+                "x-jk-token-transport"?: "cookie" | "body";
+            };
             path?: never;
             cookie?: never;
         };
@@ -8042,11 +8241,14 @@ export interface operations {
     postAuthRefresh: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `cookie` (web): the refresh token is set as the HttpOnly cookie `jk_rt` (Secure; SameSite=Strict; Path=/v1/auth) and omitted from the JSON body; refresh/logout read it from the cookie. Requires an allow-listed `Origin` (403 ORIGIN_NOT_ALLOWED). Default `body` (mobile, admin). */
+                "x-jk-token-transport"?: "cookie" | "body";
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["Refresh"];
             };
@@ -8129,11 +8331,18 @@ export interface operations {
     postAuthLogout: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `cookie` (web): the refresh token is set as the HttpOnly cookie `jk_rt` (Secure; SameSite=Strict; Path=/v1/auth) and omitted from the JSON body; refresh/logout read it from the cookie. Requires an allow-listed `Origin` (403 ORIGIN_NOT_ALLOWED). Default `body` (mobile, admin). */
+                "x-jk-token-transport"?: "cookie" | "body";
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Logout"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -11219,9 +11428,11 @@ export interface operations {
                 originCity?: string;
                 destinationCountry?: string;
                 destinationCity?: string;
+                /** @description Anonymous requests (WEEK precision): evaluated from the Monday of this week */
                 departureFrom?: string;
+                /** @description Anonymous requests (WEEK precision): evaluated up to the Sunday of this week */
                 departureTo?: string;
-                /** @description Trips arriving on or before this date */
+                /** @description Trips arriving on or before this date (anonymous requests: on or before the Sunday of its week) */
                 arrivalBy?: string;
                 /** @description Only trips that do not exclude this category */
                 categoryCode?: string;
@@ -11245,6 +11456,15 @@ export interface operations {
             };
             /** @description Validation error */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11414,6 +11634,15 @@ export interface operations {
             };
             /** @description Validation error */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18006,6 +18235,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FaqArticle"];
+                };
+            };
+            /** @description Validation error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Business rule violation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getSupportComplaintInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplaintInfo"];
                 };
             };
             /** @description Validation error */
@@ -30616,6 +30928,35 @@ export interface operations {
             };
         };
     };
+    getHealthWorker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Worker ran recently */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerHeartbeat"];
+                };
+            };
+            /** @description Worker stale — Cron Trigger / worker loop not running */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerHeartbeat"];
+                };
+            };
+        };
+    };
     getAdminInfraDbHealth: {
         parameters: {
             query?: never;
@@ -30951,6 +31292,89 @@ export interface operations {
         };
     };
     postAdminInfraDbConnectionTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminResult"];
+                };
+            };
+            /** @description Validation error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Business rule violation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminInfraAuditCheckpointsVerify: {
         parameters: {
             query?: never;
             header?: never;

@@ -564,6 +564,88 @@ class SupportTicket {
   bool get isClosed => status == 'CLOSED';
 }
 
+/// `GET /support/complaint-info` — consumer complaint channel (Permendag 19/2026): published
+/// channels (null while not announced), first-response SLA by priority (config `support.sla`)
+/// and the government escalation channel.
+class ComplaintInfo {
+  const ComplaintInfo({
+    required this.complaintPriority,
+    required this.complaintFirstResponseHours,
+    required this.hoursByPriority,
+    required this.slaIsAssumption,
+    required this.escalationAuthority,
+    required this.escalationUnit,
+    required this.escalationMinistry,
+    required this.escalationVerifiedAt,
+    required this.escalationOutOfCourt,
+    this.whatsappUrl,
+    this.email,
+    this.webUrl,
+    this.escalationWhatsappDisplay,
+    this.escalationWhatsappUrl,
+    this.escalationEmail,
+    this.escalationPhoneDisplay,
+    this.escalationPhoneNumber,
+    this.escalationWebsite,
+  });
+
+  factory ComplaintInfo.fromJson(Json json) {
+    final channels = readObject(json, 'channels');
+    final whatsapp = readObjectOrNull(channels, 'whatsapp');
+    final sla = readObject(json, 'sla');
+    final hours = readObject(sla, 'hoursByPriority');
+    final escalation = readObject(json, 'escalation');
+    final escWhatsapp = readObject(escalation, 'whatsapp');
+    final escPhone = readObject(escalation, 'phone');
+    final verification = readObject(escalation, 'verification');
+    return ComplaintInfo(
+      whatsappUrl: whatsapp == null ? null : readStringOrNull(whatsapp, 'url'),
+      email: readStringOrNull(channels, 'email'),
+      webUrl: readStringOrNull(channels, 'webUrl'),
+      complaintPriority: readString(sla, 'complaintPriority', 'HIGH'),
+      complaintFirstResponseHours: readInt(sla, 'complaintFirstResponseHours'),
+      hoursByPriority: <String, int>{
+        for (final p in priorities)
+          if (readIntOrNull(hours, p) != null) p: readInt(hours, p),
+      },
+      slaIsAssumption: readBool(sla, 'isAssumption', true),
+      escalationAuthority: readString(escalation, 'authority'),
+      escalationUnit: readString(escalation, 'unit'),
+      escalationMinistry: readString(escalation, 'ministry'),
+      escalationWhatsappDisplay: readStringOrNull(escWhatsapp, 'display'),
+      escalationWhatsappUrl: readStringOrNull(escWhatsapp, 'url'),
+      escalationEmail: readStringOrNull(escalation, 'email'),
+      escalationPhoneDisplay: readStringOrNull(escPhone, 'display'),
+      escalationPhoneNumber: readStringOrNull(escPhone, 'number'),
+      escalationWebsite: readStringOrNull(escalation, 'website'),
+      escalationVerifiedAt: readString(verification, 'accessedAt'),
+      escalationOutOfCourt: readString(escalation, 'outOfCourt'),
+    );
+  }
+
+  /// Most urgent first, the order the SLA table is shown in.
+  static const List<String> priorities = <String>['URGENT', 'HIGH', 'NORMAL', 'LOW'];
+
+  final String? whatsappUrl;
+  final String? email;
+  final String? webUrl;
+  final String complaintPriority;
+  final int complaintFirstResponseHours;
+  final Map<String, int> hoursByPriority;
+  final bool slaIsAssumption;
+  final String escalationAuthority;
+  final String escalationUnit;
+  final String escalationMinistry;
+  final String? escalationWhatsappDisplay;
+  final String? escalationWhatsappUrl;
+  final String? escalationEmail;
+  final String? escalationPhoneDisplay;
+  final String? escalationPhoneNumber;
+  final String? escalationWebsite;
+  final String escalationVerifiedAt;
+  final String escalationOutOfCourt;
+}
+
 class RatingSummary {
   const RatingSummary({this.travelerAverage, this.travelerCount = 0, this.buyerAverage, this.buyerCount = 0});
 

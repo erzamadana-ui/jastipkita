@@ -180,6 +180,9 @@ class EngagementRepository {
         ),
       );
 
+  /// Public: consumer complaint channels, SLA by priority and government escalation.
+  Future<ComplaintInfo> complaintInfo() async => ComplaintInfo.fromJson(await _api.get('/support/complaint-info'));
+
   Future<SupportTicket> replyTicket(String id, String body) async =>
       SupportTicket.fromJson(await _api.post('/support/tickets/$id/messages', body: <String, dynamic>{'body': body}));
 
@@ -213,6 +216,10 @@ final unreadCountProvider = FutureProvider.autoDispose<int>((ref) {
 
 final disputeDetailProvider = FutureProvider.autoDispose.family<Dispute, String>(
   (ref, id) => ref.watch(engagementRepositoryProvider).dispute(id),
+);
+
+final complaintInfoProvider = FutureProvider.autoDispose<ComplaintInfo>(
+  (ref) => ref.watch(engagementRepositoryProvider).complaintInfo(),
 );
 
 final ticketDetailProvider = FutureProvider.autoDispose.family<SupportTicket, String>(

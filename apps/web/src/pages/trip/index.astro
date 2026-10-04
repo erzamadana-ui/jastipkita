@@ -20,7 +20,7 @@ const wa = whatsappUrl('Halo JastipKita, kabari saya saat trip traveler sudah te
       <Breadcrumbs items={crumbs} />
       <span class="eyebrow mt-18"><Icon name="plane-takeoff" size={16} />Trip discovery</span>
       <h1>Cari traveler yang sedang ke luar negeri</h1>
-      <p class="lead">Hanya trip berstatus aktif yang tampil. Nama traveler disingkat (nama depan + inisial) untuk melindungi privasi; detail lengkap terlihat di aplikasi setelah match.</p>
+      <p class="lead">Hanya trip berstatus aktif yang tampil. Untuk melindungi privasi traveler, nama disingkat (nama depan + inisial) dan tanggal berangkat/tiba ditampilkan sebagai rentang minggu; tanggal pasti terlihat setelah masuk di aplikasi.</p>
     </div>
   </section>
 
@@ -40,7 +40,8 @@ const wa = whatsappUrl('Halo JastipKita, kabari saya saat trip traveler sudah te
         </div>
         <div class="field">
           <label for="f-arrival">Tiba paling lambat</label>
-          <input class="input" id="f-arrival" name="arrivalBy" type="date" />
+          <input class="input" id="f-arrival" name="arrivalBy" type="date" aria-describedby="f-arrival-hint" />
+          <span class="small muted" id="f-arrival-hint">Dihitung per minggu (Senin–Minggu)</span>
         </div>
         <div class="field">
           <label for="f-cat">Kategori barang</label>
@@ -53,6 +54,10 @@ const wa = whatsappUrl('Halo JastipKita, kabari saya saat trip traveler sudah te
         <button class="btn btn-primary" type="submit"><Icon name="search" />Cari trip</button>
       </form>
 
+      <div class="note mt-20" id="trip-week-note" role="note" hidden>
+        <Icon name="calendar" />
+        <p>Tanggal ditampilkan sebagai rentang minggu (Senin–Minggu) untuk melindungi keamanan traveler. <strong>Tanggal pasti terlihat setelah kamu masuk di aplikasi JastipKita.</strong></p>
+      </div>
       <div id="trip-results" class="trip-results" aria-live="polite" aria-busy="true">
         {[0, 1, 2].map(() => <div class="card skeleton-card" aria-hidden="true"><div class="skeleton h-22 w-60p"></div><div class="skeleton h-14 w-40p mt-12"></div><div class="skeleton h-6 mt-20"></div><div class="skeleton h-40 w-50p mt-18 rounded-pill"></div></div>)}
       </div>

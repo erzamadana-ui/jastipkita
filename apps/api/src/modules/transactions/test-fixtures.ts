@@ -27,17 +27,26 @@ export async function setupParties(t: TestContext, opts: { buyerKyc?: number; tr
   return { buyer: { ...buyer, tokenIssuedAt: now }, traveler: { ...traveler, tokenIssuedAt: now }, payoutAccountId };
 }
 
-export async function createPayoutAccount(t: TestContext, userId: string, opts: { verified?: boolean; accountNumber?: string } = {}): Promise<string> {
+/**
+ * Payout account fixture. Established by default (added/verified 7 days before the test clock, i.e. past the
+ * new-account cooldown `money.policy.newPayoutAccountCooldownHours`); `ageHours: 0` makes a fresh one.
+ */
+export async function createPayoutAccount(
+  t: TestContext,
+  userId: string,
+  opts: { verified?: boolean; accountNumber?: string; ageHours?: number; isDefault?: boolean } = {},
+): Promise<string> {
   const id = crypto.randomUUID();
   const number = opts.accountNumber ?? `1234${Math.floor(Math.random() * 1e6).toString().padStart(6, '0')}`;
   const enc = await t.deps.crypto.encrypt(number, `payout_accounts.account_number:${id}`);
   const hash = await t.deps.crypto.hashIdentifier('bank_account', `BCA:${number}`);
   const verified = opts.verified ?? true;
+  const createdAt = new Date(t.clock.now().getTime() - (opts.ageHours ?? 7 * 24) * 3600_000);
   await t.adminSql`
     INSERT INTO payout_accounts (id, user_id, bank_code, account_number_enc, account_number_hash, account_mask, holder_name, enc_key_id,
-                                 verification_status, verified_at, is_default)
+                                 verification_status, verified_at, is_default, created_at)
     VALUES (${id}, ${userId}, 'BCA', ${Buffer.from(enc)}, ${Buffer.from(hash)}, ${`****${number.slice(-4)}`}, 'TRAVELER UJI',
-            ${t.deps.crypto.activeKeyId}, ${verified ? 'VERIFIED' : 'UNVERIFIED'}, ${verified ? t.clock.now() : null}, true)`;
+            ${t.deps.crypto.activeKeyId}, ${verified ? 'VERIFIED' : 'UNVERIFIED'}, ${verified ? createdAt : null}, ${opts.isDefault ?? true}, ${createdAt})`;
   return id;
 }
 

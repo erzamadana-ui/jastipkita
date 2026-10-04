@@ -1,4 +1,5 @@
 /** Test helpers for the identity module group (not a test file itself). */
+import { createHash, randomBytes } from 'node:crypto';
 import { exportJWK, generateKeyPair, createLocalJWKSet, SignJWT, type JWK } from 'jose';
 import type { TestContext } from '../../../test/helpers';
 import { configureOAuthKeys } from './oauth';
@@ -85,6 +86,20 @@ export async function installOAuthTestKeys(t: TestContext): Promise<OAuthTestKey
         .sign(key);
     },
   };
+}
+
+/**
+ * Sign in with Apple request fields with a fresh rawNonce: the token's `nonce` claim = sha256hex(rawNonce), as Apple does.
+ * APPLE requires a nonce by default (OAUTH_REQUIRE_NONCE, SEC-15) and a verified nonce is single use.
+ */
+export async function appleSignIn(
+  keys: OAuthTestKeys,
+  claims: Record<string, unknown>,
+  opts?: Parameters<OAuthTestKeys['sign']>[2],
+): Promise<{ identityToken: string; rawNonce: string }> {
+  const rawNonce = randomBytes(24).toString('base64url');
+  const identityToken = await keys.sign('APPLE', { ...claims, nonce: createHash('sha256').update(rawNonce).digest('hex') }, opts);
+  return { identityToken, rawNonce };
 }
 
 /** Recursively collects keys and string values of a JSON value. */

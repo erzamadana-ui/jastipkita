@@ -556,10 +556,11 @@
     "refundMaxSystemRetries": 3,
     "payoutMaxSystemRetries": 3,
     "payoutDelayHours": 0,
+    "newPayoutAccountCooldownHours": 24,
     "pendingPaymentPollMinutes": 15,
     "payoutFeeIdr": 0,
     "payoutMinIdr": 10000,
-    "note": "Refund di atas batas butuh approval admin (maker-checker). Biaya payout ditanggung platform sampai kontrak Xendit final."
+    "note": "Refund di atas batas butuh approval admin (maker-checker). Biaya payout ditanggung platform sampai kontrak Xendit final. Rekening payout yang baru ditambahkan/diverifikasi/dijadikan utama baru menerima payout setelah newPayoutAccountCooldownHours (anti pengambilalihan akun, keputusan CEO 2026-10-04)."
   },
   "marketplace.lifetimes": {
     "requestExpiryDays": 30,

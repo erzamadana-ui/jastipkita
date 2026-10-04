@@ -3,7 +3,7 @@ import type { App } from '../../context';
 import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../lib/openapi';
 import { getAuth, requireAuth } from '../../middleware/auth';
 import { rateLimit } from '../../middleware/rate-limit';
-import { CreateTicketSchema, FaqArticle, FaqList, FaqQuery, LocaleQuery, TicketDetailSchema, TicketListQuery, TicketMessageSchema, TicketPage } from './schemas';
+import { ComplaintInfoSchema, CreateTicketSchema, FaqArticle, FaqList, FaqQuery, LocaleQuery, TicketDetailSchema, TicketListQuery, TicketMessageSchema, TicketPage } from './schemas';
 import * as svc from './service';
 
 const tags = ['Support'];
@@ -38,10 +38,25 @@ export function registerSupport(app: App): void {
   );
   r.openapi(
     createRoute({
+      method: 'get',
+      path: '/v1/support/complaint-info',
+      tags,
+      summary: 'Consumer complaint channel (Permendag 19/2026): published channels, first-response SLA by priority, government escalation',
+      middleware: [rateLimit({ name: 'support.complaint_info', limit: 120, windowSec: 60, key: 'ip' })] as const,
+      responses: { 200: jsonContent(ComplaintInfoSchema), ...errorResponses },
+    }),
+    async (c) => {
+      const body = await svc.complaintInfo(c.get('deps'));
+      c.header('cache-control', 'public, max-age=300');
+      return c.json(body, 200);
+    },
+  );
+  r.openapi(
+    createRoute({
       method: 'post',
       path: '/v1/support/tickets',
       tags,
-      summary: 'Create a support ticket (TKT-…), optionally linked to my transaction or dispute; SLA by priority',
+      summary: 'Create a support ticket (TKT-…) or consumer complaint (category COMPLAINT, default HIGH), optionally linked to my transaction or dispute; SLA by priority (config support.sla)',
       security: bearer,
       middleware: [requireAuth, rateLimit({ name: 'support.tickets', limit: 10, windowSec: 3600, key: 'user' })] as const,
       request: jsonBody(CreateTicketSchema),

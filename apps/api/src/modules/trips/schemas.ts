@@ -96,6 +96,13 @@ export const PublicProfileSchema = z
   })
   .openapi('PublicProfile');
 
+const DateWindowSchema = z
+  .object({
+    from: z.string().openapi({ example: '2026-10-12' }),
+    to: z.string().openapi({ example: '2026-10-18' }),
+  })
+  .openapi('TripDateWindow', { description: 'Inclusive calendar-date window (YYYY-MM-DD). DAY precision: from = to = the exact date; WEEK: Monday–Sunday.' });
+
 export const TripPublicSchema = z
   .object({
     id: z.string().uuid(),
@@ -104,8 +111,13 @@ export const TripPublicSchema = z
     originCity: z.string(),
     destinationCountry: z.string(),
     destinationCity: z.string(),
-    departureDate: z.string(),
-    arrivalDate: z.string(),
+    departureDate: z.string().openapi({ description: 'DAY precision: exact date. WEEK precision (anonymous): Monday of the departure week — NOT the exact date; render departureWindow.' }),
+    arrivalDate: z.string().openapi({ description: 'DAY precision: exact date. WEEK precision (anonymous): Monday of the arrival week — render arrivalWindow.' }),
+    datePrecision: z.enum(['DAY', 'WEEK']).openapi({
+      description: 'SEC-19: WEEK for anonymous requests (dates coarsened to the ISO week, Mon–Sun), DAY for signed-in users (exact dates).',
+    }),
+    departureWindow: DateWindowSchema,
+    arrivalWindow: DateWindowSchema,
     capacityRemainingKg: z.number(),
     itemsRemaining: z.number().int().nullable(),
     fee: TripFee,
@@ -177,9 +189,9 @@ export const DiscoveryQuery = z.object({
   originCity: z.string().trim().min(1).max(100).optional(),
   destinationCountry: Country.optional(),
   destinationCity: z.string().trim().min(1).max(100).optional(),
-  departureFrom: IsoDay.optional(),
-  departureTo: IsoDay.optional(),
-  arrivalBy: IsoDay.optional().openapi({ description: 'Trips arriving on or before this date' }),
+  departureFrom: IsoDay.optional().openapi({ description: 'Anonymous requests (WEEK precision): evaluated from the Monday of this week' }),
+  departureTo: IsoDay.optional().openapi({ description: 'Anonymous requests (WEEK precision): evaluated up to the Sunday of this week' }),
+  arrivalBy: IsoDay.optional().openapi({ description: 'Trips arriving on or before this date (anonymous requests: on or before the Sunday of its week)' }),
   categoryCode: Category.optional().openapi({ description: 'Only trips that do not exclude this category' }),
   minCapacityKg: z.coerce.number().positive().max(1000).optional(),
   verifiedOnly: z

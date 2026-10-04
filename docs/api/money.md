@@ -35,7 +35,7 @@ All endpoints are under `/v1`, JSON camelCase, IDR integers, ISO-8601 UTC. 🔒 
 | `POST /transactions/{id}/cancel` | 🔒💰 party | preview first with `GET …/cancel/preview`; `{reason, cause?}` → `{status, cancellation{stage, refundIdr, travelerCompensationIdr, …, trustPenalty}, refunds[]}`; `422 CANCELLATION_NOT_ALLOWED` (e.g. "Barang sudah dibeli; gunakan Dispute Center"), `422 ADMIN_APPROVAL_REQUIRED` |
 | `GET /transactions/{id}/refunds` | 🔒 party | method, status, `destinationRequired`, masked destination |
 | `POST /refunds/{id}/destination` | 🔒 buyer of the refund | `{bankCode, accountNumber, accountHolderName, stepUp{challengeId, code}}` — `stepUp` = SENSITIVE_ACTION OTP (action `REFUND_DESTINATION_SET`, targetId = refund id; identity.md §3.1), else `403 STEP_UP_REQUIRED`; provider-validated, encrypted → `{refundId, bankCode, accountMask: "****1234", validationStatus: VALID\|PENDING_REVIEW, reviewRequired, validatedAt}` (see §5.3) |
-| `GET /payouts/mine` | 🔒 traveler | `{data[], nextCursor, summary{scheduledIdr, paidIdr, heldIdr, processingIdr, failedIdr}}` — destination masked |
+| `GET /payouts/mine` | 🔒 traveler | `{data[], nextCursor, summary{scheduledIdr, paidIdr, heldIdr, processingIdr, failedIdr}}` — destination masked; `data[].cooldownUntil` while the destination is in its new-account cooldown (§5.7) |
 
 ### 1.1 Transaction detail contract (`TransactionDetail`)
 
@@ -121,7 +121,10 @@ cancelInTx(deps, db: TxSql, tx: TxRow, { actor, actorId, reason, cause?, refundR
 completeTransaction(deps, transactionId)                              // BUYER_CONFIRMED → COMPLETED (idempotent)
 
 // src/modules/payouts/service.ts
-processPayouts(deps, { transactionId? }) · payoutRiskDecision(db, tx) · schedulePayout(deps, db, tx, {amountIdr, kind})
+processPayouts(deps, { transactionId? }) → {paid, held, failed, skipped, deferred}
+payoutRiskDecision(db, tx) · schedulePayout(deps, db, tx, {amountIdr, kind})
+payoutAccountReadyAt({createdAt, verifiedAt, defaultSince}, cooldownHours) · payoutCooldownUntil(…, now)   // §5.7
+repointPendingPayouts(deps, db: TxSql, travelerId, 'DEFAULT_CHANGED' | 'ACCOUNT_REMOVED')                  // kyc service, §5.7
 
 // src/modules/payments/service.ts
 processPaymentEvent(deps, PaymentEventInput) · expireDuePayments(deps) · expireQuotesAndLocks(deps)
@@ -189,6 +192,27 @@ alone (other receipt signals — duplicate receipt, price/time anomalies — sti
 ### 5.6 Cancel response
 `POST /transactions/{id}/cancel` re-reads `refunds[]` (status, method) after processing, so the body — and its
 idempotent replay — matches `GET /transactions/{id}/refunds` (e.g. REFUNDED + SUCCEEDED).
+
+### 5.7 New payout account cooldown (anti account-takeover, CEO decision 2026-10-04)
+Config `money.policy.newPayoutAccountCooldownHours` (default **24**, 0 = off; optional in versions stored before 2026-10-04, readers
+merge the default). A traveler payout account is **ready** at
+
+`ready_at = greatest(created_at, verified_at, default_since) + cooldown`
+
+(`default_since`: migration 0120, set when the account becomes the default, NULL otherwise — trigger-maintained for every writer).
+
+| When | Rule |
+|---|---|
+| Scheduling (`schedulePayout`, completion / compensation / owed sweep) | `scheduled_for = max(now + payoutDelayHours, ready_at(destination))`; `payout.scheduled.cooldownUntil` = ready time when it is what delays the payout |
+| Default changed through the API (`POST /kyc/payout-accounts/{id}/default`, add with `makeDefault`, removing the default → oldest VERIFIED promoted) | same DB transaction: every SCHEDULED / ON_HOLD / FAILED payout of the traveler is **re-pointed** to the new default and SCHEDULED ones get `scheduled_for = max(scheduled_for, ready_at)`; event `payout.scheduled {kind: DESTINATION_CHANGED, cooldownUntil}` (traveler warned: "Bukan kamu?"), audit `payout.destination_changed` |
+| Processing (`processPayouts`, every 5 min) | re-check: the payout follows the traveler's current VERIFIED default (covers admin verification override / support changes); after the risk/dispute/verified guards, a destination still in cooldown → stays SCHEDULED with `scheduled_for = ready_at`, event `payout.scheduled {kind: ACCOUNT_COOLDOWN}`, audit `payout.cooldown_deferred`, counted as `deferred` |
+| Config change | applies to every later scheduling and processing check (a longer cooldown defers due payouts; a shorter one does not pull already-scheduled payouts earlier) |
+
+Exposure: `GET /payouts/mine` and `GET /admin/payouts` → `cooldownUntil` (pending payouts only), `PayoutAccount.payoutsFrom`
+(identity.md §1), admin web payout list badge "Jeda rekening baru". Admin release/retry set `scheduled_for` ≥ now; the processor still
+applies the cooldown. Re-pointing never touches PROCESSING/PAID payouts (already handed to the provider).
+Residual: the cooldown only buys time — the traveler must notice the `payout_account.verified` / `payout.scheduled` notifications
+(push + e-mail) and contact support; refund destinations (§5.3) have no cooldown (manual review only when the name differs).
 
 ---
 *Catatan keterbatasan: SafePay berstatus SANDBOX (MOCK / Xendit test mode); nilai validasi rekening Xendit (Iluma) belum

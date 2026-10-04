@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { totpAt } from '../../lib/crypto';
 import { createTestContext, type TestContext } from '../../../test/helpers';
-import { CONSENTS, installOAuthTestKeys, otpRequest, otpVerify, phoneLogin, type OAuthTestKeys } from './test-support';
+import { appleSignIn, CONSENTS, installOAuthTestKeys, otpRequest, otpVerify, phoneLogin, type OAuthTestKeys } from './test-support';
 
 let t: TestContext;
 let keys: OAuthTestKeys;
@@ -70,38 +70,41 @@ describe('Google sign-in', () => {
   });
 
   it('checks the nonce when the client sends one', async () => {
-    const tok = await keys.sign('GOOGLE', { sub: 'google-sub-5', email: 'n5@gmail.com', email_verified: true, nonce: 'abc' });
-    expect((await google({ idToken: tok, nonce: 'xyz', consents: CONSENTS })).body.error.details.reason).toBe('NONCE_MISMATCH');
-    expect((await google({ idToken: tok, nonce: 'abc', consents: CONSENTS })).status).toBe(200);
+    const nonce = 'web-nonce-abcdefghijklmnop';
+    const tok = await keys.sign('GOOGLE', { sub: 'google-sub-5', email: 'n5@gmail.com', email_verified: true, nonce });
+    expect((await google({ idToken: tok, nonce: 'web-nonce-zzzzzzzzzzzzzzzz', consents: CONSENTS })).body.error.details.reason).toBe('NONCE_MISMATCH');
+    expect((await google({ idToken: tok, nonce, consents: CONSENTS })).status).toBe(200);
+    // too short to be a nonce
+    expect((await google({ idToken: tok, nonce: 'abc', consents: CONSENTS })).status).toBe(400);
   });
 });
 
 describe('Sign in with Apple', () => {
   it('private-relay e-mail, name only on first login', async () => {
     const relay = `abc${Date.now()}@privaterelay.appleid.com`;
-    const tok = await keys.sign('APPLE', { sub: 'apple-sub-1', email: relay, email_verified: 'true', is_private_email: 'true' });
-    const res = await apple({ identityToken: tok, fullName: { givenName: 'Siti', familyName: 'Rahma' }, consents: CONSENTS });
+    const first = await appleSignIn(keys, { sub: 'apple-sub-1', email: relay, email_verified: 'true', is_private_email: 'true' });
+    const res = await apple({ ...first, fullName: { givenName: 'Siti', familyName: 'Rahma' }, consents: CONSENTS });
     expect(res.status).toBe(200);
     expect(res.body.isNewUser).toBe(true);
     expect(res.body.user.email).toBe(relay);
     expect(res.body.user.displayName).toBe('Siti Rahma');
     // later logins carry no name; the stored one is kept
-    const again = await apple({ identityToken: await keys.sign('APPLE', { sub: 'apple-sub-1', email: relay, email_verified: 'true' }) });
+    const again = await apple(await appleSignIn(keys, { sub: 'apple-sub-1', email: relay, email_verified: 'true' }));
     expect(again.body.user.displayName).toBe('Siti Rahma');
     expect(again.body.isNewUser).toBe(false);
   });
 
   it('wrong audience / expired are rejected', async () => {
-    const wrong = await apple({ identityToken: await keys.sign('APPLE', { sub: 'apple-sub-2' }, { aud: 'com.other.app' }), consents: CONSENTS });
+    const wrong = await apple({ ...(await appleSignIn(keys, { sub: 'apple-sub-2' }, { aud: 'com.other.app' })), consents: CONSENTS });
     expect(wrong.status).toBe(401);
     expect(wrong.body.error.details.reason).toBe('AUDIENCE_MISMATCH');
-    const expired = await apple({ identityToken: await keys.sign('APPLE', { sub: 'apple-sub-2' }, { expSec: -300 }), consents: CONSENTS });
+    const expired = await apple({ ...(await appleSignIn(keys, { sub: 'apple-sub-2' }, { expSec: -300 })), consents: CONSENTS });
     expect(expired.body.error.details.reason).toBe('TOKEN_EXPIRED');
   });
 
   it('Apple without a verified e-mail signs in by subject only (no linking)', async () => {
     const owner = await t.createUser({ email: `shared-${Date.now()}@example.com` });
-    const res = await apple({ identityToken: await keys.sign('APPLE', { sub: 'apple-sub-3', email: owner.email, email_verified: 'false' }), consents: CONSENTS });
+    const res = await apple({ ...(await appleSignIn(keys, { sub: 'apple-sub-3', email: owner.email, email_verified: 'false' })), consents: CONSENTS });
     expect(res.status).toBe(200);
     expect(res.body.user.id).not.toBe(owner.id);
     expect(res.body.user.email).toBeNull();
@@ -119,7 +122,7 @@ describe('account linking by verified e-mail', () => {
     expect(g.status).toBe(200);
     expect(g.body.user.id).toBe(uid);
     expect(g.body.isNewUser).toBe(false);
-    const a = await apple({ identityToken: await keys.sign('APPLE', { sub: 'apple-link-1', email, email_verified: true }) });
+    const a = await apple(await appleSignIn(keys, { sub: 'apple-link-1', email, email_verified: true }));
     expect(a.body.user.id).toBe(uid);
     const ids = await t.adminSql<{ provider: string }[]>`SELECT provider FROM auth_identities WHERE user_id = ${uid} ORDER BY provider`;
     expect(ids.map((i) => i.provider)).toEqual(['APPLE', 'EMAIL', 'GOOGLE']);

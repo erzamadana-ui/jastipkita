@@ -32,7 +32,8 @@ Binding references: `docs/00-domain-model.md` (§2 level 5, §4, §6/§15.3, §1
 | `POST /promotions/validate` | bearer | preview only — **no redemption** (money group reserves/redeems at checkout) |
 | `GET /promotions/active` | public | no budget / usage / funding / targeting fields |
 | `GET /support/faq` · `GET /support/faq/{slug}` | public | locale with Indonesian fallback, pg_trgm search |
-| `POST /support/tickets` · `GET /support/tickets` · `GET /support/tickets/{id}` · `POST /support/tickets/{id}/messages` | bearer | `TKT-…`, SLA by priority |
+| `GET /support/complaint-info` | public | consumer complaint channel (L12, Permendag 19/2026): published channels, SLA by priority, government escalation — §8.1; 120 req/min/IP, `Cache-Control: public, max-age=300` |
+| `POST /support/tickets` · `GET /support/tickets` · `GET /support/tickets/{id}` · `POST /support/tickets/{id}/messages` | bearer | `TKT-…`, SLA by priority (config `support.sla`); category `COMPLAINT` = consumer complaint |
 | `POST /analytics/events` | optional | ≤ 50 events, anonymous with `anonymousId`, allowlist, PII stripping, 120 req/min/IP |
 
 All routes are `createRoute` (OpenAPI), errors use the standard `{error:{code,message,details,requestId}}` shape.
@@ -227,7 +228,38 @@ When the verdict is "do not increase / pause": warning log + one `security_event
 
 ## 8. Support & FAQ
 - FAQ: `PUBLISHED` only; `?locale=en` falls back to the Indonesian article per slug; `?category=`; `?q=` uses pg_trgm (`word_similarity` on question 60 % + full text 40 % + substring bonus; matches substring, trigram ≥ 0.35 or exact tag) — typo tolerant ("safepey" → SafePay).
-- Tickets: categories per schema, optional link to **my** transaction or dispute (dispute implies its transaction), attachments = my files. Priority `HIGH` for DISPUTE / REFUND / PAYMENT, else `NORMAL` (`URGENT` is agent-only). First-response SLA: URGENT 4 h, HIGH 12 h, NORMAL 24 h, LOW 72 h (`sla_due_at`). User replies reopen `PENDING_USER` / `RESOLVED` → `OPEN`; `CLOSED` → `422 TICKET_CLOSED`. Internal agent notes are never returned. Emits `support.ticket_updated {ticketId, userId, status, actorType: USER, action}`; admin-produced updates (no `actorType` or `AGENT`) notify the user.
+- Tickets: categories `TRANSACTION | DISPUTE | REFUND | ACCOUNT | PAYMENT | CUSTOMS | OTHER | COMPLAINT` (COMPLAINT added by migration 0130), optional link to **my** transaction or dispute (dispute implies its transaction), attachments = my files. Priority: optional body `priority` `LOW | NORMAL | HIGH`; default `HIGH` for COMPLAINT / DISPUTE / REFUND / PAYMENT, else `NORMAL` (`URGENT` is agent-only → `400`; agents re-prioritise via `PATCH /v1/admin/support/tickets/{id}`, which recomputes the SLA while there is no first response). First-response SLA = `created_at + support.sla.hoursByPriority[priority]` (`sla_due_at`; versioned config, maker-checker — defaults URGENT 4 h, HIGH 12 h, NORMAL 24 h, LOW 72 h, flagged **ASUMSI** until reviewed after soft launch). User replies reopen `PENDING_USER` / `RESOLVED` → `OPEN`; `CLOSED` → `422 TICKET_CLOSED`. Internal agent notes are never returned. Emits `support.ticket_updated {ticketId, userId, status, actorType: USER, action, priority, category}`; admin-produced updates (no `actorType` or `AGENT`) notify the user.
+
+### 8.1 Consumer complaint channel — `GET /v1/support/complaint-info` (launch checklist L12)
+Public, no auth, no personal data. Backs the web pages `/pengaduan/` · `/en/complaints/` and the app screen *Bantuan → Pengaduan konsumen*
+(which files `POST /support/tickets` with `category: COMPLAINT`). Response `ComplaintInfo`:
+
+| Field | Source | Notes |
+|---|---|---|
+| `channels.inApp` | constant | `{ticketCategory: COMPLAINT, endpoint: /v1/support/tickets}` |
+| `channels.whatsapp` | env `SUPPORT_WHATSAPP` | `{number (digits), url: https://wa.me/…}` or **null** while not announced ("segera diumumkan") |
+| `channels.email` | env `SUPPORT_EMAIL` | string or **null** |
+| `channels.webUrl` | env `WEB_BASE_URL` | `${WEB_BASE_URL}/pengaduan/` |
+| `sla` | config `support.sla` | `{basis: FIRST_RESPONSE, complaintPriority: HIGH, complaintFirstResponseHours, hoursByPriority {URGENT, HIGH, NORMAL, LOW}, configKey, isAssumption: true}` — a new ACTIVE config version changes it without a deploy |
+| `escalation` | `modules/support/complaint-info.ts` | government channel (below), `verification {status, accessedAt, sources[]}`, `outOfCourt` (BPSK) |
+| `disputeFlow` | constant | paid transactions go through `POST /v1/transactions/{id}/disputes` (funds stay in SafePay; payouts wait while a dispute is open) |
+| `legalBasis` | constant | UU 8/1999, PP 80/2019, Permendag 19/2026 |
+
+`SUPPORT_WHATSAPP` / `SUPPORT_EMAIL` are optional public values (validated at boot: phone digits / e-mail address; empty = unset),
+overridable per environment from GitHub Variables (`scripts/ci/worker-config.ts`); keep them equal to the web's `PUBLIC_SUPPORT_*`.
+
+**Government escalation channel** — verified **2026-10-04** (`status: VERIFIED`):
+Direktorat Jenderal Perlindungan Konsumen dan Tertib Niaga (**Ditjen PKTN**), Direktorat Pemberdayaan Konsumen, Kementerian Perdagangan RI —
+WhatsApp **0853-1111-1010**, e-mail **pengaduan.konsumen@kemendag.go.id**, telepon **(021) 3441839**, web
+`https://ditjenpktn.kemendag.go.id/konsultasi-online`. Sources (accessed 2026-10-04):
+[ditjenpktn.kemendag.go.id/konsultasi-online](https://ditjenpktn.kemendag.go.id/konsultasi-online) (official page: WhatsApp, e-mail, phone),
+[ANTARA 29-04-2025](https://www.antaranews.com/berita/4801037/kemendag-catat-1657-layanan-konsumen-sepanjang-januari-maret-2025)
+(WhatsApp, e-mail, phone, SIMPKTN), [Katadata 21-05-2026](https://katadata.co.id/amp/digital/e-commerce/6a0e5f3d6976b/kemendag-panggil-shopee-soal-aduan-barang-tak-sesuai-dan-shopee-paylater)
+(WhatsApp + "identitas, kronologi, bukti pendukung"). Not published by us: the SIMPKTN portal (`simpktn.kemendag.go.id`) — on 2026-10-04 a
+search-engine listing showed a gambling-spam title for that domain although the page itself served the official portal → **perlu verifikasi**
+before linking it. Ministry contact data changes without notice: re-verify before launch and update `ESCALATION_ACCESSED_AT`.
+Permendag 19/2026 requires a complaint service (Pasal 10–14 per `docs/research/05-legal-regulatory.md`); the exact response deadline it
+imposes, if any, was **not** verified from the regulation text — our SLA is an internal target, not a statutory figure.
 
 ---
 

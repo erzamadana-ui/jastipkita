@@ -222,6 +222,12 @@ export interface MoneyPolicyConfig {
   readonly payoutMaxSystemRetries: number;
   /** Delay between COMPLETED and the payout attempt (hours). */
   readonly payoutDelayHours: number;
+  /**
+   * Anti account-takeover cooldown (hours, 0 = off): a payout account added, verified or made default less than this
+   * many hours ago receives no payout yet — the payout waits until max(created/verified/became-default) + cooldown.
+   * Versions stored before 2026-10-04 may omit it; readers merge the default (24).
+   */
+  readonly newPayoutAccountCooldownHours: number;
   /** Reconciliation polls the provider for PENDING payments older than this. */
   readonly pendingPaymentPollMinutes: number;
   readonly payoutFeeIdr: number;
@@ -690,12 +696,14 @@ const VALIDATORS: { readonly [K in BusinessConfigKey]: KeyValidator } = {
   },
   'money.policy': (c, v, p) => {
     const req = ['refundAutoApproveMaxIdr', 'refundMaxSystemRetries', 'payoutMaxSystemRetries', 'payoutDelayHours', 'pendingPaymentPollMinutes', 'payoutFeeIdr', 'payoutMinIdr'];
-    const o = c.object(p, v, [...req, 'note'], req);
+    // newPayoutAccountCooldownHours (2026-10-04) is optional so versions approved before it stay valid (default merged on read)
+    const o = c.object(p, v, [...req, 'newPayoutAccountCooldownHours', 'note'], req);
     if (!o) return;
     c.idr(`${p}.refundAutoApproveMaxIdr`, o.refundAutoApproveMaxIdr);
     c.int(`${p}.refundMaxSystemRetries`, o.refundMaxSystemRetries, 0, 20);
     c.int(`${p}.payoutMaxSystemRetries`, o.payoutMaxSystemRetries, 0, 20);
     c.int(`${p}.payoutDelayHours`, o.payoutDelayHours, 0, 720);
+    if (o.newPayoutAccountCooldownHours !== undefined) c.int(`${p}.newPayoutAccountCooldownHours`, o.newPayoutAccountCooldownHours, 0, 720);
     c.int(`${p}.pendingPaymentPollMinutes`, o.pendingPaymentPollMinutes, 1, 1440);
     c.idr(`${p}.payoutFeeIdr`, o.payoutFeeIdr);
     c.idr(`${p}.payoutMinIdr`, o.payoutMinIdr);

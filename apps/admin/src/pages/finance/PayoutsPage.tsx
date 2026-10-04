@@ -41,6 +41,16 @@ export function holdSource(p: Pick<PayoutItem, 'status' | 'holdReason' | 'heldBy
   return { kind: 'SYSTEM', label: 'Otomatis · sistem', tone: 'warning', note: 'Perlu dilepas manual oleh FINANCE' };
 }
 
+/**
+ * New payout account cooldown (money.md §5.7): a destination added / verified / made default less than
+ * money.policy.newPayoutAccountCooldownHours ago receives nothing before `cooldownUntil` (the processor re-checks it).
+ */
+export function payoutCooldown(p: Pick<PayoutItem, 'status' | 'cooldownUntil'>, now: Date = new Date()): { until: string; note: string } | null {
+  if (!p.cooldownUntil || !['SCHEDULED', 'ON_HOLD', 'FAILED'].includes(p.status)) return null;
+  if (Date.parse(p.cooldownUntil) <= now.getTime()) return null;
+  return { until: p.cooldownUntil, note: 'Rekening tujuan baru ditambahkan/diverifikasi/dijadikan utama — payout menunggu masa jeda (anti pengambilalihan akun)' };
+}
+
 export default function PayoutsPage() {
   const [status, setStatus] = useState('ON_HOLD');
   const { query, rows, pagination } = useCursorQuery(['payouts', status], (cursor) => Payouts.list({ status: status || undefined, cursor, limit: 25 }));
@@ -58,7 +68,7 @@ export default function PayoutsPage() {
 
   return (
     <div className="stack stack--lg">
-      <PageHeader title="Payout traveler" subtitle="Hold manual → release adalah maker-checker (pelepas ≠ penahan, juga dijaga DB). Hold otomatis karena dispute dilepas sistem setelah dispute ditutup. Rekening tujuan hanya mask." />
+      <PageHeader title="Payout traveler" subtitle="Hold manual → release adalah maker-checker (pelepas ≠ penahan, juga dijaga DB). Hold otomatis karena dispute dilepas sistem setelah dispute ditutup. Rekening tujuan baru menunggu masa jeda sebelum menerima payout. Rekening tujuan hanya mask." />
       <Card flush>
         <div className="filterbar">
           <Field label="Status">
@@ -127,7 +137,26 @@ export default function PayoutsPage() {
                 );
               },
             },
-            { key: 'sch', header: 'Jadwal', render: (p) => <DateTime value={p.scheduledFor} /> },
+            {
+              key: 'sch',
+              header: 'Jadwal',
+              render: (p) => {
+                const cd = payoutCooldown(p);
+                return (
+                  <span className="stack" style={{ gap: 2 }}>
+                    <DateTime value={p.scheduledFor} />
+                    {cd ? (
+                      <span className="row row--tight" data-testid={`cooldown-${p.id}`} title={cd.note}>
+                        <Badge tone="info">Jeda rekening baru</Badge>
+                        <span className="cell-sub">
+                          s/d <DateTime value={cd.until} />
+                        </span>
+                      </span>
+                    ) : null}
+                  </span>
+                );
+              },
+            },
             {
               key: 'act',
               header: 'Aksi',

@@ -179,6 +179,7 @@ includes the row hash), `GET /v1/admin/audit-logs/verify?fromId&toId` (`verify_a
 `infra.db.read` (READ) / `infra.db.read + infra.db.operate` + fresh MFA + role SUPER_ADMIN (OPERATE):
 `GET /v1/admin/infra/db/health | provider | migrations | storage | backups | operations | operations/{id}`, `POST …/connection-test` (READ);
 `POST …/backups | restores | exports | operations/{id}/approve | operations/{id}/cancel | migration-workflows | migration-workflows/{id}/steps/{step} | …/steps/{step}/approve` (OPERATE).
+`GET /v1/admin/infra/audit/checkpoints/verify` (READ) — T12 audit chain checkpoints, see §6. Public (no auth, ops): `GET /v1/health/worker`.
 
 ---
 
@@ -262,6 +263,16 @@ destination review), `referral.rewarded`, `risk.review_resolved`, `support.ticke
 * **Export** = anonymized daily aggregates only (funnel, GMV, take rate, analytics event counts), produced by the `admin.export` worker job
   into an encrypted `EXPORT` file owned by the requester (7-day retention), downloadable via `/v1/files/{id}/content|url`.
 * Connection test (3 × `SELECT 1`) is logged as `db_operations CONNECTION_TEST`. Stale operations expire (see observability doc).
+* **Audit chain checkpoints (T12).** Daily job `infra.audit_checkpoint` records the chain head (last id, hash, row count, time) in the
+  append-only `audit_checkpoints` and writes the same JSON to storage at `audit-checkpoints/YYYY/MM/DD.json` (production bucket: R2
+  bucket lock / WORM, `docs/08-backup-dr.md` §9; dev: memory storage). It first verifies the chain since the previous checkpoint and
+  never anchors a broken chain (CRITICAL `AUDIT_CHAIN_BROKEN` + `ALERT audit.checkpoint_refused`). `GET /v1/admin/infra/audit/checkpoints/verify`
+  is read-only: hash + row count at the latest checkpoint's `last_id`, `verify_audit_chain(last_id + 1)` up to the head, every older
+  checkpoint vs `audit_logs`, and the storage object (digest vs DB row, content vs `audit_logs`) → `OK` / `BROKEN` / `NO_CHECKPOINT` with
+  `findings` (Indonesian). A missing object is `BROKEN` on LIVE storage, a warning on MOCK (memory) storage. This catches a superuser
+  rewrite of the whole chain that `GET /v1/admin/audit-logs/verify` alone cannot.
+* **Worker heartbeat.** `GET /v1/health/worker` (public, 60/min/IP, no-store): `{status ok|stale, lastScheduledJobAt, ageSec,
+  staleAfterSec, checkedAt}`, HTTP 503 when stale (3 cron intervals) — for external uptime checkers (`infra/monitoring/README.md`).
 
 ---
 

@@ -88,7 +88,7 @@ const items = [
             <p class="xsmall muted mt-6">Memuat skrip Google Identity Services hanya setelah tombol ditekan.</p>
           </div>
         )}
-        <p class="xsmall muted mt-20">Token akses hanya disimpan di memori halaman; token penyegar disimpan di tab ini saja (sessionStorage) dan hilang saat tab ditutup atau kamu keluar. Kami tidak memakai cookie pelacak.</p>
+        <p class="xsmall muted mt-20">Token akses hanya disimpan di memori halaman. Token penyegar dipasang server API kami sebagai cookie keamanan <code>jk_rt</code> (HttpOnly — tidak dapat dibaca skrip halaman, hanya dikirim ke API) dan dihapus saat kamu keluar. Kami tidak memakai cookie pelacak.</p>
       </div>
     </div>
   </section>

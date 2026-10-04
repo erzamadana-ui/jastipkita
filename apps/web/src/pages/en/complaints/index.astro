@@ -1,0 +1,11 @@
+---
+import Base from '../../../layouts/Base.astro';
+import ComplaintsPage from '../../pengaduan/_ComplaintsPage.astro';
+import { breadcrumbLd, webPageLd } from '../../../lib/seo.ts';
+const title = 'JastipKita Consumer Complaints';
+const description = 'Official JastipKita consumer complaint channels, response time targets (SLA), what to include, how complaints are handled and escalation to the Ministry of Trade.';
+const crumbs = [{ name: 'Home', path: '/en/' }, { name: 'Consumer complaints', path: '/en/complaints/' }];
+---
+<Base title={title} description={description} path="/en/complaints/" lang="en" alternates={[{ lang: 'id', path: '/pengaduan/' }]} jsonLd={[webPageLd({ name: title, description, path: '/en/complaints/', lang: 'en', type: 'ContactPage' }), breadcrumbLd(crumbs)]}>
+  <ComplaintsPage lang="en" crumbs={crumbs} />
+</Base>

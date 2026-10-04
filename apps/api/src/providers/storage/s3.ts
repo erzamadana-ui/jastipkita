@@ -12,6 +12,7 @@
  */
 import { AwsClient } from 'aws4fetch';
 import type { PresignedUpload, StorageProvider } from '../types';
+import { contentDisposition, servedContentType } from './content-safety';
 
 export interface S3StorageOptions {
   endpoint: string;
@@ -82,10 +83,16 @@ export class S3StorageProvider implements StorageProvider {
     };
   }
 
-  async presignDownload(input: { key: string; expiresSec: number; filename?: string }): Promise<string> {
+  /**
+   * SEC-18: the signed query pins `response-content-disposition` (attachment unless a raster image) and, when the type
+   * is known, `response-content-type` — the bucket cannot be tricked into serving the object as HTML/PDF inline.
+   * (S3/R2 cannot add nosniff/CSP through a presigned URL; see content-safety.ts.)
+   */
+  async presignDownload(input: { key: string; expiresSec: number; filename?: string; contentType?: string; disposition?: 'inline' | 'attachment' }): Promise<string> {
     const url = this.objectUrl(input.key);
     url.searchParams.set('X-Amz-Expires', String(input.expiresSec));
-    if (input.filename) url.searchParams.set('response-content-disposition', `inline; filename="${input.filename.replace(/"/g, '')}"`);
+    url.searchParams.set('response-content-disposition', contentDisposition(input.contentType, input.filename, input.disposition));
+    if (input.contentType) url.searchParams.set('response-content-type', servedContentType(input.contentType));
     const signed = await this.client.sign(url.toString(), { method: 'GET', aws: { signQuery: true, datetime: this.amzDate() } });
     return signed.url;
   }

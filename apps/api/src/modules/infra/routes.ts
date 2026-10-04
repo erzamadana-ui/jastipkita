@@ -1,17 +1,42 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import type { App } from '../../context';
 import { bearer, createRouter, errorResponses, jsonBody, jsonContent } from '../../lib/openapi';
+import { rateLimit } from '../../middleware/rate-limit';
 import { AdminLoose, AdminPage, adminCtx, adminGuard, IdParam, ReasonBody } from '../admin/common';
+import { verifyAuditCheckpoints } from './audit-checkpoints';
+import { workerHeartbeat } from './heartbeat';
 import * as svc from './service';
 import { STEPS, approveStep, completeStep, startWorkflow } from './workflow';
 
 const tags = ['Admin · DB & Infra Center'];
 const READ = adminGuard(['infra.db.read']);
 const OPERATE = adminGuard(['infra.db.read', 'infra.db.operate'], { mfa: true });
+const WorkerHeartbeat = z
+  .object({
+    status: z.enum(['ok', 'stale']),
+    lastScheduledJobAt: z.string().nullable(),
+    ageSec: z.number().int().nullable(),
+    staleAfterSec: z.number().int(),
+    checkedAt: z.string(),
+  })
+  .openapi('WorkerHeartbeat');
 const StepParam = IdParam.extend({ step: z.enum(STEPS).openapi({ param: { name: 'step', in: 'path' } }) });
 
 export function registerInfra(app: App) {
   const r = createRouter();
+  r.openapi(
+    createRoute({
+      method: 'get', path: '/v1/health/worker', tags: ['System'],
+      summary: 'Public worker heartbeat for uptime checkers: age of the last finished scheduled job; 503 when older than 3 cron intervals (no sensitive data)',
+      middleware: [rateLimit({ name: 'health.worker', limit: 60, windowSec: 60, key: 'ip' })] as const,
+      responses: { 200: jsonContent(WorkerHeartbeat, 'Worker ran recently'), 503: jsonContent(WorkerHeartbeat, 'Worker stale — Cron Trigger / worker loop not running') },
+    }),
+    async (c) => {
+      const hb = await workerHeartbeat(c.get('deps'));
+      c.header('cache-control', 'no-store');
+      return hb.status === 'ok' ? c.json(hb, 200) : c.json(hb, 503);
+    },
+  );
   r.openapi(
     createRoute({ method: 'get', path: '/v1/admin/infra/db/health', tags, security: bearer, summary: 'Version, size, connections, cache hit ratio, long-running queries, replication (host masked; never credentials)', middleware: READ, responses: { 200: jsonContent(AdminLoose), ...errorResponses } }),
     async (c) => c.json((await svc.dbHealth(await adminCtx(c))) as unknown as Record<string, never>, 200),
@@ -31,6 +56,14 @@ export function registerInfra(app: App) {
   r.openapi(
     createRoute({ method: 'post', path: '/v1/admin/infra/db/connection-test', tags, security: bearer, summary: 'Connection test (3 × SELECT 1) — recorded as db_operations CONNECTION_TEST', middleware: READ, responses: { 200: jsonContent(AdminLoose), ...errorResponses } }),
     async (c) => c.json(await svc.connectionTest(await adminCtx(c)), 200),
+  );
+  r.openapi(
+    createRoute({
+      method: 'get', path: '/v1/admin/infra/audit/checkpoints/verify', tags, security: bearer,
+      summary: 'Read-only: recompute the audit hash chain since the latest daily checkpoint and compare with the checkpoint row and its WORM storage object → OK / BROKEN / NO_CHECKPOINT (+ findings, last 10 checkpoints)',
+      middleware: READ, responses: { 200: jsonContent(AdminLoose), ...errorResponses },
+    }),
+    async (c) => c.json((await verifyAuditCheckpoints((await adminCtx(c)).deps)) as unknown as Record<string, never>, 200),
   );
   r.openapi(
     createRoute({ method: 'get', path: '/v1/admin/infra/db/backups', tags, security: bearer, summary: 'Backups (provider) + backup/restore operations', middleware: READ, responses: { 200: jsonContent(AdminLoose), ...errorResponses } }),

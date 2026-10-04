@@ -90,12 +90,16 @@ describe('response data exposure', () => {
     expect(r.headers.get('content-security-policy')).toContain("default-src 'none'");
     expect(r.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
     expect(r.headers.get('referrer-policy')).toBe('no-referrer');
-    // CORS: only allow-listed origins, never credentials
+    // CORS: only allow-listed origins; credentials only for the web origin (HttpOnly refresh cookie, SEC-14), never admin/others
     const evil = await t.app.request('/v1/health', { headers: { origin: 'https://evil.example' } });
     expect(evil.headers.get('access-control-allow-origin')).toBeNull();
+    expect(evil.headers.get('access-control-allow-credentials')).toBeNull();
     const web = await t.app.request('/v1/health', { headers: { origin: 'http://web.test' } });
     expect(web.headers.get('access-control-allow-origin')).toBe('http://web.test');
-    expect(web.headers.get('access-control-allow-credentials')).toBeNull();
+    expect(web.headers.get('access-control-allow-credentials')).toBe('true');
+    const admin = await t.app.request('/v1/health', { headers: { origin: 'http://admin.test' } });
+    expect(admin.headers.get('access-control-allow-origin')).toBe('http://admin.test');
+    expect(admin.headers.get('access-control-allow-credentials')).toBeNull();
     // oversized JSON body
     const big = await t.request('POST', '/v1/auth/otp/request', { rawBody: JSON.stringify({ channel: 'SMS', destination: 'x'.repeat(2 * 1024 * 1024) }), headers: { 'content-type': 'application/json' } });
     expect(big.status).toBe(400);

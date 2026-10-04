@@ -1305,24 +1305,47 @@ export const TEMPLATES: readonly TemplateDef[] = [
   def(
     'payout.scheduled',
     { group: 'PAYMENT', category: 'PAYMENT', channels: ALL, link: 'transaction' },
-    (c) => ({
-      title: 'Pencairan dijadwalkan',
-      body: `${amount(c)} untuk ${num(c)} dijadwalkan cair.`,
-      subject: `Pencairan ${s(c.v.payoutNumber)} dijadwalkan`.trim(),
-      heading: 'Pencairan dijadwalkan',
-      paragraphs: [`Pendapatan kamu dari transaksi ${num(c)} sebesar ${amount(c)} sudah dijadwalkan untuk dicairkan ke rekening payout.`],
-      details: c.v.payoutNumber ? [['No. payout', s(c.v.payoutNumber)]] : [],
-      cta: 'Lihat pencairan',
-    }),
-    (c) => ({
-      title: 'Payout scheduled',
-      body: `${amount(c)} for ${num(c)} is scheduled for payout.`,
-      subject: `Payout ${s(c.v.payoutNumber)} scheduled`.trim(),
-      heading: 'Payout scheduled',
-      paragraphs: [`Your earnings of ${amount(c)} from transaction ${num(c)} are scheduled for payout to your account.`],
-      details: c.v.payoutNumber ? [['Payout no.', s(c.v.payoutNumber)]] : [],
-      cta: 'View payout',
-    }),
+    // cooldownUntil: the destination is a new payout account (money.policy.newPayoutAccountCooldownHours, money.md §5.7)
+    (c) => {
+      const cd = c.v.cooldownUntil ? c.dt(c.v.cooldownUntil) : null;
+      const moved = c.v.kind === 'DESTINATION_CHANGED';
+      return {
+        title: cd ? 'Pencairan dijadwalkan — rekening baru' : 'Pencairan dijadwalkan',
+        body: cd ? `${amount(c)} untuk ${num(c)} cair mulai ${cd} karena rekening payout baru.` : `${amount(c)} untuk ${num(c)} dijadwalkan cair.`,
+        subject: `Pencairan ${s(c.v.payoutNumber)} dijadwalkan`.trim(),
+        heading: 'Pencairan dijadwalkan',
+        paragraphs: [
+          `Pendapatan kamu dari transaksi ${num(c)} sebesar ${amount(c)} sudah dijadwalkan untuk dicairkan ke rekening payout${c.v.accountMask ? ` ${s(c.v.accountMask)}` : ''}.`,
+          ...(cd
+            ? [`Demi keamanan akun, rekening payout yang baru ditambahkan, baru diverifikasi, atau baru dijadikan rekening utama belum bisa langsung menerima pencairan. Dana kamu tetap aman di SafePay dan dicairkan mulai ${cd}.`]
+            : []),
+          ...(moved ? ['Rekening tujuan berubah karena rekening utama kamu diganti. Bukan kamu yang menggantinya? Segera hubungi Pusat Bantuan dan keluar dari semua sesi di aplikasi.'] : []),
+        ],
+        ...(cd ? { highlight: { tone: 'info' as const, text: `Cair mulai ${cd}` } } : {}),
+        details: [...(c.v.payoutNumber ? [['No. payout', s(c.v.payoutNumber)] as [string, string]] : []), ...(cd ? [['Cair mulai', cd] as [string, string]] : [])],
+        cta: 'Lihat pencairan',
+      };
+    },
+    (c) => {
+      const cd = c.v.cooldownUntil ? c.dt(c.v.cooldownUntil) : null;
+      const moved = c.v.kind === 'DESTINATION_CHANGED';
+      return {
+        title: cd ? 'Payout scheduled — new account' : 'Payout scheduled',
+        body: cd ? `${amount(c)} for ${num(c)} will be paid out from ${cd} because the payout account is new.` : `${amount(c)} for ${num(c)} is scheduled for payout.`,
+        subject: `Payout ${s(c.v.payoutNumber)} scheduled`.trim(),
+        heading: 'Payout scheduled',
+        paragraphs: [
+          `Your earnings of ${amount(c)} from transaction ${num(c)} are scheduled for payout to your account${c.v.accountMask ? ` ${s(c.v.accountMask)}` : ''}.`,
+          ...(cd
+            ? [`For your security, a payout account that was just added, verified or made your default cannot receive payouts right away. Your money stays safe in SafePay and is paid out from ${cd}.`]
+            : []),
+          ...(moved ? ['The destination changed because your default payout account was changed. Not you? Contact the Help Center right away and sign out of all sessions in the app.'] : []),
+        ],
+        ...(cd ? { highlight: { tone: 'info' as const, text: `Paid out from ${cd}` } } : {}),
+        details: [...(c.v.payoutNumber ? [['Payout no.', s(c.v.payoutNumber)] as [string, string]] : []), ...(cd ? [['Paid out from', cd] as [string, string]] : [])],
+        cta: 'View payout',
+      };
+    },
   ),
   def(
     'payout.paid',

@@ -2,6 +2,11 @@
  * Google Sign-In & Sign in with Apple ID-token verification (RS256 via the providers' JWKS).
  * The JWKS resolver is injectable per AppDeps so tests can use a locally generated key pair
  * (jose generateKeyPair + exportJWK + createLocalJWKSet) without network access.
+ *
+ * SEC-15 (replay of a captured ID token): a provider listed in OAUTH_REQUIRE_NONCE (default APPLE — every Apple client
+ * sends rawNonce; Google stays optional until the mobile Google flow sends a nonce) rejects requests without a nonce
+ * (NONCE_REQUIRED) and tokens without a matching `nonce` claim (NONCE_MISMATCH). A verified nonce is returned in
+ * `VerifiedIdentity.nonce` so the caller can make the token single use (oauth_nonce_uses, NONCE_REUSED).
  */
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 import type { AppDeps } from '../../context';
@@ -48,6 +53,8 @@ export interface VerifiedIdentity {
   emailVerified: boolean;
   name: string | null;
   isPrivateRelayEmail: boolean;
+  /** Present when a nonce was checked against the token: the verified claim + the token expiry (single-use bookkeeping). */
+  nonce: { claim: string; expiresAt: Date } | null;
 }
 
 export type OAuthFailure =
@@ -57,6 +64,7 @@ export type OAuthFailure =
   | 'ISSUER_MISMATCH'
   | 'SIGNATURE_INVALID'
   | 'NONCE_MISMATCH'
+  | 'NONCE_REQUIRED'
   | 'CLAIMS_INVALID'
   | 'KEYS_UNAVAILABLE';
 
@@ -77,6 +85,13 @@ export interface NonceCheck {
    * identity token's `nonce` claim; the claim must be present and equal (constant-time).
    */
   rawNonce?: string | undefined;
+  /** SEC-15: the provider requires a nonce (OAUTH_REQUIRE_NONCE) → a request with neither field is rejected before verification. */
+  required?: boolean | undefined;
+}
+
+/** Providers whose ID tokens must carry a nonce (env OAUTH_REQUIRE_NONCE). */
+export function nonceRequired(deps: AppDeps, provider: OAuthProvider): boolean {
+  return deps.env.OAUTH_REQUIRE_NONCE.includes(provider);
 }
 
 /** SHA-256 hex (lowercase) of the raw nonce — what Apple embeds in the identity token `nonce` claim. */
@@ -88,6 +103,7 @@ export async function verifyIdToken(deps: AppDeps, provider: OAuthProvider, toke
   const { nonce, rawNonce } = check;
   const audiences = provider === 'GOOGLE' ? deps.env.GOOGLE_CLIENT_IDS : deps.env.APPLE_CLIENT_IDS;
   if (!audiences.length) throw new OAuthVerificationError('NOT_CONFIGURED');
+  if (check.required && nonce === undefined && rawNonce === undefined) throw new OAuthVerificationError('NONCE_REQUIRED');
   let payload: JWTPayload;
   try {
     const res = await jwtVerify(token, resolver(deps, provider), {
@@ -118,6 +134,7 @@ export async function verifyIdToken(deps: AppDeps, provider: OAuthProvider, toke
   } else if (nonce !== undefined && (claim === null || !timingSafeEqualStr(claim, nonce))) {
     throw new OAuthVerificationError('NONCE_MISMATCH');
   }
+  const nonceChecked = claim !== null && (rawNonce !== undefined || nonce !== undefined);
   const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : null;
   return {
     provider,
@@ -126,5 +143,7 @@ export async function verifyIdToken(deps: AppDeps, provider: OAuthProvider, toke
     emailVerified: !!email && truthy(payload.email_verified),
     name: typeof payload.name === 'string' ? payload.name.slice(0, 80) : null,
     isPrivateRelayEmail: truthy(payload.is_private_email) || (email?.endsWith('@privaterelay.appleid.com') ?? false),
+    // exp is a required claim (jwtVerify above); +60 s = the clock tolerance the token is still accepted with.
+    nonce: nonceChecked ? { claim: claim!, expiresAt: new Date(((payload.exp as number) + 60) * 1000) } : null,
   };
 }

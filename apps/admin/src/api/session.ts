@@ -109,7 +109,9 @@ export class SessionStore {
     this.access = { token: t.accessToken, expiresAt: Date.parse(t.accessTokenExpiresAt), mfaAt: mfa, sessionId: t.sessionId ?? null };
     this.endReason = null;
     try {
-      storage()?.setItem(RT_KEY, t.refreshToken);
+      // `Tokens.refreshToken` is optional in the OpenAPI schema (omitted only for the web's cookie transport, which the
+      // admin never requests) — guard so the regenerated type compiles; admin always receives it in the body.
+      if (t.refreshToken) storage()?.setItem(RT_KEY, t.refreshToken);
     } catch {
       /* storage unavailable: session lasts until the access token expires */
     }

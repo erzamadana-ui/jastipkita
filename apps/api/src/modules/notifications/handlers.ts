@@ -205,7 +205,9 @@ const payoutEvent =
       }
     }
     if (!traveler) return [];
-    return [{ userId: traveler, template, role: 'TRAVELER', transactionId: txId ?? null, vars: { payoutNumber, accountMask, amountIdr } }];
+    // payout.scheduled: schedule + new-account cooldown (money.md §5.7) for the copy
+    const timing = { scheduledFor: pstr(p, 'scheduledFor') ?? null, cooldownUntil: pstr(p, 'cooldownUntil') ?? null, kind: pstr(p, 'kind') ?? null };
+    return [{ userId: traveler, template, role: 'TRAVELER', transactionId: txId ?? null, vars: { payoutNumber, accountMask, amountIdr, ...timing } }];
   };
 
 interface DisputeRow {

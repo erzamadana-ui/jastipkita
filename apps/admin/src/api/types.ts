@@ -449,6 +449,11 @@ export interface PayoutItem {
   releasedAt: string | null;
   transactionHoldReason: string | null;
   scheduledFor: string | null;
+  /**
+   * New payout account cooldown (anti account-takeover, money.policy.newPayoutAccountCooldownHours, 2026-10-04): the
+   * destination account was added / verified / made default recently — no payout before this time. null = none.
+   */
+  cooldownUntil?: string | null;
   paidAt: string | null;
   provider: string;
   sandbox: boolean;
@@ -892,6 +897,34 @@ export interface ConnectionTest {
   avgMs: number | null;
   error: string | null;
   target: DbTarget;
+}
+/** GET /v1/admin/infra/audit/checkpoints/verify — T12 audit chain checkpoints (read-only verification). */
+export interface AuditCheckpointVerification {
+  status: 'OK' | 'BROKEN' | 'NO_CHECKPOINT';
+  checkedAt: string;
+  durationMs: number;
+  checkpoint: {
+    id: number;
+    day: string;
+    lastId: number;
+    lastHash: string;
+    rowCount: number;
+    headUpdatedAt: string;
+    createdAt: string;
+    ageSec: number;
+    storageKey: string;
+    storageMode: string;
+    objectSha256: string;
+  } | null;
+  anchor: { hashMatches: boolean; rowCountMatches: boolean; actualRowCount: number } | null;
+  segment: { fromId: number; toId: number; rowsSinceCheckpoint: number; brokenAtId: number | null };
+  head: { lastId: number; lastHash: string; updatedAt: string } | null;
+  history: { checkpoints: number; mismatched: { id: number; day: string; lastId: number }[] };
+  storage: { status: 'MATCH' | 'MISMATCH' | 'MISSING' | 'ERROR' | 'SKIPPED'; mode: string; key: string | null; error: string | null };
+  findings: string[];
+  warnings: string[];
+  recent: { day: string; lastId: number; rowCount: number; createdAt: string; storageKey: string; storageMode: string }[];
+  note: string;
 }
 export interface DbOperation {
   id: string;

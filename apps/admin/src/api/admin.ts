@@ -302,7 +302,19 @@ export const Infra = {
     call<T.DbOperationDetail>(c().POST('/v1/admin/infra/db/migration-workflows/{id}/steps/{step}', { params: { path: { id, step: step as never } }, body })),
   approveStep: (id: string, step: string) =>
     call<T.DbOperationDetail>(c().POST('/v1/admin/infra/db/migration-workflows/{id}/steps/{step}/approve', { params: { path: { id, step: step as never } } })),
+  /** T12. Raw authenticated GET (no params) so the UI works before schema.d.ts is regenerated; same auth/refresh handling. */
+  auditCheckpoints: () => getJson<T.AuditCheckpointVerification>('/v1/admin/infra/audit/checkpoints/verify'),
 };
+
+async function getJson<R>(path: string): Promise<R> {
+  const res = await api().authFetch(path, { method: 'GET', headers: { accept: 'application/json' } });
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    const { normalizeError } = await import('./errors');
+    throw normalizeError(res.status, body, res);
+  }
+  return body as R;
+}
 
 // ------------------------------------------------------------------ files
 /** GET /v1/files/{id}/content as a Blob (authenticated, never cached). */

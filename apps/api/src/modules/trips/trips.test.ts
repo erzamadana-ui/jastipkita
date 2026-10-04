@@ -209,27 +209,31 @@ describe('GET /v1/trips (public discovery)', () => {
       await t3.adminSql`UPDATE users SET trust_score = 88 WHERE id = ${a.id}`;
       await t3.adminSql`INSERT INTO user_rating_summaries (user_id, as_traveler_count, as_traveler_avg, as_traveler_weighted) VALUES (${a.id}, 12, 4.80, 4.75)`;
 
-      const all = await t3.request('GET', '/v1/trips');
+      // signed-in viewer: exact dates (SEC-19 — anonymous visitors get week precision, see below)
+      const viewer = await t3.createUser();
+      const get = (path: string) => t3.request('GET', path, { token: viewer.accessToken });
+      const all = await get('/v1/trips');
       expect(all.status).toBe(200);
       expect(all.body.data).toHaveLength(3);
       expect(all.body.data.map((x: { departureDate: string }) => x.departureDate)).toEqual([day(t3, 10), day(t3, 11), day(t3, 12)]);
+      expect(all.body.data[0]).toMatchObject({ datePrecision: 'DAY', departureWindow: { from: day(t3, 10), to: day(t3, 10) } });
 
-      const jp = await t3.request('GET', '/v1/trips?originCountry=jp');
+      const jp = await get('/v1/trips?originCountry=jp');
       expect(jp.body.data.map((x: { id: string }) => x.id)).toEqual([tripA.id, tripB.id]);
-      const food = await t3.request('GET', '/v1/trips?originCountry=JP&categoryCode=FOOD_SNACKS');
+      const food = await get('/v1/trips?originCountry=JP&categoryCode=FOOD_SNACKS');
       expect(food.body.data.map((x: { id: string }) => x.id)).toEqual([tripB.id]);
-      const sby = await t3.request('GET', '/v1/trips?destinationCity=surabaya');
+      const sby = await get('/v1/trips?destinationCity=surabaya');
       expect(sby.body.data.map((x: { id: string }) => x.id)).toEqual([tripB.id]);
-      const arrivalBy = await t3.request('GET', `/v1/trips?arrivalBy=${day(t3, 11)}`);
+      const arrivalBy = await get(`/v1/trips?arrivalBy=${day(t3, 11)}`);
       expect(arrivalBy.body.data).toHaveLength(2);
 
-      const p1 = await t3.request('GET', '/v1/trips?limit=2');
+      const p1 = await get('/v1/trips?limit=2');
       expect(p1.body.data).toHaveLength(2);
       expect(p1.body.nextCursor).toBeTruthy();
-      const p2 = await t3.request('GET', `/v1/trips?limit=2&cursor=${p1.body.nextCursor}`);
+      const p2 = await get(`/v1/trips?limit=2&cursor=${p1.body.nextCursor}`);
       expect(p2.body.data).toHaveLength(1);
       expect(p2.body.nextCursor).toBeNull();
-      expect((await t3.request('GET', '/v1/trips?cursor=garbage')).status).toBe(400);
+      expect((await get('/v1/trips?cursor=garbage')).status).toBe(400);
 
       const first = all.body.data[0];
       expect(first.traveler).toEqual({
@@ -254,6 +258,79 @@ describe('GET /v1/trips (public discovery)', () => {
       for (const id of uuids) expect(tripIds.has(id) || id === a.id || id === b.id).toBe(true);
     } finally {
       await t3.close();
+    }
+  });
+});
+
+describe('SEC-19: anonymous discovery sees ISO-week precision, signed-in users exact dates', () => {
+  it('coarsens dates, windows and ordering; week-granular filters; private caching; strict optional bearer; detail view', async () => {
+    // NOW = Monday 2026-10-05 10:00 WIB → day(+10..+13) = Thu 15 .. Sun 18 Oct (week 12–18), day(+14) = Mon 19 Oct
+    const t4 = await createTestContext({ now: NOW });
+    try {
+      const a = await t4.createUser({ kycLevel: 4, displayName: 'Rina Wulandari' });
+      const b = await t4.createUser({ kycLevel: 4, displayName: 'Dimas Pratama' });
+      const thu = await createActiveTrip(t4, a, { departureDate: day(t4, 10), arrivalDate: day(t4, 10) });
+      const fri = await createActiveTrip(t4, b, { departureDate: day(t4, 11), arrivalDate: day(t4, 11) });
+      const sat = await createActiveTrip(t4, a, { departureDate: day(t4, 12), arrivalDate: day(t4, 13) });
+      const mon = await createActiveTrip(t4, b, { departureDate: day(t4, 14), arrivalDate: day(t4, 15) });
+      const week = { from: '2026-10-12', to: '2026-10-18' };
+      const next = { from: '2026-10-19', to: '2026-10-25' };
+
+      const anon = await t4.request('GET', '/v1/trips');
+      expect(anon.status).toBe(200);
+      expect(anon.headers.get('cache-control')).toBe('public, max-age=30');
+      expect(anon.headers.get('vary')).toContain('Authorization');
+      const ids = anon.body.data.map((x: { id: string }) => x.id);
+      // ordered by week, then id — the order inside a week says nothing about the exact day
+      expect(ids.slice(0, 3)).toEqual([thu.id, fri.id, sat.id].sort());
+      expect(ids[3]).toBe(mon.id);
+      for (const x of anon.body.data.slice(0, 3)) {
+        expect(x).toMatchObject({ datePrecision: 'WEEK', departureWindow: week, departureDate: week.from, arrivalWindow: week, arrivalDate: week.from });
+      }
+      expect(anon.body.data[3]).toMatchObject({ datePrecision: 'WEEK', departureWindow: next, arrivalWindow: next, departureDate: next.from });
+      const json = JSON.stringify(anon.body);
+      for (const exact of [day(t4, 10), day(t4, 11), day(t4, 12), day(t4, 15)]) expect(json).not.toContain(exact); // 15, 16, 17, 20 Oct
+
+      // a day-precise filter cannot single out one day for anonymous visitors (whole weeks), it can for signed-in users
+      const viewer = await t4.createUser();
+      const asUser = (path: string) => t4.request('GET', path, { token: viewer.accessToken });
+      const probe = `/v1/trips?departureFrom=${day(t4, 11)}&departureTo=${day(t4, 11)}`;
+      expect((await t4.request('GET', probe)).body.data.map((x: { id: string }) => x.id).sort()).toEqual([thu.id, fri.id, sat.id].sort());
+      expect((await asUser(probe)).body.data.map((x: { id: string }) => x.id)).toEqual([fri.id]);
+      const byArrival = `/v1/trips?arrivalBy=${day(t4, 10)}`;
+      expect((await t4.request('GET', byArrival)).body.data.map((x: { id: string }) => x.id).sort()).toEqual([thu.id, fri.id, sat.id].sort());
+      expect((await asUser(byArrival)).body.data.map((x: { id: string }) => x.id)).toEqual([thu.id]);
+
+      // keyset pagination on (week, id): no duplicates or gaps
+      const p1 = await t4.request('GET', '/v1/trips?limit=2');
+      const p2 = await t4.request('GET', `/v1/trips?limit=2&cursor=${p1.body.nextCursor}`);
+      expect([...p1.body.data, ...p2.body.data].map((x: { id: string }) => x.id)).toEqual(ids);
+      expect(p2.body.nextCursor).toBeNull();
+
+      // signed-in: exact dates, private response
+      const exact = await asUser('/v1/trips');
+      expect(exact.headers.get('cache-control')).toBe('private, no-store');
+      expect(exact.body.data.map((x: { id: string }) => x.id)).toEqual([thu.id, fri.id, sat.id, mon.id]);
+      expect(exact.body.data[2]).toMatchObject({ datePrecision: 'DAY', departureDate: day(t4, 12), arrivalDate: day(t4, 13), departureWindow: { from: day(t4, 12), to: day(t4, 12) } });
+
+      // a token that does not verify is refused (the app refreshes) instead of silently answering with coarse dates
+      const bad = await t4.request('GET', '/v1/trips', { token: 'not-a-jwt' });
+      expect(bad.status).toBe(401);
+
+      // trip detail: anonymous WEEK, signed-in non-owner DAY, owner OWNER view
+      const dAnon = await t4.request('GET', `/v1/trips/${fri.id}`);
+      expect(dAnon.body).toMatchObject({ view: 'PUBLIC', trip: { datePrecision: 'WEEK', departureDate: week.from, departureWindow: week } });
+      expect(dAnon.headers.get('cache-control')).toBe('public, max-age=30');
+      const dUser = await asUser(`/v1/trips/${fri.id}`);
+      expect(dUser.body).toMatchObject({ view: 'PUBLIC', trip: { datePrecision: 'DAY', departureDate: day(t4, 11) } });
+      expect(dUser.headers.get('cache-control')).toBe('private, no-store');
+      const dOwner = await t4.request('GET', `/v1/trips/${fri.id}`, { token: b.accessToken });
+      expect(dOwner.body).toMatchObject({ view: 'OWNER', trip: { departureDate: day(t4, 11) } });
+      // a suspended account is served like an anonymous visitor
+      await t4.adminSql`UPDATE users SET status = 'SUSPENDED' WHERE id = ${viewer.id}`;
+      expect((await asUser(`/v1/trips/${fri.id}`)).body.trip.datePrecision).toBe('WEEK');
+    } finally {
+      await t4.close();
     }
   });
 });

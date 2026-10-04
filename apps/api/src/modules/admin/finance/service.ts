@@ -8,7 +8,9 @@
 import { payoutFsm } from '@jastipkita/core';
 import { AppError, Errors } from '../../../lib/errors';
 import { emitEvent } from '../../../services/outbox';
+import { payoutCooldownUntil } from '../../payouts/service';
 import { approveRefund, processRefunds, rejectRefund } from '../../refunds/service';
+import { moneyPolicy } from '../../transactions/common';
 import { type AdminCtx, adminAudit, decodeKey, encodeKey, inAdminTx, iso, makerChecker, maskName, num, parseCsv } from '../common';
 
 const REFUND_STATUSES = ['REQUESTED', 'PENDING_APPROVAL', 'APPROVED', 'PROCESSING', 'SUCCEEDED', 'FAILED', 'REJECTED', 'CANCELLED'] as const;
@@ -95,7 +97,8 @@ export async function listPayouts(ctx: AdminCtx, q: { status?: string | undefine
   const r = await db<Record<string, unknown>[]>`
     SELECT p.id, p.number, p.traveler_id, p.transaction_id, p.amount_idr, p.fee_idr, p.net_idr, p.status, p.hold_reason, p.held_by, p.held_at,
            p.released_by, p.released_at, p.approved_by, p.scheduled_for, p.paid_at, p.provider, p.provider_env, p.failure_reason, p.attempts, p.created_at,
-           a.bank_code, a.account_mask, a.verification_status, t.number AS tx_number, t.payout_hold_reason, u.display_name
+           a.bank_code, a.account_mask, a.verification_status, a.created_at AS account_created_at, a.verified_at AS account_verified_at,
+           a.default_since AS account_default_since, t.number AS tx_number, t.payout_hold_reason, u.display_name
       FROM payouts p JOIN payout_accounts a ON a.id = p.payout_account_id JOIN users u ON u.id = p.traveler_id
       LEFT JOIN transactions t ON t.id = p.transaction_id
      WHERE true
@@ -104,6 +107,13 @@ export async function listPayouts(ctx: AdminCtx, q: { status?: string | undefine
        ${cursor ? db`AND (p.created_at, p.id) < (${cursor.t}::timestamptz, ${cursor.id}::uuid)` : db``}
      ORDER BY p.created_at DESC, p.id DESC LIMIT ${q.limit + 1}`;
   const more = r.length > q.limit;
+  // new payout account cooldown (money.md §5.7): shown for payouts not yet handed to the provider
+  const cooldownHours = (await moneyPolicy(db)).newPayoutAccountCooldownHours;
+  const now = ctx.deps.clock.now();
+  const cooldownOf = (p: Record<string, unknown>) =>
+    ['SCHEDULED', 'ON_HOLD', 'FAILED'].includes(String(p.status))
+      ? iso(payoutCooldownUntil({ createdAt: p.account_created_at as Date, verifiedAt: p.account_verified_at as Date | null, defaultSince: p.account_default_since as Date | null }, cooldownHours, now))
+      : null;
   const data = r.slice(0, q.limit).map((p) => ({
     id: String(p.id),
     number: String(p.number),
@@ -122,6 +132,7 @@ export async function listPayouts(ctx: AdminCtx, q: { status?: string | undefine
     releasedAt: iso(p.released_at as Date | null),
     transactionHoldReason: (p.payout_hold_reason as string | null) ?? null,
     scheduledFor: iso(p.scheduled_for as Date),
+    cooldownUntil: cooldownOf(p),
     paidAt: iso(p.paid_at as Date | null),
     provider: String(p.provider),
     sandbox: p.provider_env !== 'LIVE',

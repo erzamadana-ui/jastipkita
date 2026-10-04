@@ -68,6 +68,7 @@ const legal: Array<[string, string]> = [
         <ul>
           {legal.map(([label, href]) => <li><a href={href}>{label}</a></li>)}
           <li><a href={url('/bantuan/')}>{id ? 'Pusat bantuan' : 'Help center (ID)'}</a></li>
+          <li><a href={id ? url('/pengaduan/') : url('/en/complaints/')} data-footer-complaints>{id ? 'Pengaduan konsumen' : 'Consumer complaints'}</a></li>
           <li><a href={id ? url('/hapus-akun/') : url('/en/delete-account/')}>{id ? 'Hapus akun & data' : 'Delete account & data'}</a></li>
         </ul>
       </div>
@@ -82,6 +83,8 @@ const legal: Array<[string, string]> = [
           {wa ? <a href={wa} rel="noopener">WhatsApp {formatWhatsapp(CONFIG.supportWhatsapp)}</a> : <span>{id ? 'WhatsApp CS segera diumumkan' : 'WhatsApp support to be announced'}</span>}
           {' · '}
           {CONFIG.supportEmail ? <a href={`mailto:${CONFIG.supportEmail}`}>{CONFIG.supportEmail}</a> : <span>{id ? 'e-mail CS segera diumumkan' : 'support e-mail to be announced'}</span>}
+          {' · '}
+          <a href={id ? url('/pengaduan/') : url('/en/complaints/')}>{id ? 'Layanan pengaduan konsumen' : 'Consumer complaints'}</a>
         </p>
         <p>
           <Icon name="info" size={14} class="inline-icon" />

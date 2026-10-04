@@ -140,6 +140,7 @@ erDiagram
     text account_mask "****0961"
     text verification_status
     bool is_default "one per user"
+    timestamptz default_since "0120: payout cooldown input"
   }
   kyc_documents {
     uuid id PK

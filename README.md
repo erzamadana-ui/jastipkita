@@ -64,6 +64,7 @@ bash scripts/ci/secret-grep.sh                          # penjaga secret sebelum
 | `deploy-staging.yml` | CI sukses di `main`, manual | migrasi Neon → deploy Worker + secret → smoke → web (antarkita-landing) → admin (Pages) |
 | `deploy-production.yml` | manual saja | gerbang aktor/konfirmasi/CI/keputusan LIVE → backup → migrasi → deploy → smoke → rollback |
 | `db-backup.yml` | harian 02:17 WIB, manual | `pg_dump` → age → artifact (14 hari) (+ R2) |
+| `mobile-ios.yml` | push `main` yang mengubah `apps/mobile/**`/`packages/design-tokens/**`, mingguan, manual | build iOS debug tanpa tanda tangan di macOS (menit ×10 di repo private; `IOS_CI_AUTO=false` = manual saja), artefak log |
 | `mobile-release.yml` | manual | AAB/APK bertanda tangan; iOS skeleton (nonaktif) |
 
 ## Deployment
@@ -91,5 +92,6 @@ untuk owner: **`docs/07-deployment.md`**. Batas & risiko paket gratis: `docs/01-
 - API: `docs/api/*.md`, `docs/api/openapi.json`, `docs/dev/api-module-guide.md` · Desain: `docs/05-ui-design-system.md`, `brand/BRAND-GUIDE.md`
 - Deployment: `docs/07-deployment.md` · Backup & DR: `docs/08-backup-dr.md` · Keamanan: `docs/09-security.md` · Privasi (UU PDP): `docs/10-privacy.md`
 - Checklist: `docs/checklists/{security,store,launch}-checklist.md` · Runbook: `docs/runbooks/` · Growth: `docs/marketing/launch-plan.md`
+- Kepatuhan privasi (RoPA, DPIA KYC & rekening, template DPA): `docs/privacy/` · SOP operasional (CS & pengaduan, sengketa, keuangan harian, komunikasi insiden): `docs/sop/`
 - Riset regulasi & integrasi: `docs/research/`
 - Kontribusi: `CONTRIBUTING.md` · Konvensi: `CONVENTIONS.md` · Keamanan (lapor celah): `SECURITY.md`

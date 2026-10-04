@@ -466,8 +466,23 @@ abstract final class Labels {
         return l10n.ticketCategoryPayment;
       case 'CUSTOMS':
         return l10n.ticketCategoryCustoms;
+      case 'COMPLAINT':
+        return l10n.ticketCategoryComplaint;
       default:
         return l10n.ticketCategoryOther;
+    }
+  }
+
+  static String ticketPriority(AppLocalizations l10n, String priority) {
+    switch (priority) {
+      case 'URGENT':
+        return l10n.ticketPriorityUrgent;
+      case 'HIGH':
+        return l10n.ticketPriorityHigh;
+      case 'LOW':
+        return l10n.ticketPriorityLow;
+      default:
+        return l10n.ticketPriorityNormal;
     }
   }
 

@@ -12,13 +12,16 @@ Owner: admin group (thresholds, admin jobs, admin endpoints). Code: `apps/api/sr
 | Source | Where | Notes |
 |---|---|---|
 | Structured logs | stdout (Workers Logs / container logs) via `lib/logger.ts` | JSON lines, request id, PII keys redacted (`email`, `phone`, `token`, `account_number`, `nik`, …) |
-| Public liveness | `GET /v1/health` | no auth; for uptime checks / load balancer |
+| Public liveness | `GET /v1/health` | no auth; for uptime checks / load balancer (DB down → HTTP 200 with `"status":"degraded"` — check the body) |
+| Worker heartbeat | `GET /v1/health/worker` | no auth, no sensitive data; age of the last finished scheduled job, **503** after 3 cron intervals (production 15 min, staging 45 min) — the dead-man's switch for the Cron Trigger |
 | Operational health | `GET /v1/admin/system/health` (`infra.db.read`) | snapshot below; computed live, no caching |
 | Alerts | `GET /v1/admin/system/alerts` (`infra.db.read`) | current alerts + `firstSeenAt`/`occurrences` from `admin_ops_alerts` + the threshold table |
 | DB internals | `GET /v1/admin/infra/db/health` | version, size, connections by state, cache-hit ratio, long-running queries (> 30 s), replication |
 | Business KPIs | `GET /v1/admin/dashboard/kpis`, daily `admin_kpi_snapshots` | every metric carries `definition` + `dataQuality` |
 | Security events | `security_events` (append-only) | `ADMIN_PII_REVEALED`, `ROLE_*`, `OPS_ALERT`, `AUDIT_CHAIN_BROKEN`, `ADMIN_BREAK_GLASS_GRANT`, auth events … |
 | Integrity | `audit_logs` hash chain, `app_health_checks` component `AUDIT_CHAIN` | nightly verification job |
+| Audit anchors (T12) | `audit_checkpoints` + `audit-checkpoints/YYYY/MM/DD.json` in storage, `GET /v1/admin/infra/audit/checkpoints/verify` (`infra.db.read`) | daily `infra.audit_checkpoint`; detects a full rewrite of the chain (`docs/08-backup-dr.md` §9) |
+| Alert definitions | [`infra/monitoring/alerts.yaml`](../infra/monitoring/alerts.yaml) + [`README`](../infra/monitoring/README.md) | alerting as code: every alert's source, threshold, window, severity, runbook, wiring status |
 
 ## 2. `GET /v1/admin/system/health` fields
 
@@ -76,8 +79,11 @@ volume (< 1k transactions/month) and should be revisited with real traffic.
   `security_events` row `OPS_ALERT` (deduplicated per opening — the page sees it once, not every 5 minutes).
 * Still true → `last_seen_at`, `occurrences + 1`, value/severity updated.
 * No longer true → `RESOLVED` with `resolved_at`.
-* Paging: forward `security_events` of type `OPS_ALERT` / `AUDIT_CHAIN_BROKEN` / `ADMIN_BREAK_GLASS_GRANT` with severity HIGH/CRITICAL to the
-  on-call channel (log drain filter on `admin.*` / `security_events` inserts). The admin UI polls `/v1/admin/system/alerts`.
+* Every opening is also logged **after COMMIT** as `ALERT ops.alert_opened` (`code`, `severity`, `value`, `threshold`; level `error` for
+  HIGH/CRITICAL, `warn` for MEDIUM) — once per opening, not every 5 minutes.
+* Paging: **not wired yet.** `security_events` inserts are DB rows, not log lines, so a log drain cannot see them; the hooks for external
+  paging are the `ALERT …` log lines (incl. `ALERT ops.alert_opened`) and the public health endpoints. Options, costs and what is missing:
+  [`infra/monitoring/README.md`](../infra/monitoring/README.md). The admin UI polls `/v1/admin/system/alerts`.
 
 | Alert | First response (runbook) |
 |---|---|
@@ -94,6 +100,7 @@ volume (< 1k transactions/month) and should be revisited with real traffic.
 | `admin.alerts_evaluate` | 5 min | §3 lifecycle |
 | `admin.stale_ops_cleanup` | 1 h | `db_operations` REQUESTED > 72 h → CANCELLED; non-migration RUNNING > 24 h → FAILED; expires role requests, settlement changes and trust overrides past `expires_at`; one audit row when anything changed |
 | `admin.audit_chain_verify` | 24 h | `verify_audit_chain()` → `app_health_checks` AUDIT_CHAIN UP/DOWN (+ `brokenAtId`, duration); DOWN also writes a CRITICAL `AUDIT_CHAIN_BROKEN` security event and an error log |
+| `infra.audit_checkpoint` (`jobs/infra.ts`) | 24 h (UTC day) | verifies the chain since the previous checkpoint, then records the head in `audit_checkpoints` and stores `audit-checkpoints/YYYY/MM/DD.json`; a broken chain is never anchored → CRITICAL `AUDIT_CHAIN_BROKEN` event + `ALERT audit.checkpoint_refused` log |
 | queue `admin.export` | on demand | anonymized analytics export for the DB & Infra Center |
 
 The on-demand check `GET /v1/admin/audit-logs/verify` runs the same function (optionally over an id range) and shows the chain head and the

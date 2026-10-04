@@ -17,6 +17,10 @@ const PayoutItem = z
     status: z.enum(['SCHEDULED', 'ON_HOLD', 'PROCESSING', 'PAID', 'FAILED', 'CANCELLED']),
     holdReason: z.string().nullable(),
     scheduledFor: z.string(),
+    cooldownUntil: z
+      .string()
+      .nullable()
+      .openapi({ description: 'Set while the destination account is in its new-account cooldown (money.policy.newPayoutAccountCooldownHours): the payout is not sent before this time (ISO-8601)' }),
     paidAt: z.string().nullable(),
     destination: z.object({ bankCode: z.string(), accountMask: z.string() }),
     providerEnv: z.string(),

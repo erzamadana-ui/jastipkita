@@ -173,6 +173,21 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               ),
             ],
           ),
+          if (r.isAutoFilled) ...<Widget>[
+            const SizedBox(height: JkSpacing.s3),
+            // AI-content label (Permendag 19/2026): the product data came from automated extraction.
+            Semantics(
+              container: true,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(Icons.auto_awesome_outlined, size: 16, color: jk.onSurfaceMuted),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(l10n.autofillDetailLabel, style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted))),
+                ],
+              ),
+            ),
+          ],
           const Divider(height: JkSpacing.s6),
           Wrap(
             spacing: JkSpacing.s5,

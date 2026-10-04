@@ -362,6 +362,7 @@ function BackupsTab() {
       <Card title="Log operasi DB (db_operations)" hint="RESTORE / IMPORT / SWITCH / ROLLBACK butuh SUPER_ADMIN kedua (DB CHECK)" flush>
         <OperationsTable ops={ops.data?.data} loading={ops.isPending} />
       </Card>
+      <AuditCheckpointCard />
       <ActionDialog open={dlg === 'backup'} onClose={() => setDlg(null)} title="Buat backup (branch provider)" confirmLabel="Buat backup" mfa canConfirm={label.trim().length > 2} onConfirm={(r) => backup.mutateAsync(r)}>
         <Field label="Label" required>
           <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="pre-migration-0070" />
@@ -398,6 +399,90 @@ function BackupsTab() {
         </div>
       </ActionDialog>
     </TabPanel>
+  );
+}
+
+const STORAGE_LABEL: Record<string, string> = {
+  MATCH: 'Objek cocok',
+  MISMATCH: 'Objek TIDAK cocok',
+  MISSING: 'Objek tidak ada',
+  ERROR: 'Storage error',
+  SKIPPED: 'Belum ada objek',
+};
+
+/** T12: daily audit chain checkpoint (DB row + WORM object) and the read-only verification since the last one. */
+export function AuditCheckpointCard() {
+  const q = useQuery({ queryKey: ['infra', 'audit-checkpoints'], queryFn: Infra.auditCheckpoints });
+  const v = q.data;
+  const cp = v?.checkpoint ?? null;
+  return (
+    <Card
+      title="Checkpoint rantai audit (WORM)"
+      hint="Job harian infra.audit_checkpoint → tabel audit_checkpoints + objek audit-checkpoints/YYYY/MM/DD.json. Verifikasi read-only: hitung ulang rantai sejak checkpoint terakhir."
+      actions={
+        <>
+          {v ? <StatusBadge status={v.status} label={v.status === 'NO_CHECKPOINT' ? 'Belum ada checkpoint' : v.status} /> : null}
+          <Button size="sm" icon="refresh" onClick={() => void q.refetch()} loading={q.isFetching}>
+            Verifikasi ulang
+          </Button>
+        </>
+      }
+    >
+      {q.error ? (
+        <Callout tone="danger" title={describeError(q.error).title}>{describeError(q.error).detail}</Callout>
+      ) : !v ? (
+        <LoadingBlock rows={4} />
+      ) : (
+        <div className="stack">
+          {v.findings.length ? (
+            <Callout tone="danger" title="Rantai audit TIDAK cocok dengan checkpoint — tangani sebagai insiden keamanan (docs/runbooks/security-incident.md).">
+              <ul>{v.findings.map((f) => <li key={f}>{f}</li>)}</ul>
+            </Callout>
+          ) : null}
+          {v.warnings.length ? (
+            <Callout tone="warning">
+              <ul>{v.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+            </Callout>
+          ) : null}
+          <div className="grid grid-4">
+            <Stat label="Checkpoint terakhir" value={cp ? cp.day : '—'} tone={!cp || cp.ageSec > 26 * 3600 ? 'warning' : undefined} />
+            <Stat label="Id / jumlah baris" value={cp ? `#${formatNumber(cp.lastId)} / ${formatNumber(cp.rowCount)}` : '—'} />
+            <Stat label="Baris sejak checkpoint" value={formatNumber(v.segment.rowsSinceCheckpoint)} />
+            <Stat label="Objek storage" value={STORAGE_LABEL[v.storage.status] ?? v.storage.status} tone={v.storage.status === 'MISMATCH' ? 'danger' : v.storage.status === 'MATCH' || v.storage.status === 'SKIPPED' ? undefined : 'warning'} />
+          </div>
+          <KeyValue
+            cols={2}
+            items={[
+              ['Anchor (hash di last_id)', v.anchor ? (v.anchor.hashMatches && v.anchor.rowCountMatches ? <Badge tone="success">cocok</Badge> : <Badge tone="danger">tidak cocok</Badge>) : '—'],
+              ['Segmen diverifikasi', `#${formatNumber(v.segment.fromId)} … #${formatNumber(v.segment.toId)}${v.segment.brokenAtId !== null ? ` · rusak di #${v.segment.brokenAtId}` : ''}`],
+              ['Storage', <span className="row row--tight"><ModeBadge name="storage" mode={v.storage.mode} /><code className="small">{v.storage.key ?? '—'}</code></span>],
+              ['Checkpoint tercatat', `${v.history.checkpoints}${v.history.mismatched.length ? ` · ${v.history.mismatched.length} tidak cocok` : ''}`],
+              ['Dibuat', cp ? <DateTime value={cp.createdAt} relative /> : '—'],
+              ['Dicek', <span><DateTime value={v.checkedAt} relative /> · {v.durationMs} ms</span>],
+            ]}
+          />
+          {v.recent.length ? (
+            <details>
+              <summary className="small">10 checkpoint terakhir</summary>
+              <DataTable
+                compact
+                caption="Checkpoint audit terakhir"
+                rows={v.recent}
+                rowKey={(r) => r.day}
+                columns={[
+                  { key: 'd', header: 'Hari (UTC)', render: (r) => <code>{r.day}</code> },
+                  { key: 'i', header: 'Last id', align: 'right', render: (r) => formatNumber(r.lastId) },
+                  { key: 'n', header: 'Baris', align: 'right', render: (r) => formatNumber(r.rowCount) },
+                  { key: 'm', header: 'Storage', render: (r) => r.storageMode },
+                  { key: 'c', header: 'Dibuat', render: (r) => <DateTime value={r.createdAt} /> },
+                ]}
+              />
+            </details>
+          ) : null}
+          <p className="small muted">{v.note}</p>
+        </div>
+      )}
+    </Card>
   );
 }
 

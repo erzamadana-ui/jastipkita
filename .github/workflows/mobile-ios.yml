@@ -1,0 +1,146 @@
+# iOS compile check (unsigned) — the first and only place iOS is built until the owner has a Mac + Apple account.
+#
+# Separate from ci.yml on purpose: deploy-staging.yml (workflow_run of CI) and deploy-production.yml (CI success for the
+# commit) must not wait for, or be blocked by, a macOS job.
+#
+# COST: macOS minutes count 10× against the included Actions minutes of a PRIVATE repository (public repos: free).
+# One run ≈ 15–25 runner minutes ≈ 150–250 billed minutes (ASSUMPTION — measure on the first runs, docs/07-deployment.md
+# §13). Hence: push to main only when the app changes, weekly drift check, manual runs. Set the repository variable
+# IOS_CI_AUTO=false to stop the automatic (push/schedule) runs; "Run workflow" keeps working.
+#
+# What it proves: the generated (or committed) ios/ folder + every plugin compile with the pinned settings of
+# apps/mobile/tool/configure_native.py (bundle id, deployment target 15.5, purpose strings, URL scheme, entitlements).
+# It is a DEBUG build for a device (arm64) without code signing — not installable, nothing is uploaded except logs.
+# Device, not --simulator: mobile_scanner 6.x ships GoogleMLKit 7.0, which has no arm64-simulator slice (its
+# CHANGELOG 6.0.2), and the macOS runners are Apple silicon.
+name: Mobile iOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/design-tokens/**'
+      - '.github/workflows/mobile-ios.yml'
+  schedule:
+    - cron: '47 21 * * 0' # Monday 04:47 WIB — catches drift in Flutter stable, Xcode image and pods
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Same dart-defines as the CI APK build (ci.yml job mobile). Public value, never a secret.
+  CI_API_BASE_URL: ${{ vars.STAGING_API_BASE_URL || 'https://jastipkita-api-staging.example.workers.dev' }}
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  COCOAPODS_DISABLE_STATS: 'true'
+
+jobs:
+  ios:
+    name: iOS build (debug, no codesign)
+    if: github.event_name == 'workflow_dispatch' || vars.IOS_CI_AUTO != 'false'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash # → bash -eo pipefail, so "| tee" keeps the exit code
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Preconditions
+        working-directory: .
+        run: |
+          [ -f apps/mobile/pubspec.yaml ] || { echo "::error::apps/mobile/pubspec.yaml missing"; exit 1; }
+          echo "LOGS=$RUNNER_TEMP/ios-logs" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ios-logs"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Toolchain
+        run: |
+          {
+            echo "### iOS toolchain"
+            echo '```'
+            flutter --version
+            xcodebuild -version
+            echo "CocoaPods $(pod --version 2>/dev/null || echo 'not installed')"
+            sw_vers | tr '\t' ' '
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          command -v pod >/dev/null || brew install cocoapods
+      - name: Generate ios/ when missing (not committed yet)
+        run: |
+          if [ -d ios ]; then echo "ios/ is committed — using it"; exit 0; fi
+          had_test=false; [ -f test/widget_test.dart ] && had_test=true
+          flutter create --platforms=ios --org com.antarkitaindonesia --project-name jastipkita .
+          # the template test references a counter app that does not exist in this project
+          if [ "$had_test" = false ]; then rm -f test/widget_test.dart; fi
+      - name: Native configuration (display name, bundle id, iOS 15.5, purpose strings, URL scheme, entitlements)
+        run: python3 tool/configure_native.py --platforms=ios --ios-entitlements
+      - run: flutter pub get
+      - name: Launcher icons & native splash (when configured)
+        run: |
+          if grep -q '^flutter_launcher_icons:' pubspec.yaml || [ -f flutter_launcher_icons.yaml ]; then dart run flutter_launcher_icons; else echo "launcher icons not configured"; fi
+          if grep -q '^flutter_native_splash:' pubspec.yaml || [ -f flutter_native_splash.yaml ]; then dart run flutter_native_splash:create; else echo "native splash not configured"; fi
+      - name: Localizations
+        run: |
+          if [ -f l10n.yaml ] || grep -qE '^\s+generate:\s*true' pubspec.yaml; then flutter gen-l10n; else echo "l10n not configured"; fi
+      - name: Native configuration again (Podfile from pub get; verify nothing was overwritten)
+        run: |
+          python3 tool/configure_native.py --platforms=ios --ios-entitlements
+          python3 tool/configure_native.py --platforms=ios --ios-entitlements --check
+      - name: CocoaPods
+        run: |
+          if [ ! -f ios/Podfile ]; then
+            echo "no ios/Podfile — every plugin resolved through Swift Package Manager (or flutter build creates it)"; exit 0
+          fi
+          cd ios
+          if ! pod install 2>&1 | tee "$LOGS/pod-install.log"; then
+            echo "::warning title=CocoaPods::pod install failed — retrying with a specs repo update"
+            pod install --repo-update 2>&1 | tee -a "$LOGS/pod-install.log"
+          fi
+      - name: Build iOS (debug, device, no codesign, staging API)
+        run: |
+          flutter build ios --debug --no-codesign \
+            --dart-define=API_BASE_URL="$CI_API_BASE_URL" --dart-define=APP_ENV=staging 2>&1 | tee "$LOGS/flutter-build-ios.log"
+      - name: Check the built app
+        run: |
+          app=build/ios/iphoneos/Runner.app
+          [ -d "$app" ] || { echo "::error::$app not found"; exit 1; }
+          read_key() { /usr/libexec/PlistBuddy -c "Print :$1" "$app/Info.plist"; }
+          id=$(read_key CFBundleIdentifier); min=$(read_key MinimumOSVersion); name=$(read_key CFBundleDisplayName)
+          {
+            echo "### iOS build"
+            echo "| Key | Value |"; echo "|---|---|"
+            echo "| CFBundleIdentifier | \`$id\` |"
+            echo "| CFBundleDisplayName | $name |"
+            echo "| MinimumOSVersion | $min |"
+            echo "| Runner.app size | $(du -sh "$app" | cut -f1) (debug, unsigned) |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$id" = com.antarkitaindonesia.jastipkita ] || { echo "::error::unexpected bundle id $id"; exit 1; }
+          for key in NSCameraUsageDescription NSPhotoLibraryUsageDescription NSMicrophoneUsageDescription; do
+            read_key "$key" >/dev/null || { echo "::error::$key missing from the built Info.plist"; exit 1; }
+          done
+      - name: Collect logs
+        if: always()
+        run: |
+          LOGS="${LOGS:-$RUNNER_TEMP/ios-logs}"; mkdir -p "$LOGS"
+          flutter doctor -v > "$LOGS/flutter-doctor.txt" 2>&1 || true
+          for f in ios/Podfile ios/Podfile.lock ios/Runner/Info.plist ios/Runner/Runner.entitlements; do
+            [ -f "$f" ] && cp "$f" "$LOGS/$(echo "$f" | tr '/' '_')"
+          done
+          ls -la "$LOGS"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mobile-ios-logs
+          path: ${{ runner.temp }}/ios-logs
+          retention-days: 7
+          if-no-files-found: ignore

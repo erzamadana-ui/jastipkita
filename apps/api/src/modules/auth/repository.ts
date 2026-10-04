@@ -206,3 +206,30 @@ export async function recentMfaFailures(db: Db, userId: string, since: Date): Pr
     SELECT count(*)::int AS n FROM security_events WHERE user_id = ${userId} AND type = 'MFA_FAILED' AND created_at >= ${since}`;
   return r?.n ?? 0;
 }
+
+// ------------------------------------------------------------------ OAuth nonce single use (SEC-15, migration 0110)
+/**
+ * Serializes concurrent sign-ins presenting the same nonce (transaction-scoped lock), then reports whether it was
+ * already used — the second of two parallel replays waits and sees the first one's committed row.
+ */
+export async function oauthNonceUsed(db: Db, provider: 'GOOGLE' | 'APPLE', nonceHash: Uint8Array): Promise<boolean> {
+  await db`SELECT pg_advisory_xact_lock(hashtextextended(${`${provider}:${Buffer.from(nonceHash).toString('hex')}`}, 7271))`;
+  const [r] = await db<{ ok: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM oauth_nonce_uses WHERE provider = ${provider} AND nonce_hash = ${buf(nonceHash)}) AS ok`;
+  return !!r?.ok;
+}
+
+/**
+ * Records the nonce of a successful sign-in. Returns false when another request recorded it first (concurrent replay).
+ * Purges a bounded batch of expired rows on the way (the table only needs to outlive the tokens).
+ */
+export async function recordOauthNonce(db: Db, provider: 'GOOGLE' | 'APPLE', nonceHash: Uint8Array, expiresAt: Date, now: Date): Promise<boolean> {
+  await db`DELETE FROM oauth_nonce_uses
+            WHERE ctid IN (SELECT ctid FROM oauth_nonce_uses WHERE expires_at < ${now} LIMIT 100)`;
+  const rows = await db<{ provider: string }[]>`
+    INSERT INTO oauth_nonce_uses (provider, nonce_hash, expires_at, created_at)
+    VALUES (${provider}, ${buf(nonceHash)}, ${expiresAt}, ${now})
+    ON CONFLICT (provider, nonce_hash) DO NOTHING
+    RETURNING provider`;
+  return rows.length === 1;
+}

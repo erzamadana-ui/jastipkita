@@ -2,6 +2,7 @@ import type { AppDeps } from '../context';
 import { adminJobs } from './admin';
 import { engagementJobs } from './engagement';
 import { identityJobs } from './identity';
+import { infraJobs } from './infra';
 import { marketplaceJobs } from './marketplace';
 import { moneyJobs } from './money';
 import type { JobGroup, OutboxEvent, OutboxHandler, QueueHandler, ScheduledJob } from './types';
@@ -12,6 +13,7 @@ const GROUPS: { name: string; group: JobGroup }[] = [
   { name: 'money', group: moneyJobs },
   { name: 'engagement', group: engagementJobs },
   { name: 'admin', group: adminJobs },
+  { name: 'infra', group: infraJobs },
 ];
 
 interface NamedHandler {

@@ -4,6 +4,11 @@
 # Order:   preflight → migrate (Neon, as jk_migrate_staging) → deploy-api (Worker + secrets + smoke) → web → admin
 # Every step that lacks its credentials is SKIPPED WITH A NOTICE instead of failing, so the pipeline is green
 # while the owner is still creating accounts (docs/07-deployment.md lists every secret/variable).
+#
+# Web address — owner decision 2026-10-04: the public web stays at https://antarkitaindonesia.com/jastipkita (shared
+# origin, NO subdomain). Compensating controls for SEC-14 instead of a separate origin: a Content-Security-Policy on
+# EVERY page of the origin (antarkita-landing included — the publish step below reports landing pages without one) and
+# the refresh token in an HttpOnly cookie on the API host (docs/07-deployment.md §8.3).
 name: Deploy staging
 
 on:
@@ -56,8 +61,13 @@ jobs:
           HAS_CF: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
           HAS_LANDING: ${{ secrets.LANDING_DEPLOY_TOKEN != '' }}
           HAS_PAGES: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && vars.ADMIN_PAGES_PROJECT != '' }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
         run: |
           { echo "db=$HAS_DB"; echo "api=$HAS_CF"; echo "landing=$HAS_LANDING"; echo "pages=$HAS_PAGES"; } >> "$GITHUB_OUTPUT"
+          # The web refresh cookie (jk_rt, SameSite=Strict, host-only) is only stored/sent when the API is same-site
+          # with https://antarkitaindonesia.com — a *.workers.dev API logs web users out when the access token expires.
+          api_host=$(echo "$API_BASE_URL" | sed -E 's#^[a-z]+://##; s#[/:].*$##')
+          case "$api_host" in antarkitaindonesia.com|*.antarkitaindonesia.com) SAME_SITE=true ;; *) SAME_SITE=false ;; esac
           {
             echo "### Staging deploy of \`${DEPLOY_SHA::7}\`"
             echo "| Part | Ready | Missing configuration |"
@@ -66,7 +76,9 @@ jobs:
             echo "| API Worker | $HAS_CF | secrets \`CLOUDFLARE_API_TOKEN\`, \`CLOUDFLARE_ACCOUNT_ID\` |"
             echo "| Web → antarkita-landing | $HAS_LANDING | secret \`LANDING_DEPLOY_TOKEN\` |"
             echo "| Admin → Cloudflare Pages | $HAS_PAGES | variable \`ADMIN_PAGES_PROJECT\` |"
+            echo "| Web session (refresh cookie) | $SAME_SITE | variable \`API_BASE_URL\` on a custom domain under antarkitaindonesia.com (docs/07-deployment.md §8.3) |"
           } >> "$GITHUB_STEP_SUMMARY"
+          [ "$SAME_SITE" = true ] || echo "::warning title=staging::API_BASE_URL host '${api_host:-unset}' is not under antarkitaindonesia.com — web logins cannot refresh (SameSite=Strict refresh cookie); mobile and admin are unaffected (docs/07-deployment.md §8.3)"
           [ "$HAS_DB" = true ] || echo "::notice title=staging::DATABASE_URL_MIGRATOR missing — migrations skipped (docs/07-deployment.md §3)"
           [ "$HAS_CF" = true ] || echo "::notice title=staging::Cloudflare credentials missing — API deploy skipped (docs/07-deployment.md §4)"
           [ "$HAS_LANDING" = true ] || echo "::notice title=staging::LANDING_DEPLOY_TOKEN missing — web is built as an artifact only"
@@ -126,7 +138,7 @@ jobs:
         with:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -143,7 +155,7 @@ jobs:
           pnpm --filter @jastipkita/api exec tsx ../../scripts/ci/worker-config.ts staging
       - name: Secrets unchanged since last push?
         id: fp
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/secrets-fingerprint
           key: worker-secrets-staging-${{ steps.cfg.outputs.fingerprint }}
@@ -160,7 +172,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/secrets-fingerprint" && echo "${{ steps.cfg.outputs.fingerprint }}" > "$RUNNER_TEMP/secrets-fingerprint/fp"
       - name: Remember secrets fingerprint
         if: steps.fp.outputs.cache-hit != 'true' || inputs.force_secrets == true
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/secrets-fingerprint
           key: worker-secrets-staging-${{ steps.cfg.outputs.fingerprint }}
@@ -189,7 +201,7 @@ jobs:
           if [ -f apps/web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"
           else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice title=web::apps/web not present — skipped"; fi
       - if: steps.app.outputs.present == 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
       - if: steps.app.outputs.present == 'true'
         uses: actions/setup-node@v5
         with:
@@ -209,7 +221,7 @@ jobs:
           PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.PUBLIC_GOOGLE_CLIENT_ID }}
         run: pnpm --filter @jastipkita/web build
       - if: steps.app.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-dist-staging-${{ github.run_number }}
           path: apps/web/dist
@@ -241,10 +253,24 @@ jobs:
               exit 1
             fi
           fi
+          if [ "$LANDING_PATH" != jastipkita ]; then
+            echo "::warning title=landing::LANDING_PATH=$LANDING_PATH, but the decided address is /jastipkita (2026-10-04) — Astro base, App Links (assetlinks.json), AASA and the app's WEB_BASE_URL all assume /jastipkita"
+          fi
           mkdir -p "landing/$LANDING_PATH"
           # keep the Flutter web app (/jastipkita/app/) which is published separately
           rsync -a --delete --exclude 'app/' apps/web/dist/ "landing/$LANDING_PATH/"
           cd landing
+          # SEC-14 on a shared origin: a page WITHOUT a CSP anywhere on antarkitaindonesia.com can run script with
+          # JastipKita's origin. Report (do not block) landing pages outside /$LANDING_PATH/ that lack a CSP meta tag.
+          no_csp=0; pages=0
+          while IFS= read -r -d '' page; do
+            pages=$((pages + 1))
+            grep -qiE 'http-equiv=.?content-security-policy' "$page" || no_csp=$((no_csp + 1))
+          done < <(find . -name '*.html' -not -path './.git/*' -not -path "./$LANDING_PATH/*" -print0)
+          echo "Landing pages outside /$LANDING_PATH/ without a CSP meta tag: $no_csp of $pages" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$no_csp" -gt 0 ]; then
+            echo "::warning title=SEC-14::$no_csp of $pages antarkita-landing page(s) outside /$LANDING_PATH/ have no Content-Security-Policy — the shared-origin decision relies on a CSP for the whole origin (docs/07-deployment.md §8.3)"
+          fi
           git add -A "$LANDING_PATH"
           [ -f .nojekyll ] && git add .nojekyll
           if git diff --cached --quiet; then echo "no changes to publish"; exit 0; fi
@@ -270,7 +296,7 @@ jobs:
           if [ -f apps/admin/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"
           else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice title=admin::apps/admin not present — skipped"; fi
       - if: steps.app.outputs.present == 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
       - if: steps.app.outputs.present == 'true'
         uses: actions/setup-node@v5
         with:
@@ -292,7 +318,7 @@ jobs:
             printf '/*\n  X-Robots-Tag: noindex, nofollow\n  X-Frame-Options: DENY\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: no-referrer\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n' > "$d/_headers"
           fi
       - if: steps.app.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: admin-dist-staging-${{ github.run_number }}
           path: apps/admin/dist

@@ -61,6 +61,13 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
 
   bool _extracting = false;
   ExtractionResult? _extraction;
+
+  /// Source (URL / PHOTO / SEARCH) of the extraction draft applied to the form, null when typed in.
+  String? _appliedSource;
+
+  /// Form fields whose value came from the extraction draft and was not edited since — each gets
+  /// the AI-content label (Permendag 19/2026).
+  final Set<String> _autoFilled = <String>{};
   List<ExtractionDraft> _searchResults = const <ExtractionDraft>[];
   bool _showForm = false;
   String? _productUrl;
@@ -111,8 +118,26 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
     }
   }
 
+  String? _autoHelper(AppLocalizations l10n, String field) => _autoFilled.contains(field) ? l10n.autofillFieldHelper : null;
+
+  /// The buyer changed an auto-filled field: it is now their own input.
+  void _edited(String field) {
+    if (_autoFilled.contains(field)) setState(() => _autoFilled.remove(field));
+  }
+
   void _applyDraft(ExtractionDraft draft, Catalog? catalog) {
     setState(() {
+      _appliedSource = draft.sourceType;
+      _autoFilled
+        ..clear()
+        ..addAll(<String>[
+          if (draft.productName != null) 'name',
+          if (draft.merchantName != null) 'merchant',
+          if (draft.variant != null) 'variant',
+          if (draft.merchantCountry != null) 'country',
+          if (draft.categoryCode != null) 'category',
+          if (draft.priceCurrency != null) 'currency',
+        ]);
       _name.text = draft.productName ?? _name.text;
       _merchant.text = draft.merchantName ?? _merchant.text;
       _variant.text = draft.variant ?? _variant.text;
@@ -125,6 +150,7 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
       final currency = _currency;
       if (price != null && currency != null) {
         _price.text = Money.minor(price, currency, minorUnits: catalog?.minorUnits(currency)).replaceAll(RegExp(r'[^0-9.,]'), '');
+        _autoFilled.add('price');
       }
       _showForm = true;
       _check = null;
@@ -254,8 +280,11 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
     if (!_validate(catalog)) return;
     final budget = int.tryParse(_budget.text.replaceAll(RegExp(r'[^0-9]'), ''));
     final extraction = _extraction;
+    final applied = _appliedSource;
     final body = <String, dynamic>{
-      'sourceType': _source == _Source.manual ? 'MANUAL' : _source.name.toUpperCase(),
+      // A draft that was applied keeps its source even if the buyer switched tabs afterwards, so the
+      // request keeps the auto-fill label (API `autoFill`).
+      'sourceType': applied ?? (_source == _Source.manual ? 'MANUAL' : _source.name.toUpperCase()),
       if (_productUrl != null) 'productUrl': _productUrl,
       'productName': _name.text.trim(),
       if (_merchant.text.trim().isNotEmpty) 'merchantName': _merchant.text.trim(),
@@ -273,7 +302,7 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
       'deliveryPreference': _delivery,
       if (_imageUrl != null) 'imageUrls': <String>[_imageUrl!],
       if (_imageFileIds.isNotEmpty) 'imageFileIds': List<String>.of(_imageFileIds),
-      if (extraction != null) 'extraction': <String, dynamic>{'mode': extraction.mode, 'confidence': extraction.confidence},
+      if (extraction != null && applied != null) 'extraction': <String, dynamic>{'mode': extraction.mode, 'confidence': extraction.confidence},
       'acknowledgeRestriction': _ack,
       'publish': publish,
     };
@@ -456,25 +485,41 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
       ..sort();
     return <Widget>[
       SectionHeader(title: l10n.requestFormTitle),
+      if (_appliedSource != null) ...<Widget>[
+        NoticeBox(icon: Icons.auto_awesome_outlined, message: l10n.autofillNotice),
+        gap,
+      ],
       JkTextField(
         label: l10n.fieldProductName,
         controller: _name,
         errorText: _errors['name'],
+        helper: _autoHelper(l10n, 'name'),
         textCapitalization: TextCapitalization.sentences,
-        onChanged: (String _) => _invalidateCheck(),
+        onChanged: (String _) {
+          _edited('name');
+          _invalidateCheck();
+        },
       ),
       gap,
-      JkTextField(label: l10n.fieldMerchant, controller: _merchant, hint: l10n.fieldMerchantHint),
+      JkTextField(
+        label: l10n.fieldMerchant,
+        controller: _merchant,
+        hint: l10n.fieldMerchantHint,
+        helper: _autoHelper(l10n, 'merchant'),
+        onChanged: (String _) => _edited('merchant'),
+      ),
       gap,
       PickerField<String>(
         label: l10n.fieldCountry,
         value: _country,
         errorText: _errors['country'],
+        helper: _autoHelper(l10n, 'country'),
         options: <PickerOption<String>>[
           for (final c in catalog?.origins ?? const <Country>[])
             PickerOption<String>(c.code, '${PopularOrigins.flag(c.code)} ${c.name(locale)}'),
         ],
         onChanged: (String v) {
+          _edited('country');
           setState(() {
             _country = v;
             _currency ??= catalog?.country(v)?.currencyCode;
@@ -487,10 +532,12 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
         label: l10n.fieldCategory,
         value: _category,
         errorText: _errors['category'],
+        helper: _autoHelper(l10n, 'category'),
         options: <PickerOption<String>>[
           for (final c in catalog?.categories ?? const <ProductCategory>[]) PickerOption<String>(c.code, c.name(locale)),
         ],
         onChanged: (String v) {
+          _edited('category');
           setState(() => _category = v);
           _invalidateCheck();
         },
@@ -505,7 +552,13 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
         },
       ),
       gap,
-      JkTextField(label: l10n.fieldVariant, controller: _variant, hint: l10n.fieldVariantHint),
+      JkTextField(
+        label: l10n.fieldVariant,
+        controller: _variant,
+        hint: l10n.fieldVariantHint,
+        helper: _autoHelper(l10n, 'variant'),
+        onChanged: (String _) => _edited('variant'),
+      ),
       gap,
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,9 +569,13 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
               label: l10n.fieldPrice,
               controller: _price,
               errorText: _errors['price'],
+              helper: _autoHelper(l10n, 'price'),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: JkTextField.moneyFormatters,
-              onChanged: (String _) => _invalidateCheck(),
+              onChanged: (String _) {
+                _edited('price');
+                _invalidateCheck();
+              },
             ),
           ),
           const SizedBox(width: JkSpacing.s3),
@@ -528,8 +585,10 @@ class _CreateRequestScreenState extends ConsumerState<CreateRequestScreen> {
               label: l10n.fieldCurrency,
               value: _currency,
               errorText: _errors['currency'],
+              helper: _autoHelper(l10n, 'currency'),
               options: <PickerOption<String>>[for (final c in currencies) PickerOption<String>(c, c)],
               onChanged: (String v) {
+                _edited('currency');
                 setState(() => _currency = v);
                 _invalidateCheck();
               },

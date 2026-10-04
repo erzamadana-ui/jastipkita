@@ -137,7 +137,11 @@ export interface PresignedUpload {
 export interface StorageProvider {
   readonly mode: ProviderMode;
   presignUpload(input: { key: string; contentType: string; maxBytes: number; expiresSec: number }): Promise<PresignedUpload>;
-  presignDownload(input: { key: string; expiresSec: number; filename?: string }): Promise<string>;
+  /**
+   * Short-lived GET URL. SEC-18: the URL pins the response type and disposition — `inline` only for raster images
+   * (`contentType` jpeg/png/webp/heic), `attachment` for everything else and whenever `contentType` is unknown.
+   */
+  presignDownload(input: { key: string; expiresSec: number; filename?: string; contentType?: string; disposition?: 'inline' | 'attachment' }): Promise<string>;
   put(key: string, body: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<{ body: Uint8Array; contentType: string } | null>;
   head(key: string): Promise<{ size: number; contentType: string } | null>;

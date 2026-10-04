@@ -12,6 +12,7 @@ import type { AppDeps, AuthContext } from '../../context';
 import { bytesToHex, hexToBytes, sha256 } from '../../lib/crypto';
 import { AppError, Errors } from '../../lib/errors';
 import { hasSessionMfa } from '../../middleware/auth';
+import { effectiveDisposition } from '../../providers/storage/content-safety';
 import { audit } from '../../services/audit';
 import { SECURITY, securityEvent, u8, userHasPermission, type RequestMeta } from '../auth/common';
 import { encryptObject, decryptObject } from './envelope';
@@ -224,10 +225,13 @@ export async function downloadUrl(deps: AppDeps, auth: AuthContext, fileId: stri
   if (f.encrypted || isEncryptedPurpose(f.purpose)) {
     return { url: `${deps.env.API_BASE_URL}/v1/files/${f.id}/content`, method: 'GET' as const, requiresAuth: true, expiresAt: null };
   }
+  // SEC-18: the URL pins the stored type; only raster images may open inline, everything else downloads
   const url = await deps.providers.storage.presignDownload({
     key: f.storage_key,
     expiresSec: SECURITY.DOWNLOAD_URL_TTL_SEC,
     filename: `${f.purpose.toLowerCase()}-${f.id.slice(0, 8)}.${extensionFor(f.mime)}`,
+    contentType: f.mime,
+    disposition: effectiveDisposition(f.mime),
   });
   return {
     url,
@@ -263,7 +267,8 @@ export async function streamContent(deps: AppDeps, auth: AuthContext, fileId: st
     body,
     contentType: f.mime,
     filename: `${f.purpose.toLowerCase()}-${f.id.slice(0, 8)}.${extensionFor(f.mime)}`,
-    attachment: f.purpose === 'EXPORT' || f.mime === 'application/pdf',
+    // SEC-18: inline only for raster images (never for exports, PDFs, videos or unknown types)
+    attachment: f.purpose === 'EXPORT' || effectiveDisposition(f.mime) === 'attachment',
   };
 }
 

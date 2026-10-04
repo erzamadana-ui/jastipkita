@@ -4,12 +4,18 @@
 #   1. request job (no secrets): actor ∈ vars.PRODUCTION_DEPLOYERS, confirmation phrase, ref is on main,
 #      CI succeeded for that exact commit.
 #   2. deploy job runs in GitHub Environment "production" → required reviewers (when the plan supports it,
-#      see docs/07-deployment.md §8) — ONE approval covers the whole job.
+#      see docs/07-deployment.md §1.1/§1.3) — ONE approval covers the whole job.
 #   3. Live-payment decision: production variable ALLOW_LIVE_PAYMENTS must be explicitly "true" or "false" and equal
 #      the input checkbox; LIVE additionally needs decision_ref == vars.LIVE_PAYMENTS_DECISION_REF (written record).
 # Then: backup (Neon branch, or encrypted pg_dump) → migrate → deploy Worker → smoke → auto-rollback of the Worker
 # on smoke failure. Database changes are forward-only: DB rollback = restore from the pre-deploy branch
 # (docs/runbooks/db-restore.md).
+#
+# Web: not deployed here. Owner decision 2026-10-04 — the public web stays at https://antarkitaindonesia.com/jastipkita
+# (shared origin, no subdomain); SEC-14 is handled by a CSP across the whole origin plus the refresh token in an
+# HttpOnly cookie (jk_rt, SameSite=Strict, host-only) on the API host. That cookie only works when the production API
+# is SAME-SITE with the web, i.e. vars.API_BASE_URL on a custom domain under antarkitaindonesia.com
+# (docs/07-deployment.md §8.3, §9), and vars.WEB_BASE_URL/CORS_ORIGINS must name https://antarkitaindonesia.com.
 name: Deploy production
 
 on:
@@ -116,6 +122,15 @@ jobs:
               echo "::error::LIVE payments need decision_ref equal to LIVE_PAYMENTS_DECISION_REF (written owner decision)"; exit 1; }
           fi
           echo "payments mode for this deploy: $([ "$RECORDED" = true ] && echo LIVE || echo SANDBOX)" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Web session prerequisite (same-site API host — warning only)
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          api_host=$(echo "$API_BASE_URL" | sed -E 's#^[a-z]+://##; s#[/:].*$##')
+          case "$api_host" in
+            antarkitaindonesia.com|*.antarkitaindonesia.com) echo "API host $api_host is same-site with the web — refresh cookie OK" ;;
+            *) echo "::warning title=production::API_BASE_URL host '${api_host:-unset}' is not under antarkitaindonesia.com — the web's SameSite=Strict refresh cookie will not work (docs/07-deployment.md §8.3, §9); mobile and admin are unaffected" ;;
+          esac
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.SHA }}
@@ -164,7 +179,7 @@ jobs:
             exit 1
           fi
       - if: steps.backup.outputs.method == 'pg_dump'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: db-backup-production-predeploy-${{ github.run_number }}
           path: ${{ runner.temp }}/backup
@@ -186,7 +201,7 @@ jobs:
           bash db/scripts/migrate.sh --verify
 
       # ---------------------------------------------------------------- 3. deploy Worker
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}

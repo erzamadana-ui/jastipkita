@@ -4,12 +4,20 @@ import { Errors } from '../../lib/errors';
 import { decodeCursor, encodeCursor } from '../../lib/pagination';
 import { emitEvent } from '../../services/outbox';
 import { truncate } from '../notifications/templates/format';
+import { ESCALATION, LEGAL_BASIS, publishedChannels } from './complaint-info';
 import * as repo from './repository';
-import type { FAQ_CATEGORIES, TICKET_CATEGORIES, TICKET_STATUSES } from './schemas';
+import type { FAQ_CATEGORIES, TICKET_CATEGORIES, TICKET_PRIORITIES, TICKET_STATUSES, USER_TICKET_PRIORITIES } from './schemas';
 
-/** First-response SLA by priority (hours). URGENT is set by agents only. */
-export const TICKET_SLA_HOURS = { URGENT: 4, HIGH: 12, NORMAL: 24, LOW: 72 } as const;
-const HIGH_PRIORITY = new Set(['DISPUTE', 'REFUND', 'PAYMENT']);
+type TicketCategory = (typeof TICKET_CATEGORIES)[number];
+type TicketPriority = (typeof TICKET_PRIORITIES)[number];
+
+/** Categories that default to priority HIGH (COMPLAINT: consumer complaint channel, Permendag 19/2026). */
+const HIGH_PRIORITY: ReadonlySet<TicketCategory> = new Set<TicketCategory>(['COMPLAINT', 'DISPUTE', 'REFUND', 'PAYMENT']);
+
+/** Default priority of a user-filed ticket. URGENT is set by agents only. */
+export function defaultPriority(category: TicketCategory): TicketPriority {
+  return HIGH_PRIORITY.has(category) ? 'HIGH' : 'NORMAL';
+}
 
 type FaqCategory = (typeof FAQ_CATEGORIES)[number];
 
@@ -42,10 +50,10 @@ function ticketDto(t: repo.TicketRow) {
   return {
     id: t.id,
     number: t.number,
-    category: t.category as (typeof TICKET_CATEGORIES)[number],
+    category: t.category as TicketCategory,
     subject: t.subject,
     status: t.status as (typeof TICKET_STATUSES)[number],
-    priority: t.priority as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
+    priority: t.priority as TicketPriority,
     transactionId: t.transaction_id,
     disputeId: t.dispute_id,
     slaDueAt: t.sla_due_at?.toISOString() ?? null,
@@ -69,7 +77,15 @@ async function attachments(deps: AppDeps, userId: string, fileIds: string[] | un
 export async function createTicket(
   deps: AppDeps,
   auth: AuthContext,
-  input: { category: (typeof TICKET_CATEGORIES)[number]; subject: string; message: string; transactionId?: string | undefined; disputeId?: string | undefined; fileIds?: string[] | undefined },
+  input: {
+    category: TicketCategory;
+    subject: string;
+    message: string;
+    transactionId?: string | undefined;
+    disputeId?: string | undefined;
+    fileIds?: string[] | undefined;
+    priority?: (typeof USER_TICKET_PRIORITIES)[number] | undefined;
+  },
 ) {
   let transactionId = input.transactionId ?? null;
   if (transactionId) {
@@ -85,17 +101,56 @@ export async function createTicket(
     transactionId = transactionId ?? d.transaction_id;
   }
   const files = await attachments(deps, auth.userId, input.fileIds);
-  const priority = HIGH_PRIORITY.has(input.category) ? 'HIGH' : 'NORMAL';
+  const priority: TicketPriority = input.priority ?? defaultPriority(input.category);
+  // first-response SLA from versioned config (maker-checker in admin), same source as the admin queue
+  const sla = await deps.config.get('support.sla');
   const now = deps.clock.now();
-  const slaDueAt = new Date(now.getTime() + TICKET_SLA_HOURS[priority] * 3600_000);
+  const slaDueAt = new Date(now.getTime() + sla.hoursByPriority[priority] * 3600_000);
   const ticket = await deps.sql.begin(async (tq) => {
     const tx = tq as unknown as TxSql;
     const t = await repo.insertTicket(tx, { userId: auth.userId, category: input.category, subject: input.subject, priority, transactionId, disputeId, slaDueAt, now });
     await repo.insertTicketMessage(tx, { ticketId: t.id, authorId: auth.userId, body: input.message, attachments: files, now });
-    await emitEvent(tx, 'support_ticket', t.id, 'support.ticket_updated', { ticketId: t.id, userId: auth.userId, status: t.status, actorType: 'USER', action: 'CREATED', priority });
+    await emitEvent(tx, 'support_ticket', t.id, 'support.ticket_updated', { ticketId: t.id, userId: auth.userId, status: t.status, actorType: 'USER', action: 'CREATED', priority, category: input.category });
     return t;
   });
   return getTicket(deps, auth, ticket.id);
+}
+
+/**
+ * Public consumer-complaint information (L12): JastipKita channels (env), first-response SLA by priority (config
+ * `support.sla`), the government escalation channel and the legal basis. No personal data; cacheable.
+ */
+export async function complaintInfo(deps: Pick<AppDeps, 'config' | 'env'>) {
+  const sla = await deps.config.get('support.sla');
+  const complaintPriority = defaultPriority('COMPLAINT');
+  return {
+    channels: publishedChannels(deps.env),
+    sla: {
+      basis: 'FIRST_RESPONSE' as const,
+      complaintPriority,
+      complaintFirstResponseHours: sla.hoursByPriority[complaintPriority],
+      hoursByPriority: { URGENT: sla.hoursByPriority.URGENT, HIGH: sla.hoursByPriority.HIGH, NORMAL: sla.hoursByPriority.NORMAL, LOW: sla.hoursByPriority.LOW },
+      configKey: 'support.sla' as const,
+      // business-config.defaults.json flags support.sla as an operational assumption until reviewed after soft launch
+      isAssumption: true,
+    },
+    escalation: {
+      authority: ESCALATION.authority,
+      unit: ESCALATION.unit,
+      ministry: ESCALATION.ministry,
+      whatsapp: { ...ESCALATION.whatsapp },
+      email: ESCALATION.email,
+      phone: { ...ESCALATION.phone },
+      website: ESCALATION.website,
+      verification: { status: ESCALATION.verification.status, accessedAt: ESCALATION.verification.accessedAt, sources: [...ESCALATION.verification.sources] },
+      outOfCourt: ESCALATION.outOfCourt,
+    },
+    disputeFlow: {
+      endpoint: '/v1/transactions/{id}/disputes' as const,
+      note: 'Masalah pada transaksi yang sudah dibayar (barang tidak sesuai, tidak diterima, rusak) diselesaikan lewat dispute di halaman transaksi; dana tetap ditahan SafePay selama dispute berjalan.',
+    },
+    legalBasis: [...LEGAL_BASIS],
+  };
 }
 
 export async function listTickets(deps: AppDeps, auth: AuthContext, q: { limit: number; cursor?: string | undefined; status?: string | undefined }) {

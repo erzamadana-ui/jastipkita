@@ -142,11 +142,15 @@ with `reverse_journal()` (compensating entries). No UPDATE/DELETE on ledger tabl
 
 ## 7. Payout flow (§15.7)
 
-Scheduled at completion (earning) or cancellation (traveler compensation) to the traveler's default payout account.
-The processor checks `PAYOUT_CLEAR`: risk decision (payout hold flag from flagged proof / amount mismatch, or open
-HOLD/BLOCK risk reviews), no open dispute, account `VERIFIED` (decrypted server-side only, AAD
+Scheduled at completion (earning) or cancellation (traveler compensation) to the traveler's default payout account, at
+`max(now + money.policy.payoutDelayHours, account ready time)` — **new payout account cooldown** (2026-10-04): an account added,
+verified or made default less than `money.policy.newPayoutAccountCooldownHours` (24) ago receives nothing yet
+(`docs/api/money.md` §5.7). A default change re-points pending payouts to the new default (which then waits for its own cooldown).
+The processor re-resolves the destination (current VERIFIED default), then checks `PAYOUT_CLEAR`: risk decision (payout hold flag from
+flagged proof / amount mismatch, or open HOLD/BLOCK risk reviews), no open dispute, account `VERIFIED` (decrypted server-side only, AAD
 `payout_accounts.account_number:<id>`). Risk/dispute → `ON_HOLD` (`payout.on_hold`); unverified account → stays
-`SCHEDULED`. Disbursement failures retry with backoff (15 min × 2ⁿ) up to 3 attempts, then `ON_HOLD`.
+`SCHEDULED`; destination still in its cooldown → stays `SCHEDULED`, pushed to the ready time (`payout.cooldown_deferred`).
+Disbursement failures retry with backoff (15 min × 2ⁿ) up to 3 attempts, then `ON_HOLD`.
 
 ## 8. Sandbox vs live switch
 

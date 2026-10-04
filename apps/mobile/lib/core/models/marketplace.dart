@@ -215,6 +215,8 @@ class RequestItem {
     required this.quantity,
     required this.destinationCountry,
     this.sourceType,
+    this.autoFillSource,
+    this.autoFillMode,
     this.productUrl,
     this.merchantName,
     this.merchantCountry,
@@ -246,6 +248,7 @@ class RequestItem {
   factory RequestItem.fromJson(Json json) {
     final restriction = readObjectOrNull(json, 'restriction');
     final buyerJson = readObjectOrNull(json, 'buyer');
+    final autoFill = readObjectOrNull(json, 'autoFill');
     String? image;
     for (final img in readList(json, 'images')) {
       final url = readStringOrNull(img, 'url');
@@ -258,6 +261,8 @@ class RequestItem {
       id: readString(json, 'id'),
       status: readString(json, 'status'),
       sourceType: readStringOrNull(json, 'sourceType'),
+      autoFillSource: autoFill == null ? null : readStringOrNull(autoFill, 'sourceType'),
+      autoFillMode: autoFill == null ? null : readStringOrNull(autoFill, 'mode'),
       productUrl: readStringOrNull(json, 'productUrl'),
       productName: readString(json, 'productName'),
       merchantName: readStringOrNull(json, 'merchantName'),
@@ -295,6 +300,12 @@ class RequestItem {
   final String id;
   final String status;
   final String? sourceType;
+
+  /// URL | PHOTO | SEARCH when the product data was auto-filled by extraction (`autoFill`), else null.
+  final String? autoFillSource;
+
+  /// MOCK | SANDBOX | LIVE of the extraction that filled the data (null when unknown).
+  final String? autoFillMode;
   final String? productUrl;
   final String productName;
   final String? merchantName;
@@ -324,6 +335,9 @@ class RequestItem {
   final DateTime? expiresAt;
   final DateTime? createdAt;
   final bool isOwnerView;
+
+  /// Product data came from automated extraction — shown with the AI-content label (Permendag 19/2026).
+  bool get isAutoFilled => autoFillSource != null;
 
   String? get merchantDomain {
     final url = productUrl;

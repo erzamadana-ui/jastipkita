@@ -36,4 +36,8 @@ export const MIGRATION_MANIFEST: readonly MigrationManifestEntry[] = [
   { version: '0070', name: 'legal_public_documents', file: '0070_legal_public_documents.sql', checksum: 'c76428f49f7d550e0191aa6a03172842e0fdb0e0da99306bf4d874a07bbbe14f' },
   { version: '0080', name: 'security_hardening', file: '0080_security_hardening.sql', checksum: 'ba6bb0d907c33fbf53d3dc2a39d07ec5648171581c9ba294f1b7cd7a38f448cf' },
   { version: '0090', name: 'qa_security_followups', file: '0090_qa_security_followups.sql', checksum: 'a3eb2ceef378767e7d4948a2612f665206f54766a4f45272ba608076b52237df' },
+  { version: '0110', name: 'oauth_nonce_replay', file: '0110_oauth_nonce_replay.sql', checksum: 'fb90f8ae6520f5137d252dd8df3e66925ead414578a0bf47d0547c42925f9ded' },
+  { version: '0120', name: 'payout_account_cooldown', file: '0120_payout_account_cooldown.sql', checksum: '798e657ebc5194f994b6fc2870635c7e980101e21b7007d88be9b9feebf33325' },
+  { version: '0130', name: 'consumer_complaints', file: '0130_consumer_complaints.sql', checksum: '8b01b08dac0872b73f121d02639c4808d8dfed667291cf101ddba762730aabe0' },
+  { version: '0140', name: 'audit_checkpoints', file: '0140_audit_checkpoints.sql', checksum: '49db6ed84f50b9af2743821e53c3251705dc38d6e5d7bb891fcff80b276b98aa' },
 ];

@@ -32,6 +32,7 @@ import '../../features/requests/presentation/my_titipan_screen.dart';
 import '../../features/requests/presentation/open_requests_screen.dart';
 import '../../features/requests/presentation/request_detail_screen.dart';
 import '../../features/shell/presentation/main_shell.dart';
+import '../../features/support/presentation/complaint_screen.dart';
 import '../../features/support/presentation/support_screens.dart';
 import '../../features/transactions/presentation/checkout_screen.dart';
 import '../../features/transactions/presentation/handover_screens.dart';
@@ -172,6 +173,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       _route('/support/tickets/:id', (GoRouterState s) => TicketDetailScreen(ticketId: _id(s))),
+      _route(Routes.complaint, (GoRouterState s) => ComplaintScreen(transactionId: s.uri.queryParameters['transactionId'])),
       _route(Routes.settings, (GoRouterState s) => const SettingsScreen()),
       _route(Routes.editProfile, (GoRouterState s) => const EditProfileScreen()),
       _route(Routes.notificationSettings, (GoRouterState s) => const NotificationSettingsScreen()),

@@ -6,6 +6,9 @@
  *    step (MOCK: automatic; manual: stays IN_REVIEW for the admin queue). Guards via core kycSubmissionFsm.
  *  - Payout accounts (K3+): number encrypted + HMAC + mask ****1234, name inquiry through the payment
  *    provider; only VERIFIED accounts can be default / receive payouts. Responses show the mask only.
+ *  - New-account cooldown (CEO decision 2026-10-04): an account added / verified / made default receives payouts only
+ *    after money.policy.newPayoutAccountCooldownHours (`payoutsFrom`); a default change re-points pending payouts
+ *    (payouts/service.ts repointPendingPayouts) so they wait for the new account's cooldown.
  */
 import { assessRisk, kycSubmissionFsm } from '@jastipkita/core';
 import type { AppDeps, AuthContext } from '../../context';
@@ -18,6 +21,8 @@ import { buf, securityEvent, u8, type RequestMeta } from '../auth/common';
 import { consumeSensitiveActionOtp } from '../auth/service';
 import { inTx } from '../auth/repository';
 import { hasGrantedConsent } from '../me/repository';
+import { repointPendingPayouts } from '../payouts/service';
+import { moneyPolicy } from '../transactions/common';
 import { LEVEL_CODES, loadLevelEvidence, recomputeKycLevel } from './level';
 import * as repo from './repository';
 
@@ -308,8 +313,13 @@ export function namesMatch(a: string, b: string): boolean {
   return short.every((tok) => long.some((l) => l === tok || (tok.length >= 3 && l.startsWith(tok)) || (l.length >= 3 && tok.startsWith(l))));
 }
 
+async function cooldownInfo(deps: AppDeps, db: Db) {
+  return { hours: (await moneyPolicy(db)).newPayoutAccountCooldownHours, now: deps.clock.now() };
+}
+
 export async function listPayoutAccounts(deps: AppDeps, auth: AuthContext) {
-  return (await repo.listPayoutAccounts(deps.sql, auth.userId)).map(repo.toPayoutDto);
+  const cd = await cooldownInfo(deps, deps.sql);
+  return (await repo.listPayoutAccounts(deps.sql, auth.userId)).map((p) => repo.toPayoutDto(p, cd));
 }
 
 /** Decrypted full name of the user's VERIFIED identity (KYC ≥ 3), or null. Server-side only — never returned. */
@@ -382,9 +392,11 @@ export async function addPayoutAccount(
     if (makeDefault) await tx`UPDATE payout_accounts SET is_default = false WHERE user_id = ${userId} AND is_default`;
     await tx`
       INSERT INTO payout_accounts (id, user_id, bank_code, account_number_enc, account_number_hash, account_mask, holder_name, enc_key_id,
-                                   verification_status, verified_at, is_default, created_at)
+                                   verification_status, verified_at, is_default, default_since, created_at)
       VALUES (${id}, ${userId}, ${input.bankCode}, ${buf(enc)}, ${buf(hash)}, ${mask}, ${holderName.slice(0, 120)}, ${deps.crypto.activeKeyId},
-              ${status}, ${status === 'VERIFIED' ? now : null}, ${makeDefault}, ${now})`;
+              ${status}, ${status === 'VERIFIED' ? now : null}, ${makeDefault}, ${makeDefault ? now : null}, ${now})`;
+    // pending payouts follow the new default and wait for its cooldown
+    if (makeDefault) await repointPendingPayouts(deps, tx, userId, 'DEFAULT_CHANGED');
     if (signals.sharedPaymentInstrumentAccounts > 0 || risk.decision !== 'ALLOW') {
       await recordRiskAssessment(tx, 'USER', userId, risk, { ...signals, stage: 'PAYOUT_ACCOUNT', payoutAccountId: id }, risk.engineVersion);
     }
@@ -402,7 +414,7 @@ export async function addPayoutAccount(
     });
     return (await repo.getPayoutAccount(tx, userId, id))!;
   });
-  return repo.toPayoutDto(row);
+  return repo.toPayoutDto(row, await cooldownInfo(deps, deps.sql));
 }
 
 export async function removePayoutAccount(deps: AppDeps, auth: AuthContext, id: string) {
@@ -414,9 +426,11 @@ export async function removePayoutAccount(deps: AppDeps, auth: AuthContext, id: 
     if (busy) throw Errors.conflict('PAYOUT_ACCOUNT_IN_USE', 'Rekening masih dipakai untuk payout yang belum selesai');
     await tx`UPDATE payout_accounts SET disabled_at = ${now}, is_default = false WHERE id = ${id}`;
     if (acc.is_default) {
-      await tx`UPDATE payout_accounts SET is_default = true
+      const promoted = await tx`UPDATE payout_accounts SET is_default = true, default_since = ${now}
                 WHERE id = (SELECT id FROM payout_accounts WHERE user_id = ${auth.userId} AND disabled_at IS NULL AND verification_status = 'VERIFIED'
-                             ORDER BY created_at LIMIT 1)`;
+                             ORDER BY created_at LIMIT 1) RETURNING id`;
+      // the promoted account is a new destination: its cooldown starts now, pending payouts follow it
+      if (promoted.length) await repointPendingPayouts(deps, tx, auth.userId, 'ACCOUNT_REMOVED');
     }
     await audit(tx, { actorType: 'USER', actorId: auth.userId, action: 'kyc.payout_account_removed', entityType: 'payout_account', entityId: id, before: { accountMask: acc.account_mask, isDefault: acc.is_default } });
   });
@@ -438,12 +452,23 @@ export async function setDefaultPayoutAccount(
     if (!acc) throw Errors.notFound('Rekening', 'PAYOUT_ACCOUNT_NOT_FOUND');
     if (acc.verification_status !== 'VERIFIED') throw Errors.unprocessable('PAYOUT_ACCOUNT_NOT_VERIFIED', 'Hanya rekening terverifikasi yang dapat dijadikan utama');
     if (!acc.is_default) {
+      const now = deps.clock.now();
       await tx`UPDATE payout_accounts SET is_default = false WHERE user_id = ${auth.userId} AND is_default`;
-      await tx`UPDATE payout_accounts SET is_default = true WHERE id = ${id}`;
-      await audit(tx, { actorType: 'USER', actorId: auth.userId, action: 'kyc.payout_account_default_changed', entityType: 'payout_account', entityId: id, after: { accountMask: acc.account_mask } });
+      await tx`UPDATE payout_accounts SET is_default = true, default_since = ${now} WHERE id = ${id}`;
+      // anti account-takeover: the new default receives payouts only after its cooldown; pending payouts follow it
+      const repointed = await repointPendingPayouts(deps, tx, auth.userId, 'DEFAULT_CHANGED');
+      await audit(tx, {
+        actorType: 'USER',
+        actorId: auth.userId,
+        action: 'kyc.payout_account_default_changed',
+        entityType: 'payout_account',
+        entityId: id,
+        after: { accountMask: acc.account_mask },
+        meta: { repointedPayouts: repointed },
+      });
     }
     return (await repo.getPayoutAccount(tx, auth.userId, id))!;
   });
-  return repo.toPayoutDto(row);
+  return repo.toPayoutDto(row, await cooldownInfo(deps, deps.sql));
 }
 

@@ -101,7 +101,7 @@ Code: `src/lib/consents.ts`, `src/scripts/login.ts`; covered by `tests/api-contr
 
 ## Security (SEC-14 — shared origin) & storage
 
-**Risk:** the site is served from `https://antarkitaindonesia.com/jastipkita/`, i.e. the **same origin** as every other AntarKita page on that domain. Any XSS on another page of `antarkitaindonesia.com` (outside this repo) runs with JastipKita's origin: it can read `sessionStorage`/`localStorage` of that tab and call the API as the signed-in user. The controls below reduce the blast radius but cannot remove it. **Recommendation before public launch: move the web to its own subdomain** (e.g. `jastip.antarkitaindonesia.com` or `jastipkita.antarkitaindonesia.com`), then set the API's `WEB_BASE_URL`/`CORS_ORIGINS`, App Links (`assetlinks.json`/AASA) and `site`/`base` in `astro.config.mjs` accordingly, and serve real security headers from the host/CDN.
+**Risk:** the site is served from `https://antarkitaindonesia.com/jastipkita/`, i.e. the **same origin** as every other AntarKita page on that domain. **Decision 2026-10-04 (Commissioner): the web stays there** (ADR 0007 amendment). Mitigations: strict CSP (below), access token in memory only, and the **refresh token out of JavaScript reach** — the API keeps it in the HttpOnly, Secure, SameSite=Strict cookie `jk_rt` on its own host ("cookie transport", `docs/api/identity.md` §3.3). Residual risk (accepted): an XSS on another page of `antarkitaindonesia.com` (outside this repo) still runs in JastipKita's origin and can act as the signed-in user inside the victim's browser (drive an open tab, call `/v1/auth/refresh` for a 15-minute access token) — it can no longer steal the refresh token. Required outside this repo: an equally strict CSP across the whole origin, a security review of the other AntarKita pages, and real security headers from the host/CDN.
 
 **Content-Security-Policy** — GitHub Pages can't set headers, so every page carries `<meta http-equiv="Content-Security-Policy">` as the first element after charset/viewport (built by `src/lib/csp.ts`):
 
@@ -122,14 +122,14 @@ worker-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
 | Key | Store | Content | Cleared |
 |---|---|---|---|
 | — | memory | **access token** (never persisted) | page unload, logout |
-| `jk:refresh` | sessionStorage (this tab) | refresh token; rotated on every page load via `POST /v1/auth/refresh` | tab close, logout, refresh failure |
+| `jk_rt` | **HttpOnly cookie on the API host** (`Path=/v1/auth`, `SameSite=Strict`, `Secure`) — not readable by any script | refresh token, set by the API (`X-JK-Token-Transport: cookie`); rotated on every silent restore (`POST /v1/auth/refresh`, credentialed, no body; serialized across tabs with Web Locks) | logout (API clears it), refresh failure, 30 days |
 | `jk:device` | sessionStorage | random per-tab device id (API stores only its HMAC) | tab close, logout |
 | `jk:consent` | localStorage | banner choice (`necessary`/`analytics`) | logout |
 | `jk:theme` | localStorage | theme picked with the toggle | logout |
 
-Logout (`session.clear()` in `src/lib/api.ts`) calls `POST /v1/auth/logout` and removes the in-memory token and **every `jk:` key** from both storages. No analytics or third-party trackers are installed; if analytics are added later they must be gated on `jk:consent === 'analytics'` and allowed explicitly in the CSP.
+Logout (`session.logout()` in `src/lib/api.ts`) calls `POST /v1/auth/logout` (bearer + cookie; the API revokes the session and clears `jk_rt`) and removes the in-memory token and **every `jk:` key** from both storages. The pre-2026-10-04 `jk:refresh` sessionStorage key is deleted on every page load. Only the auth endpoints that set/read the cookie (`otp/verify`, `google`, `apple`, `refresh`, `logout`) are credentialed; every other API call uses `credentials: 'omit'`. No analytics or third-party trackers are installed; if analytics are added later they must be gated on `jk:consent === 'analytics'` and allowed explicitly in the CSP.
 
-> ⚠️ `docs/legal/cookie-policy.md` (published as version `0.1-template`, immutable) still lists the pre-SEC-14 key names (`jk-consent`, `jk-theme`, `jk-session`, `jk-device`) and says the access token is in sessionStorage. Update it in the **next legal version** (new version + re-seed), not by editing the published text.
+> `docs/legal/cookie-policy.md` **0.3-template** (2026-10-04) lists `jk_rt` and the `jk:` keys; the seed generator publishes it as a new version (published legal text is immutable).
 
 ## Honesty rules baked into the site
 
@@ -145,6 +145,6 @@ Logout (`session.clear()` in `src/lib/api.ts`) calls `POST /v1/auth/logout` and 
 3. Deploy the API, allow CORS for `https://antarkitaindonesia.com`, set `PUBLIC_API_BASE_URL`.
 4. Replace placeholders in `well-known/` (Play App Signing SHA-256, Apple Team ID) and paste the 404 snippet into the landing repo.
 5. Update `src/data/kmk-rates.ts` weekly (or wire the Kemenkeu kurs API) — Customs uses the arrival-week KMK rate.
-6. **Move the web to its own subdomain before public launch (SEC-14)** and add real security headers there (see *Security*).
-7. Publish a new cookie-policy version with the `jk:` key names.
+6. SEC-14: the web stays on the shared origin (decision 2026-10-04) — make sure **every** page of `antarkitaindonesia.com` has an equally strict CSP and gets a security review, and serve real security headers (`frame-ancestors 'none'`, HSTS, nosniff) from the host/CDN (see *Security*). Host the API on a domain that is same-site with the web (e.g. `api.antarkitaindonesia.com`), otherwise the session cookie is dropped.
+7. ~~Publish a new cookie-policy version with the `jk:` key names~~ — done: cookie-policy 0.3-template.
 8. Brand risk: "JastipKita" name/trademark conflicts are documented in `docs/research/04-market-and-naming.md` — clear with a KI consultant before paid campaigns.

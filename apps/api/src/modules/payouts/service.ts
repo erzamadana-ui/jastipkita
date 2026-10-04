@@ -42,13 +42,104 @@ async function loadPayout(db: Db, id: string, forUpdate = false): Promise<Payout
   return rows[0] ? camel<PayoutRow>(rows[0]) : null;
 }
 
+interface PayoutAccountChoice {
+  id: string;
+  bank_code: string;
+  account_mask: string;
+  verification_status: string;
+  is_default: boolean;
+  created_at: Date;
+  verified_at: Date | null;
+  default_since: Date | null;
+}
+
 /** Default (or most recent) active payout account of the traveler. */
-export async function travelerPayoutAccount(db: Db, travelerId: string) {
-  const [row] = await db<{ id: string; bank_code: string; account_mask: string; verification_status: string; is_default: boolean }[]>`
-    SELECT id, bank_code, account_mask, verification_status, is_default FROM payout_accounts
+export async function travelerPayoutAccount(db: Db, travelerId: string): Promise<PayoutAccountChoice | null> {
+  const [row] = await db<PayoutAccountChoice[]>`
+    SELECT id, bank_code, account_mask, verification_status, is_default, created_at, verified_at, default_since FROM payout_accounts
      WHERE user_id = ${travelerId} AND disabled_at IS NULL AND account_number_enc IS NOT NULL
      ORDER BY is_default DESC, (verification_status = 'VERIFIED') DESC, created_at DESC LIMIT 1`;
   return row ?? null;
+}
+
+// ------------------------------------------------------------------ new payout account cooldown (CEO decision 2026-10-04)
+
+export interface PayoutAccountTimes {
+  createdAt: Date;
+  verifiedAt: Date | null;
+  defaultSince: Date | null;
+}
+
+const toTimes = (a: { created_at: Date; verified_at: Date | null; default_since: Date | null }): PayoutAccountTimes => ({
+  createdAt: a.created_at,
+  verifiedAt: a.verified_at,
+  defaultSince: a.default_since,
+});
+
+/**
+ * Anti account-takeover: an account may receive payouts only `money.policy.newPayoutAccountCooldownHours` after the
+ * latest of: added (created_at), verified (verified_at), became the default (default_since, migration 0120).
+ */
+export function payoutAccountReadyAt(a: PayoutAccountTimes, cooldownHours: number): Date {
+  const latest = Math.max(new Date(a.createdAt).getTime(), a.verifiedAt ? new Date(a.verifiedAt).getTime() : 0, a.defaultSince ? new Date(a.defaultSince).getTime() : 0);
+  return new Date(latest + Math.max(0, cooldownHours) * 3600_000);
+}
+
+/** The ready time while it is still in the future (API field `cooldownUntil`), else null. */
+export function payoutCooldownUntil(a: PayoutAccountTimes, cooldownHours: number, now: Date): Date | null {
+  const ready = payoutAccountReadyAt(a, cooldownHours);
+  return ready > now ? ready : null;
+}
+
+/** Statuses whose destination can still change (nothing was sent to the provider yet). */
+const REPOINTABLE: readonly PayoutRow['status'][] = ['SCHEDULED', 'ON_HOLD', 'FAILED'];
+
+/**
+ * The traveler's default payout account changed (made default, added as default, removed → another promoted):
+ * every payout not yet handed to the provider follows the new default, and SCHEDULED ones wait for its cooldown.
+ * Runs inside the caller's DB transaction; the processor re-checks the same rule (paths outside the API — admin
+ * override, config changes — are covered there). Returns the number of re-pointed payouts.
+ */
+export async function repointPendingPayouts(deps: AppDeps, db: TxSql, travelerId: string, reason: 'DEFAULT_CHANGED' | 'ACCOUNT_REMOVED'): Promise<number> {
+  const [def] = await db<PayoutAccountChoice[]>`
+    SELECT id, bank_code, account_mask, verification_status, is_default, created_at, verified_at, default_since FROM payout_accounts
+     WHERE user_id = ${travelerId} AND is_default AND disabled_at IS NULL AND account_number_enc IS NOT NULL AND verification_status = 'VERIFIED'`;
+  if (!def) return 0;
+  const policy = await moneyPolicy(db);
+  const now = deps.clock.now();
+  const ready = payoutAccountReadyAt(toTimes(def), policy.newPayoutAccountCooldownHours);
+  const rows = await db<{ id: string; number: string; status: PayoutRow['status']; payout_account_id: string; transaction_id: string | null; amount_idr: number; scheduled_for: Date }[]>`
+    SELECT id, number, status, payout_account_id, transaction_id, amount_idr, scheduled_for FROM payouts
+     WHERE traveler_id = ${travelerId} AND status = ANY(${REPOINTABLE as string[]}::text[]) AND payout_account_id <> ${def.id}
+     ORDER BY created_at FOR UPDATE`;
+  for (const r of rows) {
+    const scheduledFor = ready > r.scheduled_for ? ready : r.scheduled_for;
+    await db`UPDATE payouts SET payout_account_id = ${def.id}, scheduled_for = ${scheduledFor} WHERE id = ${r.id}`;
+    const cooldownUntil = ready > now ? ready.toISOString() : null;
+    if (r.status === 'SCHEDULED') {
+      await emitEvent(db, 'payout', r.id, 'payout.scheduled', {
+        payoutId: r.id,
+        payoutNumber: r.number,
+        travelerId,
+        transactionId: r.transaction_id,
+        amountIdr: Number(r.amount_idr),
+        scheduledFor: scheduledFor.toISOString(),
+        cooldownUntil,
+        kind: 'DESTINATION_CHANGED',
+      });
+    }
+    await audit(db, {
+      actorType: 'SYSTEM',
+      actorId: null,
+      action: 'payout.destination_changed',
+      entityType: 'payout',
+      entityId: r.id,
+      before: { payoutAccountId: r.payout_account_id, scheduledFor: r.scheduled_for.toISOString() },
+      after: { payoutAccountId: def.id, scheduledFor: scheduledFor.toISOString() },
+      meta: { reason, status: r.status, cooldownUntil },
+    });
+  }
+  return rows.length;
 }
 
 /**
@@ -93,11 +184,16 @@ export async function schedulePayout(
   const policy = await moneyPolicy(db);
   const now = deps.clock.now();
   const provider = deps.providers.payment;
+  // normal schedule (payoutDelayHours), pushed to the account's ready time while it is in its new-account cooldown
+  const normal = new Date(now.getTime() + policy.payoutDelayHours * 3600_000);
+  const readyAt = payoutAccountReadyAt(toTimes(account), policy.newPayoutAccountCooldownHours);
+  const scheduledFor = readyAt > normal ? readyAt : normal;
+  const cooldownUntil = readyAt > normal ? readyAt.toISOString() : null;
   const [ins] = await db<{ id: string }[]>`
     INSERT INTO payouts (traveler_id, transaction_id, payout_account_id, amount_idr, fee_idr, status, scheduled_for,
                          provider, provider_env, idempotency_key)
     VALUES (${tx.travelerId}, ${tx.id}, ${account.id}, ${input.amountIdr}, 0, 'SCHEDULED',
-            ${new Date(now.getTime() + policy.payoutDelayHours * 3600_000)}, ${provider.name}, ${providerEnv(provider)}, ${key})
+            ${scheduledFor}, ${provider.name}, ${providerEnv(provider)}, ${key})
     RETURNING id`;
   let payout = (await loadPayout(db, ins!.id))!;
   const risk = await payoutRiskDecision(db, tx);
@@ -108,7 +204,7 @@ export async function schedulePayout(
     payout = (await loadPayout(db, payout.id))!;
     await emitEvent(db, 'payout', payout.id, 'payout.on_hold', { ...payload, reason });
   } else {
-    await emitEvent(db, 'payout', payout.id, 'payout.scheduled', { ...payload, scheduledFor: payout.scheduledFor.toISOString() });
+    await emitEvent(db, 'payout', payout.id, 'payout.scheduled', { ...payload, scheduledFor: payout.scheduledFor.toISOString(), cooldownUntil });
   }
   await audit(db, {
     actorType: 'SYSTEM',
@@ -116,8 +212,8 @@ export async function schedulePayout(
     action: 'payout.scheduled',
     entityType: 'payout',
     entityId: payout.id,
-    after: { status: payout.status, amountIdr: payout.amountIdr },
-    meta: { transactionId: tx.id, kind: input.kind, holdReason: payout.holdReason },
+    after: { status: payout.status, amountIdr: payout.amountIdr, scheduledFor: payout.scheduledFor.toISOString() },
+    meta: { transactionId: tx.id, kind: input.kind, holdReason: payout.holdReason, cooldownUntil },
   });
   return payout;
 }
@@ -166,6 +262,8 @@ export interface PayoutRunResult {
   held: number;
   failed: number;
   skipped: number;
+  /** due payouts pushed back because their destination is still in the new-account cooldown */
+  deferred: number;
 }
 
 /**
@@ -228,26 +326,52 @@ export async function processPayouts(deps: AppDeps, filter: { transactionId?: st
     SELECT id FROM payouts WHERE status = 'SCHEDULED' AND scheduled_for <= ${now}
       ${filter.transactionId ? deps.sql`AND transaction_id = ${filter.transactionId}` : deps.sql``}
      ORDER BY scheduled_for LIMIT 100`;
-  const res: PayoutRunResult = { paid: 0, held: 0, failed: 0, skipped: 0 };
+  const res: PayoutRunResult = { paid: 0, held: 0, failed: 0, skipped: 0, deferred: 0 };
   for (const { id } of due) {
-    const r = await processOnePayout(deps, id, policy.payoutMaxSystemRetries);
+    const r = await processOnePayout(deps, id, policy.payoutMaxSystemRetries, policy.newPayoutAccountCooldownHours);
     if (r === 'PAID') res.paid++;
     else if (r === 'ON_HOLD') res.held++;
     else if (r === 'FAILED') res.failed++;
+    else if (r === 'DEFERRED') res.deferred++;
     else res.skipped++;
   }
   return res;
 }
 
-async function processOnePayout(deps: AppDeps, payoutId: string, maxRetries: number): Promise<'PAID' | 'ON_HOLD' | 'FAILED' | 'PENDING' | 'SKIPPED'> {
+async function processOnePayout(
+  deps: AppDeps,
+  payoutId: string,
+  maxRetries: number,
+  cooldownHours: number,
+): Promise<'PAID' | 'ON_HOLD' | 'FAILED' | 'PENDING' | 'SKIPPED' | 'DEFERRED'> {
   const claim = await deps.sql.begin(async (db) => {
     await setDbActor(db, 'SYSTEM', null);
     const [row] = await db<Record<string, unknown>[]>`SELECT * FROM payouts WHERE id = ${payoutId} FOR UPDATE SKIP LOCKED`;
     if (!row) return { kind: 'SKIP' as const };
     const p = camel<PayoutRow>(row);
     if (p.status !== 'SCHEDULED') return { kind: 'SKIP' as const };
-    const [acc] = await db<{ id: string; bank_code: string; account_number_enc: Buffer | null; holder_name: string; verification_status: string; disabled_at: Date | null }[]>`
-      SELECT id, bank_code, account_number_enc, holder_name, verification_status, disabled_at FROM payout_accounts WHERE id = ${p.payoutAccountId}`;
+    // Destination re-check at processing time: the payout follows the traveler's current default account (the default
+    // may have changed after scheduling — admin override, removal fallback); its cooldown is evaluated below.
+    const [def] = await db<{ id: string }[]>`
+      SELECT id FROM payout_accounts
+       WHERE user_id = ${p.travelerId} AND is_default AND disabled_at IS NULL AND account_number_enc IS NOT NULL AND verification_status = 'VERIFIED'`;
+    if (def && def.id !== p.payoutAccountId) {
+      await db`UPDATE payouts SET payout_account_id = ${def.id} WHERE id = ${p.id}`;
+      await audit(db, {
+        actorType: 'SYSTEM',
+        actorId: null,
+        action: 'payout.destination_changed',
+        entityType: 'payout',
+        entityId: p.id,
+        before: { payoutAccountId: p.payoutAccountId },
+        after: { payoutAccountId: def.id },
+        meta: { reason: 'DEFAULT_CHANGED', source: 'PROCESSOR' },
+      });
+      p.payoutAccountId = def.id;
+    }
+    const [acc] = await db<{ id: string; bank_code: string; account_number_enc: Buffer | null; holder_name: string; verification_status: string; disabled_at: Date | null; created_at: Date; verified_at: Date | null; default_since: Date | null }[]>`
+      SELECT id, bank_code, account_number_enc, holder_name, verification_status, disabled_at, created_at, verified_at, default_since
+        FROM payout_accounts WHERE id = ${p.payoutAccountId}`;
     const txRows = p.transactionId ? await db<Record<string, unknown>[]>`SELECT id, payout_hold_reason FROM transactions WHERE id = ${p.transactionId}` : [];
     const txInfo = txRows[0] ? { id: String(txRows[0].id), payoutHoldReason: (txRows[0].payout_hold_reason as string | null) ?? null } : null;
     const risk = txInfo ? await payoutRiskDecision(db, txInfo) : { decision: 'ALLOW' as RiskDecision, reason: null };
@@ -265,12 +389,41 @@ async function processOnePayout(deps: AppDeps, payoutId: string, maxRetries: num
       await audit(db, { actorType: 'SYSTEM', actorId: null, action: 'payout.on_hold', entityType: 'payout', entityId: p.id, meta: { reason } });
       return { kind: 'HOLD' as const };
     }
+    // New payout account cooldown (anti account-takeover): stays SCHEDULED, pushed to the account's ready time.
+    const now = deps.clock.now();
+    const cooldownUntil = payoutCooldownUntil(toTimes(acc!), cooldownHours, now);
+    if (cooldownUntil) {
+      await db`UPDATE payouts SET scheduled_for = ${cooldownUntil} WHERE id = ${p.id}`;
+      const payload = {
+        payoutId: p.id,
+        payoutNumber: p.number,
+        travelerId: p.travelerId,
+        transactionId: p.transactionId,
+        amountIdr: p.amountIdr,
+        scheduledFor: cooldownUntil.toISOString(),
+        cooldownUntil: cooldownUntil.toISOString(),
+        kind: 'ACCOUNT_COOLDOWN',
+      };
+      await emitEvent(db, 'payout', p.id, 'payout.scheduled', payload);
+      await audit(db, {
+        actorType: 'SYSTEM',
+        actorId: null,
+        action: 'payout.cooldown_deferred',
+        entityType: 'payout',
+        entityId: p.id,
+        before: { scheduledFor: new Date(p.scheduledFor).toISOString() },
+        after: { scheduledFor: cooldownUntil.toISOString() },
+        meta: { payoutAccountId: acc!.id, cooldownHours },
+      });
+      return { kind: 'DEFER' as const };
+    }
     const accountNumber = await decryptAccountNumber(deps, acc!.id, new Uint8Array(acc!.account_number_enc!));
     await db`UPDATE payouts SET status = 'PROCESSING', attempts = attempts + 1, failure_reason = NULL WHERE id = ${p.id}`;
     return { kind: 'GO' as const, payout: p, bankCode: acc!.bank_code, accountNumber, holderName: acc!.holder_name };
   });
   if (claim.kind === 'SKIP') return 'SKIPPED';
   if (claim.kind === 'HOLD') return 'ON_HOLD';
+  if (claim.kind === 'DEFER') return 'DEFERRED';
 
   let outcome: { status: 'SUCCEEDED' | 'PENDING' | 'FAILED'; providerRef?: string; reason?: string };
   try {
@@ -366,8 +519,11 @@ export async function processPayoutEvent(deps: AppDeps, e: { providerRef: string
 
 export async function myPayouts(deps: AppDeps, auth: AuthContext, opts: { limit: number; cursor?: { t: string; id: string } | null }) {
   const db = deps.sql;
+  const policy = await moneyPolicy(db);
+  const now = deps.clock.now();
   const rows = await db<Record<string, unknown>[]>`
-    SELECT p.*, t.number AS transaction_number, a.bank_code, a.account_mask
+    SELECT p.*, t.number AS transaction_number, a.bank_code, a.account_mask,
+           a.created_at AS account_created_at, a.verified_at AS account_verified_at, a.default_since AS account_default_since
       FROM payouts p
       LEFT JOIN transactions t ON t.id = p.transaction_id
       JOIN payout_accounts a ON a.id = p.payout_account_id
@@ -382,7 +538,10 @@ export async function myPayouts(deps: AppDeps, auth: AuthContext, opts: { limit:
            coalesce(sum(net_idr) FILTER (WHERE status = 'FAILED'), 0)::bigint AS failed
       FROM payouts WHERE traveler_id = ${auth.userId}`;
   const data = rows.map((row) => {
-    const r = camel<PayoutRow & { transactionNumber: string | null; bankCode: string; accountMask: string }>(row);
+    const r = camel<PayoutRow & { transactionNumber: string | null; bankCode: string; accountMask: string; accountCreatedAt: Date; accountVerifiedAt: Date | null; accountDefaultSince: Date | null }>(row);
+    const cooldownUntil = REPOINTABLE.includes(r.status)
+      ? payoutCooldownUntil({ createdAt: r.accountCreatedAt, verifiedAt: r.accountVerifiedAt, defaultSince: r.accountDefaultSince }, policy.newPayoutAccountCooldownHours, now)
+      : null;
     return {
       id: r.id,
       number: r.number,
@@ -394,6 +553,7 @@ export async function myPayouts(deps: AppDeps, auth: AuthContext, opts: { limit:
       status: r.status,
       holdReason: r.status === 'ON_HOLD' ? r.holdReason : null,
       scheduledFor: new Date(r.scheduledFor).toISOString(),
+      cooldownUntil: cooldownUntil ? cooldownUntil.toISOString() : null,
       paidAt: r.paidAt ? new Date(r.paidAt).toISOString() : null,
       destination: { bankCode: r.bankCode, accountMask: r.accountMask },
       providerEnv: r.providerEnv,

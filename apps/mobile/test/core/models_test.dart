@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jastipkita/core/domain/domain.dart';
 import 'package:jastipkita/core/models/account.dart';
+import 'package:jastipkita/core/models/engagement.dart';
 import 'package:jastipkita/core/models/json.dart';
 import 'package:jastipkita/core/models/marketplace.dart';
 import 'package:jastipkita/core/models/transaction.dart';
@@ -208,5 +209,44 @@ void main() {
     expect(readString(j, 'missing', 'x'), 'x');
     expect(readObject(j, 'bad'), isEmpty);
     expect(readDate(j, 'missing'), isNull);
+  });
+
+  test('request autoFill (AI-content label) and complaint info', () {
+    Map<String, dynamic> request([Object? autoFill]) => <String, dynamic>{
+          'id': 'r1',
+          'status': 'OPEN',
+          'productName': 'Uniqlo AIRism',
+          'quantity': 1,
+          'destinationCountry': 'ID',
+          'sourceType': 'URL',
+          'autoFill': autoFill,
+        };
+    final filled = RequestItem.fromJson(request(<String, dynamic>{'sourceType': 'URL', 'mode': 'MOCK'}));
+    expect(filled.isAutoFilled, isTrue);
+    expect(filled.autoFillSource, 'URL');
+    expect(filled.autoFillMode, 'MOCK');
+    expect(RequestItem.fromJson(request()).isAutoFilled, isFalse, reason: 'sourceType alone is not an auto-fill');
+
+    final info = ComplaintInfo.fromJson(<String, dynamic>{
+      'channels': <String, dynamic>{'whatsapp': null, 'email': 'cs@example.com', 'webUrl': 'https://example.com/pengaduan/'},
+      'sla': <String, dynamic>{
+        'complaintPriority': 'HIGH',
+        'complaintFirstResponseHours': 12,
+        'hoursByPriority': <String, dynamic>{'URGENT': 4, 'HIGH': 12, 'NORMAL': 24, 'LOW': 72},
+        'isAssumption': true,
+      },
+      'escalation': <String, dynamic>{
+        'authority': 'Ditjen PKTN',
+        'whatsapp': <String, dynamic>{'display': '0853-1111-1010', 'url': 'https://wa.me/6285311111010'},
+        'verification': <String, dynamic>{'accessedAt': '2026-10-04'},
+      },
+    });
+    expect(info.whatsappUrl, isNull, reason: 'not announced yet');
+    expect(info.email, 'cs@example.com');
+    expect(info.complaintFirstResponseHours, 12);
+    expect(info.hoursByPriority, <String, int>{'URGENT': 4, 'HIGH': 12, 'NORMAL': 24, 'LOW': 72});
+    expect(info.escalationWhatsappUrl, 'https://wa.me/6285311111010');
+    expect(info.escalationEmail, isNull);
+    expect(info.escalationVerifiedAt, '2026-10-04');
   });
 }

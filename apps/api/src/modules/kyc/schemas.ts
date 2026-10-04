@@ -68,6 +68,14 @@ export const PayoutAccountSchema = z
     verificationStatus: z.enum(['UNVERIFIED', 'PENDING', 'VERIFIED', 'FAILED', 'NAME_MISMATCH']),
     isDefault: z.boolean(),
     verifiedAt: z.string().nullable(),
+    payoutsFrom: z
+      .string()
+      .nullable()
+      .openapi({
+        description:
+          'New-account cooldown (anti account-takeover, money.policy.newPayoutAccountCooldownHours): no payout is sent to this account before this time — ' +
+          'latest of added / verified / made default + cooldown. null once it has passed.',
+      }),
     createdAt: z.string(),
   })
   .openapi('PayoutAccount');

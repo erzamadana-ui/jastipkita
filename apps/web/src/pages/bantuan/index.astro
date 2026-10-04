@@ -57,6 +57,9 @@ const index = FAQ.map((f) => ({ slug: f.slug, q: f.question, a: stripMarkup(f.an
             {' · '}
             {CONFIG.supportEmail ? <a href={`mailto:${CONFIG.supportEmail}`}>{CONFIG.supportEmail}</a> : 'e-mail CS segera diumumkan'}
           </p>
+          <p class="small mt-8" data-help-complaints>
+            Punya keluhan atas layanan kami? <a href={url('/pengaduan/')}>Layanan Pengaduan Konsumen</a> — kanal resmi, target waktu respons, dan eskalasi ke Kementerian Perdagangan.
+          </p>
         </div>
       </div>
     </div>

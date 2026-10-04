@@ -128,6 +128,27 @@ export interface RestrictionDto {
   blocksPublishing: boolean;
 }
 
+/**
+ * Set when the product data was auto-filled from `POST /v1/requests/extract` (L13 — Permendag 19/2026 AI-content
+ * label): the request was started from URL / PHOTO / SEARCH and the client sent the extraction metadata it applied
+ * (`extraction: {mode, confidence}`). Clients label the product data "Diisi otomatis (AI/ekstraksi otomatis) — periksa
+ * kembali". Derived from requests.source_type + requests.extraction (0007); no extra column.
+ */
+export interface AutoFillDto {
+  sourceType: 'URL' | 'PHOTO' | 'SEARCH';
+  mode: ExtractionResult['mode'] | null;
+}
+
+const EXTRACTION_MODES: ReadonlySet<string> = new Set(['MOCK', 'SANDBOX', 'LIVE']);
+
+export function autoFillOf(r: Pick<RequestRow, 'source_type' | 'extraction'>): AutoFillDto | null {
+  if (r.source_type === 'MANUAL') return null;
+  const ex = r.extraction;
+  if (ex === null || typeof ex !== 'object' || Array.isArray(ex) || Object.keys(ex).length === 0) return null;
+  const mode = typeof ex.mode === 'string' && EXTRACTION_MODES.has(ex.mode) ? (ex.mode as AutoFillDto['mode']) : null;
+  return { sourceType: r.source_type, mode };
+}
+
 export interface RequestImageDto {
   fileId: string | null;
   /** Absolute: the merchant image URL, or the uploaded file's content URL. */
@@ -141,6 +162,7 @@ export interface RequestOwnerDto {
   status: RequestStatus;
   version: number;
   sourceType: RequestRow['source_type'];
+  autoFill: AutoFillDto | null;
   productUrl: string | null;
   productName: string;
   merchantName: string | null;
@@ -172,6 +194,7 @@ export interface RequestOwnerDto {
 export interface RequestListingDto {
   id: string;
   status: RequestStatus;
+  autoFill: AutoFillDto | null;
   productUrl: string | null;
   productName: string;
   merchantName: string | null;
@@ -251,6 +274,7 @@ export async function ownerDto(db: Db, deps: Deps, r: RequestRow): Promise<Reque
     status: r.status,
     version: r.version,
     sourceType: r.source_type,
+    autoFill: autoFillOf(r),
     productUrl: r.product_url,
     productName: r.product_name,
     merchantName: r.merchant_name,
@@ -290,6 +314,7 @@ export async function listingDtos(db: Db, deps: Deps, rows: RequestRow[]): Promi
     out.push({
       id: r.id,
       status: r.status,
+      autoFill: autoFillOf(r),
       productUrl: r.product_url,
       productName: r.product_name,
       merchantName: r.merchant_name,

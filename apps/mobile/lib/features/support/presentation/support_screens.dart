@@ -110,6 +110,28 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(JkSpacing.s5, JkSpacing.s4, JkSpacing.s5, JkSpacing.s16),
         children: <Widget>[
+          // Consumer complaint channel (Permendag 19/2026) — always visible at the top of Help.
+          JkCard(
+            onTap: () => context.push(Routes.complaint),
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.report_problem_outlined, color: jk.secondary),
+                const SizedBox(width: JkSpacing.s3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(l10n.complaintTitle, style: JkTypeScale.titleS.copyWith(color: jk.onSurface)),
+                      const SizedBox(height: 2),
+                      Text(l10n.complaintEntrySubtitle, style: JkTypeScale.bodyS.copyWith(color: jk.onSurfaceMuted)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+          ),
+          const SizedBox(height: JkSpacing.s4),
           JkTextField(
             label: l10n.faqSearchLabel,
             controller: _query,

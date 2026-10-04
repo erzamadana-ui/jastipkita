@@ -6,12 +6,15 @@ ditahan **SafePay** sampai barang diterima.
 
 **CI status: green on Flutter 3.47.5** (stable) — job `mobile` di `.github/workflows/ci.yml`:
 analyze (info pun fatal), tes, APK debug, build web. APK siap pasang: lihat
-[Mengunduh APK dari CI](#mengunduh-apk-dari-ci).
+[Mengunduh APK dari CI](#mengunduh-apk-dari-ci). **iOS:** workflow terpisah `.github/workflows/mobile-ios.yml`
+(macOS, build debug tanpa tanda tangan) — ditambahkan 2026-10-04, **belum pernah dijalankan**; lihat
+[CI iOS](#ci-ios-githubworkflowsmobile-iosyml).
 
 | | |
 |---|---|
 | Application ID / Bundle ID | `com.antarkitaindonesia.jastipkita` |
 | Nama tampilan | JastipKita |
+| Minimum OS | Android: `minSdk` bawaan Flutter · iOS **15.5** (`mobile_scanner` 6.x / GoogleMLKit 7.0; Flutter stable sendiri 15.0) |
 | Bahasa | Indonesia (default), English — `lib/l10n/app_id.arb`, `app_en.arb` |
 | Flutter | stable **≥ 3.32**, diverifikasi CI di **3.47.5** (Dart ≥ 3.8; `pubspec` mengizinkan SDK ^3.5 tapi `l10n.yaml` memakai `output-dir` tanpa `synthetic-package`) |
 | State / routing / HTTP | flutter_riverpod 2 (tanpa codegen) · go_router 14 · dio 5 |
@@ -38,6 +41,31 @@ flutter build web --release --base-href /jastipkita/app/ --dart-define=…
 
 Artefak per run: `mobile-apk-debug` (7 hari), `mobile-web` (7 hari), `store-screenshots` (14 hari) dan —
 hanya bila CI membuat scaffold — `mobile-platform-scaffold` (14 hari).
+
+### CI iOS (`.github/workflows/mobile-ios.yml`)
+
+Satu-satunya tempat iOS di-compile sampai owner punya Mac + akun Apple. Runner `macos-latest`, timeout 45 menit.
+
+```bash
+flutter create --platforms=ios --org com.antarkitaindonesia --project-name jastipkita .   # bila ios/ belum ada
+python3 tool/configure_native.py --platforms=ios --ios-entitlements
+flutter pub get && dart run flutter_launcher_icons && dart run flutter_native_splash:create && flutter gen-l10n
+python3 tool/configure_native.py --platforms=ios --ios-entitlements          # lagi: Podfile dari pub get (+ --check)
+(cd ios && pod install || pod install --repo-update)                          # hanya bila ios/Podfile ada
+flutter build ios --debug --no-codesign --dart-define=API_BASE_URL=… --dart-define=APP_ENV=staging
+```
+
+- **Pemicu:** push ke `main` yang mengubah `apps/mobile/**`, `packages/design-tokens/**` atau workflow itu sendiri;
+  mingguan (Senin 04.47 WIB); manual (*Actions → Mobile iOS → Run workflow*, boleh dari branch mana pun). Tidak jalan
+  di PR. Variabel repository `IOS_CI_AUTO=false` mematikan pemicu otomatis (manual tetap bisa).
+- **Biaya:** menit macOS dihitung **10×** di repo private — satu run ±150–250 menit tagihan (ASUMSI, belum diukur).
+- **Device, bukan simulator:** `mobile_scanner` 6.x (GoogleMLKit 7.0) tidak punya slice arm64-simulator, dan runner
+  macOS memakai Apple silicon. Di Mac Apple silicon lokal pun simulator akan gagal link — pakai iPhone fisik atau
+  simulator Rosetta. Usulan (keputusan Eng-Mobile, bukan bagian CI): `mobile_scanner` ≥ 7 (Apple Vision, iOS 13+)
+  menghapus MLKit di iOS, memulihkan simulator arm64 dan memungkinkan target iOS 15.0 — ada perubahan API, perlu tes.
+- **Hasil:** ringkasan run (Flutter/Xcode/CocoaPods, bundle id, `MinimumOSVersion`, ukuran `Runner.app`) + artefak
+  **`mobile-ios-logs`** (7 hari). Tidak ada `.app`/IPA yang diunggah; build ini tidak bisa dipasang (tanpa tanda tangan).
+- Workflow ini terpisah dari `ci.yml`, jadi kegagalan iOS **tidak** memblokir deploy staging/production.
 
 ### Mengunduh APK dari CI
 
@@ -87,29 +115,47 @@ flutter create --platforms=android,ios . --org com.antarkitaindonesia --project-
 python3 tool/configure_native.py         # label, izin, deep link, Info.plist (idempoten)
 flutter pub get && dart run flutter_launcher_icons && dart run flutter_native_splash:create && flutter gen-l10n
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8787      # emulator Android
-flutter run --dart-define=API_BASE_URL=http://localhost:8787      # simulator iOS / web
+flutter run --dart-define=API_BASE_URL=http://localhost:8787      # simulator iOS (Intel/Rosetta — lihat CI iOS) / web
 ```
+
+iOS di Mac: Xcode + CocoaPods (`brew install cocoapods`); `flutter build ios`/`flutter run` menjalankan
+`pod install` sendiri. Mac Apple silicon: simulator arm64 tidak didukung oleh `mobile_scanner` 6 (MLKit) — pakai
+iPhone fisik (butuh Team di *Signing & Capabilities*) atau destinasi simulator Rosetta.
 
 Di dev, URL loopback yang dibuat API (upload presigned, halaman checkout mock) otomatis diarahkan ke
 host `API_BASE_URL` agar emulator bisa menjangkaunya (`AppConfig.rewriteLoopbackUrl`, nonaktif di production).
 
 ## Native (setelah `flutter create`)
 
-`tool/configure_native.py` dijalankan otomatis oleh job CI `mobile` dan oleh `mobile-release.yml` (Android dan
-iOS) tepat setelah `flutter create`; idempoten, jadi aman juga di folder platform yang sudah di-commit.
-`python3 tool/configure_native.py --check` hanya memverifikasi (exit 1 bila ada yang belum terpasang). Format
-scaffold Flutter 3.47 didukung: `android/app/build.gradle.kts` (Kotlin DSL; Groovy tetap bisa), `namespace` +
-`applicationId`, `MainActivity` dengan nama pendek atau lengkap, `Info.plist` dengan `UIApplicationSceneManifest`
-(`SceneDelegate.swift`), bundle id di `project.pbxproj` (target `RunnerTests` tetap bersufiks). Skrip menerapkan:
+`tool/configure_native.py` dijalankan otomatis oleh job CI `mobile`, oleh `mobile-ios.yml` (dua kali: sebelum dan
+sesudah `flutter pub get`) dan oleh `mobile-release.yml` (Android dan iOS) tepat setelah `flutter create`;
+idempoten, jadi aman juga di folder platform yang sudah di-commit.
+`python3 tool/configure_native.py --check` hanya memverifikasi (exit 1 bila ada yang belum terpasang). Opsi:
+`--platforms=android,ios,web` (subset; job macOS memakai `ios` saja), `--ios-entitlements` (lihat iOS di bawah),
+`--google-ios-client-id=…` atau env `GOOGLE_IOS_CLIENT_ID` (nilai publik). Format scaffold Flutter stable didukung:
+`android/app/build.gradle.kts` (Kotlin DSL; Groovy tetap bisa), `namespace` + `applicationId`, `MainActivity` dengan
+nama pendek atau lengkap, `Info.plist` dengan `UIApplicationSceneManifest` (`SceneDelegate.swift`), bundle id di
+`project.pbxproj` (target `RunnerTests` tetap bersufiks), Podfile dengan baris `platform` dikomentari. Skrip menerapkan:
 
 - **Android** — label *JastipKita*; izin `INTERNET` di manifest utama (template hanya memberi di
   debug → build release tanpa jaringan) dan `CAMERA`; intent filter `jastipkita://…` dan App Links
   terverifikasi `https://antarkitaindonesia.com/jastipkita/app/…` + `/jastipkita/r/…` (cocok dengan
   `apps/web/well-known/assetlinks.json` — isi SHA-256 Play App Signing di sana); `flutter_deeplinking_enabled`.
-- **iOS** — nama tampilan, `NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`, URL scheme
-  `jastipkita`, `FlutterDeepLinkingEnabled`. **Manual di Xcode:** capability *Associated Domains*
-  `applinks:antarkitaindonesia.com` (+ Team ID di `apple-app-site-association`), *Sign in with Apple*,
-  dan URL scheme reversed client id Google.
+- **iOS** — nama tampilan; purpose string Indonesia yang **dikelola skrip** (selalu disetel ulang):
+  `NSCameraUsageDescription` (QR serah terima, foto barang/struk, KTP & swafoto KYC), `NSPhotoLibraryUsageDescription`
+  (foto produk, struk/bukti pembelian, bukti sengketa, dokumen) dan `NSMicrophoneUsageDescription` (wajib karena
+  `image_picker` merekam video bukti pembelian/sengketa — tanpa kunci ini iOS menghentikan app); URL scheme
+  `jastipkita`; `FlutterDeepLinkingEnabled`; `IPHONEOS_DEPLOYMENT_TARGET` dan `platform :ios` di Podfile → **15.5**
+  (`mobile_scanner` 6.x / MLKit 7.0). Dengan `GOOGLE_IOS_CLIENT_ID`: `GIDClientID` + URL scheme reversed client id
+  (`com.googleusercontent.apps.…`) yang dibutuhkan `google_sign_in`. Dengan `--ios-entitlements`:
+  `ios/Runner/Runner.entitlements` (*Sign in with Apple* + *Associated Domains* `applinks:` & `webcredentials:antarkitaindonesia.com`,
+  cocok dengan `apps/web/well-known/apple-app-site-association`) + `CODE_SIGN_ENTITLEMENTS` di target Runner — opt-in
+  karena build **bertanda tangan** gagal bila App ID/provisioning profile belum punya kedua capability itu (build CI
+  `--no-codesign` tidak terpengaruh). **Sengaja tidak ditambahkan:** `UIBackgroundModes` (wiki `file_picker`
+  menyarankannya untuk `FileType.custom`, tetapi mode latar yang tidak dipakai berisiko ditolak App Review 2.5.4 —
+  verifikasi pemilihan file iCloud yang belum terunduh di iPhone), `NSAppleMusicUsageDescription` (tidak memilih audio),
+  `ITSAppUsesNonExemptEncryption` (jawaban export compliance = keputusan owner). **Manual (owner, setelah akun Apple):**
+  aktifkan capability di App ID, ganti `TEAMID` di `apple-app-site-association`.
 
 Tidak ada keystore/sertifikat di repo. Rilis Android memakai `mobile-release.yml` (secret
 `ANDROID_KEYSTORE_*`, kontrak standar `android/key.properties`).

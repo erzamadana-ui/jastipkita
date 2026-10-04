@@ -59,7 +59,7 @@ jobs:
           [ -f pubspec.yaml ] || { echo "::error::apps/mobile/pubspec.yaml missing"; exit 1; }
           [ "$HAS_KEYSTORE" = true ] || { echo "::error::Android signing secrets missing (see workflow header)"; exit 1; }
           [ -n "$API_BASE_URL" ] || { echo "::error::variable ${{ inputs.app_env == 'production' && 'PRODUCTION_API_BASE_URL' || 'STAGING_API_BASE_URL' }} is not set"; exit 1; }
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -145,7 +145,7 @@ jobs:
       - name: Remove signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/upload.jks" android/key.properties
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-release-${{ inputs.app_env }}-${{ steps.ver.outputs.name }}-${{ steps.ver.outputs.code }}
           path: |
@@ -206,7 +206,7 @@ jobs:
       - name: Clean up keychain
         if: always()
         run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ios-release-${{ inputs.app_env }}-${{ github.run_number }}
           path: apps/mobile/build/ios/ipa/*.ipa

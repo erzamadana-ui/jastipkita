@@ -16,8 +16,9 @@ Urutan kerja (±3–4 jam untuk pertama kali):
 | 5 | Isi secret & variabel GitHub (nama persis) | pipeline tahu kredensial |
 | 6 | Xendit TEST (+ Resend untuk OTP e-mail) | pembayaran sandbox, login bisa diuji |
 | 7 | Deploy pertama + smoke test | `/v1/health` = ok, SANDBOX |
-| 8 | Web ke antarkita-landing, admin ke Cloudflare Pages | situs & admin staging |
+| 8 | Web ke antarkita-landing, admin ke Cloudflare Pages; domain API se-situs (§8.3, §9) | situs & admin staging, sesi web bisa diperpanjang |
 | 9 | Backup harian terenkripsi | `db-backup.yml` hijau |
+| 10 | (Otomatis) build iOS tanpa tanda tangan di runner macOS — `mobile-ios.yml` (§13) | bukti aplikasi iOS ter-compile |
 
 ---
 
@@ -28,7 +29,7 @@ Repo `erzamadana-ui/jastipkita` bersifat **private**. Per dokumentasi GitHub (ve
 
 | Fitur | GitHub Free + repo private | GitHub Pro/Team | Dampak |
 |---|---|---|---|
-| Menit GitHub Actions | ±2.000 menit/bulan (ASUMSI, cek Billing) | lebih besar | CI ±35–45 menit per push ke `main` (ASUMSI) → ±45 push/bulan |
+| Menit GitHub Actions | ±2.000 menit/bulan (ASUMSI, cek Billing) | lebih besar | CI ±35–45 menit per push ke `main` (ASUMSI) → ±45 push/bulan. Runner **macOS dihitung 10×** di repo private: satu build iOS ±150–250 menit tagihan (ASUMSI, §13) |
 | Environments + environment secrets | tidak tersedia | tersedia | di Free: simpan secret **staging** sebagai *Repository secrets* dengan **nama yang sama** |
 | Required reviewers untuk environment | tidak | tidak untuk repo private (Enterprise) | gerbang production diganti: daftar `PRODUCTION_DEPLOYERS` + frasa konfirmasi + keputusan tercatat |
 | Branch protection / rulesets | tidak | tersedia | di Free: disiplin PR manual |
@@ -176,10 +177,10 @@ Buat nilai kriptografi: `bash scripts/gen-secrets.sh staging` (hanya dicetak ke 
 ### 5.2 Environment `staging` — Variables
 | Nama | Wajib | Contoh |
 |---|---|---|
-| `API_BASE_URL` | ya | `https://jastipkita-api-staging.<subdomain>.workers.dev` |
+| `API_BASE_URL` | ya | awal: `https://jastipkita-api-staging.<subdomain>.workers.dev` (cukup untuk mobile & admin); untuk **login web** wajib domain se-situs `https://jastipkita-api-staging.antarkitaindonesia.com` (§8.3, §9) |
 | `S3_ENDPOINT` | ya | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
 | `ADMIN_BASE_URL` | bila admin dipakai | `https://staging.jastipkita-admin.pages.dev` |
-| `CORS_ORIGINS` | opsional | `https://antarkitaindonesia.com` (origin tanpa path) |
+| `CORS_ORIGINS` | ya untuk web | `https://antarkitaindonesia.com` (origin tanpa path) — juga daftar origin yang boleh memakai cookie refresh web (§8.3) |
 | `EMAIL_PROVIDER`, `EMAIL_FROM` | untuk OTP e-mail | `resend`, `JastipKita Staging <no-reply@antarkitaindonesia.com>` |
 | `GOOGLE_CLIENT_IDS`, `APPLE_CLIENT_IDS` | untuk login sosial | ID klien publik (dipisah koma) |
 | `PAYMENT_PROVIDER` | opsional | `mock` sementara bila Xendit belum ada |
@@ -197,6 +198,7 @@ Buat nilai kriptografi: `bash scripts/gen-secrets.sh staging` (hanya dicetak ke 
 | `PRODUCTION_DEPLOYERS` | `erzamadana-ui` (login GitHub yang boleh deploy production, dipisah koma) |
 | `CODEQL_ENABLED` | kosong/`false` sampai repo public atau Code Security dibeli |
 | `ANDROID_VERSION_CODE_OFFSET`, `IOS_RELEASE_ENABLED`, `IOS_BUILD_NUMBER_OFFSET` | untuk `mobile-release.yml` |
+| `IOS_CI_AUTO` | kosong = build iOS otomatis jalan (push `main` yang mengubah app, mingguan); `false` = hanya manual (*Run workflow*) — rem biaya menit macOS (§13) |
 
 ### 5.4 Environment `mobile-release` — Secrets
 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
@@ -268,10 +270,44 @@ SMS/WhatsApp (Twilio) berbayar per pesan → **perlu persetujuan owner**.
 4. Disarankan: *Zero Trust → Access → Applications → Self-hosted* untuk host admin, kebijakan hanya e-mail staf
    (paket gratis Zero Trust — ASUMSI batas 50 user).
 
-## 9. Domain kustom API (production, nanti)
+### 8.3 Alamat web & SEC-14 — keputusan Komisaris 2026-10-04
+**Keputusan:** web publik tetap di `https://antarkitaindonesia.com/jastipkita` (origin bersama dengan situs AntarKita),
+**tanpa subdomain**. Pengganti origin terpisah — dua kontrol yang wajib ada sebelum web dipakai publik:
+
+| Kontrol | Isi | Status |
+|---|---|---|
+| CSP di **seluruh origin** | Setiap halaman `antarkitaindonesia.com` (termasuk repo `antarkita-landing`, bukan hanya `/jastipkita/`) memuat Content-Security-Policy tanpa `unsafe-inline` untuk skrip. Halaman tanpa CSP = jalan masuk XSS ke origin JastipKita. | `/jastipkita/` sudah ber-CSP (`apps/web`); halaman landing lain **belum diperiksa** — `deploy-staging.yml` melaporkan jumlahnya di ringkasan run + peringatan `SEC-14` |
+| Refresh token di **cookie HttpOnly** pada host API | Cookie `jk_rt` (HttpOnly; Secure; SameSite=Strict; Path=/v1/auth; host-only) — token panjang tidak bisa dibaca JavaScript. Hanya aktif bila klien mengirim header `X-JK-Token-Transport: cookie` dan `Origin` termasuk `WEB_BASE_URL`/`CORS_ORIGINS`. | dikerjakan Eng-API 2026-10-04 (`apps/api/src/modules/auth/cookie-transport.ts`) |
+
+Konsekuensi deployment (yang rusak duluan bila diabaikan):
+1. **API harus se-situs dengan web.** Cookie `SameSite=Strict` tidak disimpan dan tidak dikirim pada permintaan
+   lintas situs. Dengan API di `*.workers.dev`, login web berhasil tetapi **tidak bisa diperpanjang**: pengguna web
+   ter-logout setiap kali access token habis (`ACCESS_TOKEN_TTL_SEC` = 900 → ±15 menit). Mobile & admin tidak
+   terdampak (refresh lewat body). Solusi: domain kustom API di bawah `antarkitaindonesia.com` (§9) — **staging juga**
+   bila web staging ingin diuji login. Ringkasan *Deploy staging* menampilkan baris *Web session (refresh cookie)* dan
+   peringatan bila `API_BASE_URL` belum se-situs; *Deploy production* memberi peringatan yang sama.
+2. **CSP landing tidak bisa dipasang sebagai header di GitHub Pages.** Pilihan: (a) tag `<meta http-equiv="Content-Security-Policy">`
+   di setiap halaman landing (tanpa `frame-ancestors`/`report-to` — tidak didukung lewat meta), atau (b) zona
+   `antarkitaindonesia.com` di Cloudflare (proxy) + *Rules → Transform Rules → Modify Response Header* untuk seluruh
+   origin: `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `frame-ancestors 'none'`, HSTS (jumlah rule
+   gratis terbatas — ASUMSI, cek paket). Opsi (b) sekaligus membuka domain kustom API pada poin 1.
+3. **Batas kontrol cookie (jujur):** HttpOnly mencegah *pencurian* refresh token, tetapi XSS yang berjalan di origin
+   yang sama tetap bisa memanggil `/v1/auth/refresh` (cookie ikut terkirim) dan bertindak atas nama pengguna selama
+   tab terbuka. CSP seluruh origin adalah kontrol utama; cookie membatasi dampak setelah tab ditutup.
+4. Aplikasi Flutter versi web (`/jastipkita/app/`, dipublikasi terpisah) menyimpan token lewat `flutter_secure_storage`
+   (di web = localStorage) pada origin yang sama — jangan dipublikasikan untuk publik sebelum memakai transport cookie
+   yang sama (tugas Eng-Mobile).
+5. Jalur tetap `/jastipkita`: `astro.config` (`base`), App Links (`assetlinks.json`), AASA, `WEB_BASE_URL` aplikasi
+   dan Origin cookie semuanya mengasumsikannya. Workflow memberi peringatan bila variabel `LANDING_PATH` diubah.
+
+## 9. Domain kustom API (wajib untuk login web — staging & production)
+- Alasan: cookie refresh web hanya bekerja bila API se-situs dengan `antarkitaindonesia.com` (§8.3 poin 1).
 - Butuh zona `antarkitaindonesia.com` dikelola DNS Cloudflare (pindah nameserver — tanpa biaya; lakukan hati-hati
-  karena situs & e-mail AntarKita ikut).
-- Gunakan hostname khusus, mis. `jastipkita-api.antarkitaindonesia.com` (Custom Domain di wrangler.toml).
+  karena situs & e-mail AntarKita ikut: salin semua record DNS lama, termasuk MX/SPF/DKIM, sebelum mengganti nameserver).
+- Gunakan hostname khusus: `jastipkita-api-staging.antarkitaindonesia.com` (staging) dan
+  `jastipkita-api.antarkitaindonesia.com` (production) sebagai *Custom Domain* Worker (wrangler.toml / Dashboard →
+  Worker → *Settings → Domains & Routes*), lalu ubah variabel `API_BASE_URL` (+ `STAGING_API_BASE_URL` repository dan
+  `PUBLIC_API_BASE_URL` web) ke hostname tersebut.
 - `api.antarkitaindonesia.com/jastipkita` (rute dengan path) **belum bisa**: API melayani `/v1/*` dan tidak membuang
   prefix path. Perlu perubahan kode di `worker.ts` oleh tim API bila ingin memakai pola ini (web saat ini default ke
   URL tersebut — samakan dengan variabel `PUBLIC_API_BASE_URL`).
@@ -304,7 +340,67 @@ Xendit, konfirmasi tertulis soal penahanan dana, dan review hukum.
 | Browser: CORS error | origin tidak terdaftar | `CORS_ORIGINS` (origin tanpa path) / `ADMIN_BASE_URL` |
 | Web tampil tanpa CSS | `_assets` diabaikan Jekyll | §8.1 langkah 3 |
 | Push ke landing ditolak | token kedaluwarsa/izin kurang | buat ulang token §8.1 |
-| CI menghabiskan menit | paket Free | gabung PR sebelum merge ke `main`; cek *Billing → Usage* |
+| CI menghabiskan menit | paket Free | gabung PR sebelum merge ke `main`; cek *Billing → Usage*; menit macOS (×10): variabel `IOS_CI_AUTO=false` (§13) |
+| Web: pengguna ter-logout ±15 menit setelah login | API di `*.workers.dev` (lintas situs) → cookie `jk_rt` SameSite=Strict tidak tersimpan | domain kustom API di bawah `antarkitaindonesia.com` (§8.3, §9) |
+| Peringatan `SEC-14` di *Deploy staging* | halaman landing di luar `/jastipkita/` tanpa CSP | pasang CSP (meta atau header Cloudflare) — §8.3 poin 2 |
+| iOS: `pod install` → *required a higher minimum deployment target* | plugin baru butuh iOS > 15.5 | naikkan `IOS_DEPLOYMENT_TARGET` di `apps/mobile/tool/configure_native.py` (§13.3) |
+| iOS di Mac Apple silicon: simulator gagal link (*building for iOS Simulator-arm64*) | `mobile_scanner` 6 (MLKit 7) tanpa slice arm64-simulator | jalankan di iPhone fisik atau simulator Rosetta; permanen: `mobile_scanner` ≥ 7 (§13.3) |
+
+## 13. CI (GitHub Actions) & build iOS
+
+### 13.1 Workflow
+| Workflow | Pemicu | Runner | Catatan |
+|---|---|---|---|
+| `ci.yml` | push/PR `main`, `develop`, manual | Ubuntu | core, db, api, web, admin, mobile (Android APK + web), secret scan, audit. Status check wajib §1.2 |
+| `mobile-ios.yml` | push `main` yang mengubah `apps/mobile/**` / `packages/design-tokens/**` / workflow itu sendiri, mingguan (Senin 04.47 WIB), manual | **macOS** | build iOS debug tanpa tanda tangan; **terpisah dari `ci.yml`** agar deploy staging/production tidak menunggu atau terblokir job macOS |
+| `mobile-release.yml` | manual | Ubuntu (+ macOS untuk job iOS, nonaktif) | AAB/APK bertanda tangan; IPA hanya bila `IOS_RELEASE_ENABLED=true` + sertifikat Apple |
+| `deploy-staging.yml`, `deploy-production.yml`, `db-backup.yml`, `codeql.yml` | lihat §7, §11, `docs/08-backup-dr.md` | Ubuntu | — |
+
+### 13.2 Versi action (runtime Node 24) — diperbarui 2026-10-04
+Run CI menampilkan peringatan *deprecation* runtime Node 20 untuk action JavaScript; action berikut dinaikkan ke major
+yang berjalan di `node24` (dicek dari `action.yml` tiap tag + catatan rilis resmi). Semua mensyaratkan Actions Runner ≥ 2.327.1 —
+otomatis terpenuhi di runner GitHub-hosted.
+
+| Action | Dari → ke | Bukti (catatan rilis) | Dampak ke input kita |
+|---|---|---|---|
+| `pnpm/action-setup` | v4 → **v5** | v5.0.0 "Updated the action to use Node.js 24"; `action.yml` v4 vs v5 hanya beda `runs.using` | tidak ada — versi pnpm tetap dari `packageManager` (`pnpm@10.28.0`). v6 (dukungan pnpm 11) sengaja **tidak** dipakai |
+| `actions/upload-artifact` | v4 → **v7** | v6.0.0 "runs on Node.js 24"; v7.0.0 ESM + input baru `archive` (default `true` = zip seperti dulu). v5 masih `node20` | tidak ada — nama artefak tetap unik per run, `retention-days`/`if-no-files-found`/`compression-level` sama |
+| `actions/cache` (+ `/restore`, `/save`) | v4 → **v6** | v5.0.0 "runs on the Node.js 24 runtime"; v6.0.0 migrasi ESM, input identik | tidak ada; paling buruk satu kali *cache miss* fingerprint secret Worker (secret didorong ulang sekali) |
+| `actions/setup-go` | v5 → **v7** | v6.0.0 "Upgrade Nodejs runtime from node20 to node 24" + penanganan toolchain; v7.0.0 ESM | tidak ada — kita memakai `go-version: stable`, `cache: false`, tanpa `go.mod` |
+| `actions/setup-java` (`mobile-release.yml`) | v4 → **v5** | v5.0.0 Node 24; v4 kini `deprecationMessage` | tidak ada — `distribution`/`java-version` sama |
+| `github/codeql-action/{init,analyze}` | v3 → **v4** | CHANGELOG 4.30.7 "[v4+ only] … runs on Node.js v24"; v3 deprecated Desember 2026 (4.31.3) | tidak ada — input `languages`/`build-mode`/`queries`/`config`/`category` tetap |
+
+Tidak diubah: `actions/checkout@v5`, `actions/setup-node@v5` (sudah `node24`), `subosito/flutter-action@v2`
+(composite; di dalamnya sudah `actions/cache@v5`). Dependabot (`github-actions`, mingguan) mengusulkan major berikutnya.
+
+### 13.3 Build iOS (`mobile-ios.yml`)
+- **Apa yang dibuktikan:** folder `ios/` (dibuat `flutter create` bila belum di-commit) + semua plugin ter-compile
+  dengan pengaturan `apps/mobile/tool/configure_native.py`: bundle id `com.antarkitaindonesia.jastipkita`, nama
+  *JastipKita*, iOS minimum **15.5**, purpose string kamera/galeri/mikrofon (Indonesia), URL scheme `jastipkita`,
+  entitlements Sign in with Apple + Associated Domains (`applinks:`/`webcredentials:antarkitaindonesia.com`, cocok
+  dengan `apps/web/well-known/apple-app-site-association`). Langkah terakhir memeriksa `Info.plist` hasil build.
+- **Bukan bukti:** penandatanganan, instal di iPhone, upload TestFlight/App Store (butuh Apple Developer Program
+  US$99/tahun — keputusan owner, `mobile-release.yml`).
+- **Build debug untuk device (arm64) `--no-codesign`, bukan `--simulator`:** `mobile_scanner` 6.x memakai GoogleMLKit
+  7.0 yang tidak punya slice arm64-simulator (CHANGELOG 6.0.2) sementara runner macOS = Apple silicon. Alasan yang sama
+  membuat simulator di Mac Apple silicon owner gagal link → pakai iPhone fisik/simulator Rosetta, atau (usulan, perlu
+  Eng-Mobile) naik ke `mobile_scanner` ≥ 7 (Apple Vision, iOS 13+, tanpa MLKit) lalu turunkan target ke 15.0.
+- **iOS 15.5:** minimum tertinggi di antara plugin (`mobile_scanner` 6.0.0: "iOS 15.5.0 is now the minimum");
+  Flutter stable sendiri 15.0. Konsekuensi: iPhone yang tertahan di iOS ≤ 15.4 tidak bisa memasang aplikasi.
+- **CocoaPods / Swift Package Manager:** SPM aktif default di Flutter stable; plugin tanpa dukungan SPM (MLKit) tetap
+  lewat CocoaPods. Workflow menjalankan `pod install` (ulang dengan `--repo-update` bila gagal) hanya bila `ios/Podfile` ada.
+- **Biaya:** ±15–25 menit runner per run = ±150–250 menit tagihan di repo private (×10, ASUMSI — ukur di run pertama,
+  lihat durasi job). Pemicu otomatis + mingguan bisa menghabiskan sebagian besar kuota ±2.000 menit/bulan paket
+  Free → set variabel repository `IOS_CI_AUTO=false` untuk hanya-manual. Concurrency membatalkan run lama di ref yang sama.
+- **Membaca hasil:** *Actions → Mobile iOS → run* → ringkasan (versi Flutter/Xcode/CocoaPods, bundle id,
+  MinimumOSVersion, ukuran app) + artefak kecil **`mobile-ios-logs`** (7 hari: log `pod install` & `flutter build`,
+  `flutter doctor -v`, Podfile/Podfile.lock, Info.plist, entitlements). Tidak ada `.app`/IPA yang diunggah.
+- **Saat akun Apple sudah ada (owner):** di App ID `com.antarkitaindonesia.jastipkita` aktifkan *Sign in with Apple* dan
+  *Associated Domains*; isi Team ID di AASA (`TEAMID.` → Team ID) dan publikasikan ke
+  `https://antarkitaindonesia.com/.well-known/apple-app-site-association` (`apps/web/scripts/deploy-to-landing.sh`);
+  buat OAuth client iOS Google → jalankan skrip dengan `GOOGLE_IOS_CLIENT_ID=<id>` (menambah `GIDClientID` + URL
+  scheme reversed client id) dan pakai id yang sama sebagai dart-define; commit `apps/mobile/ios` (bersama `android/`
+  dan `web/`) sebelum rilis toko pertama.
 
 ---
 
@@ -312,4 +408,7 @@ Xendit, konfirmasi tertulis soal penahanan dana, dan review hukum.
 dokumentasi publik yang dapat berubah dan ditandai **ASUMSI** — verifikasi di halaman harga masing-masing saat
 setup. Estimasi menit CI belum diukur di runner GitHub. Langkah bootstrap §3 telah diuji pada klaster
 PostgreSQL 16 lokal dengan owner non-superuser (bukan pada Neon sungguhan); perilaku `GRANT pg_read_all_data`
-di Neon belum diverifikasi.
+di Neon belum diverifikasi. Workflow `mobile-ios.yml` disusun tanpa Mac dan **belum pernah dijalankan** di GitHub
+(divalidasi dengan actionlint 1.7.12 + uji skrip pada template Flutter stable); versi action diverifikasi dari
+catatan rilis & `action.yml` resmi per 2026-10-04. Perilaku cookie lintas situs (§8.3) mengikuti aturan SameSite
+browser umum; uji di Safari, Chrome dan Firefox setelah domain kustom API aktif.
